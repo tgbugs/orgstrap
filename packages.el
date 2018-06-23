@@ -9,6 +9,8 @@
 (use-package org
              :mode ("\\.org\\'" . org-mode))
 
+(use-package htmlize)
+
 (provide 'packages)
 
 ;;; packages.el ends here

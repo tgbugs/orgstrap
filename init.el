@@ -45,6 +45,21 @@
 (require 'bootstrap)
 (require 'packages)
 
+(defun compile-org-file ()
+  ; from https://joelmccracken.github.io/entries/reading-writing-data-in-emacs-batch-via-stdin-stdout/
+  (interactive)
+  (let ((org-document-content "")
+        this-read)
+    (while (setq this-read (ignore-errors
+                             (read-from-minibuffer "")))
+      (setq org-document-content (concat org-document-content "\n" this-read)))
+
+    (with-temp-buffer
+      (org-mode)
+      (insert org-document-content)
+      (org-html-export-as-html)
+      (princ (buffer-string)))))
+
 (provide 'init)
 
 ;;; init.el ends here
