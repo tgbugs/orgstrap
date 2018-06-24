@@ -47,6 +47,7 @@
 
 (defun compile-org-file ()
   ; from https://joelmccracken.github.io/entries/reading-writing-data-in-emacs-batch-via-stdin-stdout/
+  ; NOTE writing a comile-org-forever doesn't seem to work because read-from-minibuffer cannot block
   (interactive)
   (let ((org-document-content "")
         this-read)
