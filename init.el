@@ -48,6 +48,8 @@
 (defun compile-org-file ()
   ; from https://joelmccracken.github.io/entries/reading-writing-data-in-emacs-batch-via-stdin-stdout/
   ; NOTE writing a comile-org-forever doesn't seem to work because read-from-minibuffer cannot block
+  ; NOTE if you wrap emacs for launch in any way e.g. with emacs "${@}" & this script will fail
+  ; NOTE in emacs 25 the title of the buffer takes precedence for some reason?
   (interactive)
   (let ((org-document-content "")
         this-read)
