@@ -9,6 +9,7 @@
 (use-package org
              :mode ("\\.org\\'" . org-mode)
              :config
+			 (setq org-export-with-broken-links 1)  ; needed on some systems
              (defun org-custom-link-img-follow (path)
                (org-open-link-from-string path))
              (defun org-custom-link-img-export (path desc format)
