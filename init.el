@@ -68,8 +68,8 @@
 (defpipefun compile-org-file (org-html-export-as-html))
 (defpipefun align-tables-org-file (org-table-map-tables 'org-table-align))
 (defpipefun align-tables-and-compile-org-file
-  (progn (org-html-export-as-html)
-         (org-table-map-tables 'org-table-align)))
+  (progn (org-table-map-tables 'org-table-align)
+         (org-html-export-as-html)))
 
 (provide 'init)
 
