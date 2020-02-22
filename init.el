@@ -16,8 +16,10 @@
 (let* ((no-ssl (and (memq system-type '(windows-nt ms-dos))
                     (not (gnutls-available-p))))
        (proto (if no-ssl "http" "https")))
-  ;; Comment/uncomment these two lines to enable/disable MELPA and MELPA Stable as desired
-  (add-to-list 'package-archives (cons "melpa" (concat proto "://melpa.org/packages/")) t)
+
+  (add-to-list
+   'package-archives
+   (cons "melpa" (concat proto "://melpa.org/packages/")) t)
 
   (add-to-list
    'package-archives
@@ -45,6 +47,23 @@
 (require 'bootstrap)
 (require 'packages)
 
+;;; batch mode color fixes
+;; this one was a real adventure, found `display-color-cells' and
+;; `display-color-p' and a couple other things while hunting down
+;; `min-colors' in `defface' and finally landed on this
+;; it really seems like this should be the default behavior in emacs
+
+(defun noninteractive-face-spec-set-match-display (command &rest args)
+  "adivse native `face-spec-set-match-display' when `noninteractive'is true
+(i.e., in --batch mode) so that `org-src-fontify-natively' will work"
+  t)
+
+(when noninteractive
+  (advice-add 'face-spec-set-match-display
+              :around 'noninteractive-face-spec-set-match-display))
+
+;;; pipe functions
+
 (defmacro defpipefun (name expression)
   "define a new function for modifying things piped through std* == FUN!"
   `(defun ,name ()
@@ -53,22 +72,26 @@
      ;; NOTE if you wrap emacs for launch in any way e.g. with emacs "${@}" & this script will fail
      ;; NOTE in emacs 25 the title of the buffer takes precedence for some reason?
      (interactive)
-     (let ((org-document-content "")
-           this-read)
+     (let (this-read
+           (to-be-inserted-into-buffer ""))
        (while (setq this-read (ignore-errors
                                 (read-from-minibuffer "")))
-         (setq org-document-content (concat org-document-content "\n" this-read)))
+         (setq to-be-inserted-into-buffer (concat to-be-inserted-into-buffer "\n" this-read)))
 
        (with-temp-buffer
-         (org-mode)
-         (insert org-document-content)
+         (insert to-be-inserted-into-buffer)
          ,expression
          (princ (buffer-string))))))
 
-(defpipefun compile-org-file (org-html-export-as-html))
-(defpipefun align-tables-org-file (org-table-map-tables 'org-table-align))
+(defpipefun compile-org-file
+  (progn (org-mode)
+         (org-html-export-as-html)))
+(defpipefun align-tables-org-file
+  (progn (org-mode)
+         (org-table-map-tables 'org-table-align)))
 (defpipefun align-tables-and-compile-org-file
-  (progn (org-table-map-tables 'org-table-align)
+  (progn (org-mode)
+         (org-table-map-tables 'org-table-align)
          (org-html-export-as-html)))
 
 (provide 'init)

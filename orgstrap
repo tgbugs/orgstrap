@@ -2,4 +2,4 @@
 BASEDIR=$(dirname $0)
 ABSPATH=$(readlink -f $0)
 ABSDIR=$(dirname $ABSPATH)
-emacs --batch -q -l "${ABSDIR}/init.el" --kill
+emacs --batch --quick --load "${ABSDIR}/init.el" --kill
