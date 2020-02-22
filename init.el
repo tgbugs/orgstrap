@@ -64,7 +64,7 @@
 
 ;;; pipe functions
 
-(defmacro defpipefun (name expression)
+(defmacro defpipefun (name &rest body)
   "define a new function for modifying things piped through std* == FUN!"
   `(defun ,name ()
      ;; from https://joelmccracken.github.io/entries/reading-writing-data-in-emacs-batch-via-stdin-stdout/
@@ -80,19 +80,19 @@
 
        (with-temp-buffer
          (insert to-be-inserted-into-buffer)
-         ,expression
+         ,@body
          (princ (buffer-string))))))
 
 (defpipefun compile-org-file
-  (progn (org-mode)
-         (org-html-export-as-html)))
+  (org-mode)
+  (org-html-export-as-html))
 (defpipefun align-tables-org-file
-  (progn (org-mode)
-         (org-table-map-tables 'org-table-align)))
+  (org-mode)
+  (org-table-map-tables 'org-table-align))
 (defpipefun align-tables-and-compile-org-file
-  (progn (org-mode)
-         (org-table-map-tables 'org-table-align)
-         (org-html-export-as-html)))
+  (org-mode)
+  (org-table-map-tables 'org-table-align)
+  (org-html-export-as-html))
 
 (provide 'init)
 
