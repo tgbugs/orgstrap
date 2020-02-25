@@ -2,4 +2,14 @@
 BASEDIR=$(dirname $0)
 ABSPATH=$(readlink -f $0)
 ABSDIR=$(dirname $ABSPATH)
-emacs --batch --quick --load "${ABSDIR}/init.el" --kill
+
+# NOTE: you must set --eval directly
+# it cannot be passed in as a ${VAR}
+# otherwise emacs will throw a fit
+
+emacs \
+    --batch \
+    --quick \
+    --load "${ABSDIR}/init.el" \
+    --eval "(use-packages $*)" \
+    --kill

@@ -62,6 +62,11 @@
   (advice-add 'face-spec-set-match-display
               :around 'noninteractive-face-spec-set-match-display))
 
+;;; use additional packages
+(defmacro use-packages (&rest names)
+  "enable multiple calls to `use-package' during bootstrap"
+  (cons 'progn (map 'list (lambda (name) `(use-package ,name)) names)))
+
 ;;; pipe functions
 
 (defmacro defpipefun (name &rest body)
