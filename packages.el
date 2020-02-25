@@ -11,7 +11,8 @@
   :custom
   (org-export-with-broken-links t "needed for hrefl among others")
   (org-src-fontify-natively t)
-  :config
+  :init
+  (require 'ol)  ; must require otherwise custom parameters wont stick
 
   ;; img tag links
   ;; NOTE these are for nested images inside other links NOT for images
