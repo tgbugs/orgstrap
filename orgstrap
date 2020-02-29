@@ -1,17 +1,15 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 BASEDIR=$(dirname $0)
 ABSPATH=$(readlink -f $0)
 ABSDIR=$(dirname $ABSPATH)
 
 OSUDPD=nil
-POSITIONAL=()
-while [[ $# -gt 0 ]]
-do
-key="$1"
-case $key in
-    --user) OSUDPD=t; shift ;;
-    *)      POSITIONAL+=("$1"); shift ;;
-esac
+while [ $# -gt 0 ]; do
+    case $1 in
+        --user) OSUDPD=t ;;
+        *)      POSITIONAL="${POSITIONAL} $1" ;;
+    esac
+    shift
 done
 
 # NOTE: you must set --eval directly
@@ -23,5 +21,5 @@ emacs \
     --quick \
     --eval "(setq orgstrap-use-default-package-dir ${OSUDPD})" \
     --load "${ABSDIR}/init.el" \
-    --eval "(use-packages ${POSITIONAL[*]})" \
+    --eval "(use-packages ${POSITIONAL})" \
     --kill
