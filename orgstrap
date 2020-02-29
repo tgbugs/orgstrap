@@ -3,6 +3,17 @@ BASEDIR=$(dirname $0)
 ABSPATH=$(readlink -f $0)
 ABSDIR=$(dirname $ABSPATH)
 
+OSUDPD=nil
+POSITIONAL=()
+while [[ $# -gt 0 ]]
+do
+key="$1"
+case $key in
+    --user) OSUDPD=t; shift ;;
+    *)      POSITIONAL+=("$1"); shift ;;
+esac
+done
+
 # NOTE: you must set --eval directly
 # it cannot be passed in as a ${VAR}
 # otherwise emacs will throw a fit
@@ -10,6 +21,7 @@ ABSDIR=$(dirname $ABSPATH)
 emacs \
     --batch \
     --quick \
+    --eval "(setq orgstrap-use-default-package-dir ${OSUDPD})" \
     --load "${ABSDIR}/init.el" \
-    --eval "(use-packages $*)" \
+    --eval "(use-packages ${POSITIONAL[*]})" \
     --kill

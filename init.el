@@ -9,7 +9,11 @@
 (defconst working-dir (file-name-directory (or load-file-name (buffer-file-name)))
   "Directory where this file is located")
 
-(setq package-user-dir (expand-file-name "elpa"  working-dir))
+(defcustom orgstrap-use-default-package-dir nil
+  "If not `nil' orgstrap uses the default package-user-dir
+instead of creating one the same folder as this init.el file")
+
+(unless orgstrap-use-default-package-dir (setq package-user-dir (expand-file-name "elpa"  working-dir)))
 
 (require 'package)
 
