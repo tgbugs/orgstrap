@@ -1,4 +1,4 @@
-# -*- orgstrap-block-checksum: 305f615b38d6c684cc7a5ef1085579741fce43958ad7a27633736a63b096c4d6; no-klobber-test: "I should still be here after it is all over!"; -*-
+# -*- orgstrap-block-checksum: 1a5b7b25d84212e4b3bf939fc2b8e0b37ecc9ad5e1590e82ec87f5f8692fa264; no-klobber-test: "I should still be here after it is all over!"; -*-
 # [[file:::orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an org-mode file using file local variables
 
@@ -14,7 +14,7 @@ This file +bootstraps+ orgstraps itself to provide the functionality needed to u
 Using =orgstrap= is easy.
 
 1. Open this file in emacs[fn::This is usually the most difficult step.
- See [[file:::#future-work][Future work]] for ideas about how to get from zero to emacs.].
+   See [[file:::#future-work][Future work]] for ideas about how to get from zero to emacs.].
 2. +Accept the file local variables.+ CHECK THE FILE LOCAL VARIABLES.
 3. Accept the file local variables.
 
@@ -35,8 +35,8 @@ this file is itself an example of how to use =orgstrap=.
 The bare minimum needed to make an =org-mode= file executable (with a bit of safety).
 # TODO This is what should be produced by a call to C-u M-x `orgstrap-add-all-to-current-buffer'
 #+caption: [[file:./orgstrap-minimal.org]]
-#+begin_example org :tangle ./orgstrap-minimal.org
-# -*- orgstrap-block-checksum: 7cad09b461c3e2005e199200eef15a66a60a1b83b07f86c50ef89cbc02133b5c; -*-
+#+begin_src org :tangle ./orgstrap-minimal.org
+# -*- orgstrap-block-checksum: 0cb7d43c88b1a9522d3dd794a9827cf4d89f8f25be4ae855010da2176c036f33; -*-
 # [[file:::orgstrap][jump to orgstrap block for this file]]
 
 ,#+name: orgstrap
@@ -47,13 +47,13 @@ The bare minimum needed to make an =org-mode= file executable (with a bit of saf
 =orgstrap= a plain-text executable format.
 
 # Local Variables:
-# eval: (defun orgstrap--confirm-eval (lang body) (and (member lang '("elisp" "emacs-lisp")) (equal (secure-hash 'sha256 body) orgstrap-block-checksum)))
+# eval: (defun orgstrap--confirm-eval (lang body) (and (member lang '("elisp" "emacs-lisp")) (equal (secure-hash 'sha256 (pp (read (concat "(progn" body ")")))) orgstrap-block-checksum)))
 # eval: (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
 # eval: (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block))
 # eval: (setq-local org-confirm-babel-evaluate t)
 # eval: (fmakunbound #'orgstrap--confirm-eval)
 # End:
-#+end_example
+#+end_src
 * Inspiration
 By default =org-mode= source block headers can only take existing elisp functions as arguments.
 
@@ -78,9 +78,9 @@ While I personally find this to be totally radically awesome, there are much
 better, saner, and safer ways to execute arbitrary code than to hash some elisp
 source blocks and use emacs file local variables to automatically eval a specially
 named[fn::Since all the conventions for how this is done are defined locally by each
- file you can rename the special block however you see fit, perhaps from =orgstrap= to
- =main= if need to pretend that the file is actually c source code with some special syntax.]
-source block only when it matches the hash. .
+file you can rename the special block however you see fit, perhaps from =orgstrap= to
+=main= if need to pretend that the file is actually c source code with some special syntax.]
+source block only when it matches the hash.
 
 #+name: table-use-cases
 #+caption: Things you can do with arbitrary code execution.
@@ -89,13 +89,14 @@ source block only when it matches the hash. .
 |----------------------------------------+------------+--------------------------------|
 | Always run defuns used in file         | Yes        | init.el, =C-c C-c=             |
 | Install elisp code directly            | No         | Use packages.el                |
+| Self tangling files                    | I do it    | =C-c C-v C-t=                  |
 | Install packages required by file      | Probably   | System package manager         |
 | Create an emacs based botnet           | Definitely | ???                            |
 | Replace hard to follow instructions    | Yes        | Hard to follow instructions    |
 | Tangle git hook files for publishing   | Yes        | Manually tangle                |
 | System specific behavior without edits | Yes        | #+name: literal blocks via =:= |
 | Version control for source blocks      | Please no  | git, hg, svn, anything please  |
-|                                        |            |                                |
+| Detect and set environment variables   | Yes        |                                |
 |----------------------------------------+------------+--------------------------------|
 # Actually I'm kind of hyped for though of describing the system used to version
 # control the code in a file in the file itself. Not so simple to pull off though.
@@ -114,9 +115,8 @@ This is the =orgstrap= block that is used for this file.
 ;; This is an example that also nowebs in the source for
 ;; `orgstrap-get-block-checksum' so it is easy to
 ;; use this pattern to create and update orgstrap blocks
-(defun function-you-want-to-use-in-header-arguments-in-files ()
-  "some value")
-(message "anything else you want to do")
+(defun orgstrap-demo-function (arg)
+  (if arg "yes" "no"))
 <<orgstrap-helper-defuns>>
 #+end_src
 
@@ -166,10 +166,11 @@ file then ref:orgstrap-helper-defuns will be (was already) run for you.
 #+end_src
 
 #+RESULTS: do-orgstrap-add-block-checksum
-: 305f615b38d6c684cc7a5ef1085579741fce43958ad7a27633736a63b096c4d6
+: 1a5b7b25d84212e4b3bf939fc2b8e0b37ecc9ad5e1590e82ec87f5f8692fa264
 
 ** Functions to calculate =orgstrap-block-checksum= and set it as a file local variable.
 Add the necessary local variables to the end of the file.
+# [[info:elisp#File Local Variables][info:elisp#File Local Variables]] a useful reference
 #+name: orgstrap-helper-defuns
 #+begin_src emacs-lisp :results none :lexical yes
 (defvar orgstrap-orgstrap-block-name "orgstrap"
@@ -184,6 +185,7 @@ if someone encounters an orgstrapped file and wants to know what is going on.")
     (let* ((info (org-babel-get-src-block-info))
            (params (nth 2 info))
            ;; from `org-babel-check-confirm-evaluate'
+           (body-unexpanded (nth 1 info))
            (body (let ((coderef (nth 6 info))
                        (expand
                         (if (org-babel-noweb-p params :eval)
@@ -193,8 +195,8 @@ if someone encounters an orgstrapped file and wants to know what is going on.")
                        expand
                      (replace-regexp-in-string
                       (org-src-coderef-regexp coderef) "" expand nil nil 1))))
-           (body-unexpanded (nth 1 info)))
-      (secure-hash 'sha256 body))))
+           (body-normalized (pp (read (concat "(progn" body ")")))))
+      (secure-hash 'sha256 body-normalized))))
 
 (defun orgstrap-add-block-checksum ()
   "Add new value of `orgstrap-block-checksum' to file local variables of the `current-buffer'"
@@ -208,25 +210,37 @@ if someone encounters an orgstrapped file and wants to know what is going on.")
     orgstrap-block-checksum))
 
 (defun orgstrap-add-link-to-orgstrap-block ()
-   (format "# [[file:::%s][jump to orgstrap block for this file]]"
-      orgstrap-orgstrap-block-name)
-   (error "TODO copy and paste for now")
-)
+  (format "# [[file:::%s][jump to orgstrap block for this file]]"
+          orgstrap-orgstrap-block-name)
+  (error "TODO copy and paste for now")
+  )
 
 (defun orgstrap-add-orgstrap-block ()
   "Add a new emacs lisp source block with #+name: orgstrap
 to the current buffer or raise an error if one already exists."
-   (error "TODO copy and paste for now")
-)
+  (error "TODO copy and paste for now")
+  )
 
 (defun orgstrap-add-file-local-variables ()
   "Add the file local variables needed to make orgstrap work.
 switching comments probably wont work ? we can try
 Use a prefix argument (i.e. C-u) to add file local variables comments instead of in a :noexport:"
   (interactive)
-   (error "TODO copy and paste for now")
-  (add-file-local-variable ' '())
-)
+  ;; TODO check for existing, and upgrade them if needsbe
+  ;; hack-local-variables
+  ;; file-local-variables-alist
+  (let ((commands
+         '((defun orgstrap--confirm-eval (lang body)
+             (and (member lang '("elisp" "emacs-lisp"))
+                  (equal (secure-hash 'sha256 (pp (read (concat "(progn" body ")"))))
+                         orgstrap-block-checksum)))
+           (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
+           (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block))
+           (setq-local org-confirm-babel-evaluate t)
+           (fmakunbound #'orgstrap--confirm-eval))))
+    ;; good enough to start
+    (mapcar (lambda (sexp) (add-file-local-variable 'eval sexp)) commands)
+    ))
 
 (defun orgstrap-add-all-to-current-buffer ()
   "option for no link and comment vs :noexport:"
@@ -234,7 +248,7 @@ Use a prefix argument (i.e. C-u) to add file local variables comments instead of
   (orgstrap-add-block-checksum)
   (orgstrap-add-to-link-orgstrap-block)
   (orgstrap-add-file-local-variables)
-)
+  )
 #+end_src
 ** orgstrap.el :noexport:
 # XXX TODO it would be a super cool feature if xref could resolve to elisp source
@@ -286,15 +300,30 @@ arbitrary stuff is going on and that they should check it very carefully.
 Here is a more readable version of what the compacted local variables code
 at the end of the file is doing. *Make sure to check that the code matches.*
 # TODO it is entirely possible to automate that check.
+
+=(pp (read (concat "(progn" body ")")))= is used to normalize the code in
+the orgstrap block, removing any comments and formatting irregularities.
+This is important for two reasons. First it helps prevent denial of service
+attacks against human auditors who have low bandwidth for detecting fiddly
+changes. [fn::Note that currently semantics preserving deterministic reordering 
+of expressions is not implemented but is one of the last things left to
+implement as far as normalization is concerned.]
+
+This makes it possible to add comments to the code without changing the checksum this
+hopefully reduces one of the obstacles to enhancing the
+documentation of orgstrap code and blocks over time when
+the meaningful code itself has not changed
+
 #+name: local-variables-readable
 #+begin_src emacs-lisp :eval never :exports code
 ;; code from modeline at the top of file
 (setq-local orgstrap-block-checksum "sha256-sum-of-the-orgstrap-block")
 
-;; code from local variables XXX CHECK THAT THIS MATCHES WHAT IS IN THE FILE
+;; code from local variables
+;; XXX CHECK THAT THIS MATCHES WHAT IS IN THE FILE
 (defun orgstrap--confirm-eval (lang body)
-  (and (member lang '("elisp" "emacs-lisp"))
-       (equal (secure-hash 'sha256 body) orgstrap-block-checksum)))
+       (equal (secure-hash 'sha256 (pp (read (concat "(progn" body ")"))))
+              orgstrap-block-checksum))
 
 (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
 
@@ -310,7 +339,7 @@ at the end of the file is doing. *Make sure to check that the code matches.*
 Here is what the modeline at the start of the file looks like.
 #+name: local-variables-example-header
 #+begin_example org
-# -*- orgstrap-block-checksum: 48a856242a9baf0931ee260d420ff75c4d0af07c05781a85148ddcdb5f7dab95; no-klobber-test: "I should still be here after it is all over!"; -*-
+# -*- orgstrap-block-checksum: 1a5b7b25d84212e4b3bf939fc2b8e0b37ecc9ad5e1590e82ec87f5f8692fa264; no-klobber-test: "I should still be here after it is all over!"; -*-
 #+end_example
 
 Here is what the =:noexport:= block below this looks like.
@@ -378,7 +407,7 @@ This is particularly an issue for org files that want to bootstrap whole systems
 
 The simplest solution to me seems to be to add a second prompt variable which is
 an alist of source block checksums and names[fn::the names are not technically required
- but are for human readability]. As soon as the =orgstrap= block is run
+but are for human readability]. As soon as the =orgstrap= block is run
 =orgstrap--confirm-eval= is no longer needed and can be replace with a function
 that validates the other blocks from the prompt variable.
 
@@ -390,7 +419,33 @@ validate all of them at once at the start of the orgstrap block. This might need
 additional machinery, not entirely sure, maybe just have =orgstrap-all-blocks-checksum=
 that can be used in cases like that. The advantage here is that the core of the process
 can be verified once and then the documentation around it can change and grow as needed.
-* Boring academic reflections/Stuffy academic +commentary+ rambling
+** Deterministic semantics preserving reordering
+Reorder the expressions used in the orgstrap block alphabetically (or something like that)
+according to a deterministic rule, but not in a way that changes program semantics.
+For example a function definition cannot be moved after a top level invocation of that
+function.
+1. defuns with different names can be reordered
+2. defuns with the same name can be reordered as a block but cannot
+   internally be reordered because the order of shadowing matters
+3. While it might be nice to completely erase the names of functions as well
+   as internal variable names, this would make it trivial to shadow existing
+   function names in ways that are malicious. The exact names matter, so we
+   have to preserve them. Also the cost of not being able to tell that
+   =(lambda (a) (+ a a))= and =(lambda (b) (+ b b))= are the same seems fairly
+   small.
+4. One potential approach is to lift all defuns to the top, and then function calls
+   or whatever the more generic procedure invocation means. The simple local rule
+   is that all definitions must occur before usage except in the case where there is
+   a shadowing even that happens after a first invocation. This is annoying, but
+   if a call to a function happens before that function is defined we have to assume
+   that the call is calling some other function and those statements cannot be reordered.
+   So the ordering is calls to functions with names matching any later defuns or
+   any later assignment. Then defuns and assignments, finally procedure invocations
+   which might also include assignments. I get the sense that this is covered under
+   some part of compiler theory but can't quite put my finger on it.
+** Auto update block checksum on save
+Before save hook and/or before commit hook to automatically update the block checksum.
+* Background, file local variables, and checksums
 As mentioned above, the primary use case for =orgstrap= was that I was sick of having
 to work around the limitation that I had to do one of three things. I either one, had
 to remember to eval the source block containing defuns used later before I could
@@ -464,7 +519,7 @@ When running a file.
 4. *Observe whether org-mode complains that the orgstrap block has changed.*
 * Local Variables Footer :noexport:
 Local Variables:
-eval: (defun orgstrap--confirm-eval (lang body) (and (member lang '("elisp" "emacs-lisp")) (equal (secure-hash 'sha256 body) orgstrap-block-checksum)))
+eval: (defun orgstrap--confirm-eval (lang body) (and (member lang '("elisp" "emacs-lisp")) (equal (secure-hash 'sha256 (pp (read (concat "(progn" body ")")))) orgstrap-block-checksum)))
 eval: (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
 eval: (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block))
 eval: (setq-local org-confirm-babel-evaluate t)

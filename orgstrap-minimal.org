@@ -1,0 +1,17 @@
+# -*- orgstrap-block-checksum: 0cb7d43c88b1a9522d3dd794a9827cf4d89f8f25be4ae855010da2176c036f33; -*-
+# [[file:::orgstrap][jump to orgstrap block for this file]]
+
+#+name: orgstrap
+#+begin_src elisp :results none :noweb yes
+(message "orgstrap successful!")
+#+end_src
+
+=orgstrap= a plain-text executable format.
+
+# Local Variables:
+# eval: (defun orgstrap--confirm-eval (lang body) (and (member lang '("elisp" "emacs-lisp")) (equal (secure-hash 'sha256 (pp (read (concat "(progn" body ")")))) orgstrap-block-checksum)))
+# eval: (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
+# eval: (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block))
+# eval: (setq-local org-confirm-babel-evaluate t)
+# eval: (fmakunbound #'orgstrap--confirm-eval)
+# End:
