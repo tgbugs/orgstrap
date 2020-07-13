@@ -9,7 +9,7 @@
 =orgstrap= a plain-text executable format.
 
 # Local Variables:
-# eval: (defun orgstrap--confirm-eval (lang body) (and (member lang '("elisp" "emacs-lisp")) (equal (secure-hash 'sha256 (pp (read (concat "(progn" body ")")))) orgstrap-block-checksum)))
+# eval: (defun orgstrap--confirm-eval (lang body) (and (member lang '("elisp" "emacs-lisp")) (equal (secure-hash orgstrap-cypher (pp (read (concat "(progn\n" body "\n)")))) orgstrap-block-checksum)))
 # eval: (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
 # eval: (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block))
 # eval: (setq-local org-confirm-babel-evaluate t)
