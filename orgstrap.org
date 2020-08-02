@@ -1,15 +1,19 @@
-# -*- orgstrap-cypher: sha256; orgstrap-block-checksum: 916b06eecab63299a6396f7071d23aa9507b393440c36e6fb545ccd65484ac94; no-klobber-test: "I should still be here after it is all over!"; -*-
+# -*- orgstrap-cypher: sha256; orgstrap-block-checksum: 1b4859eb92164f5ae115af796d46b68eedf843619f0f76fd7f9be4e8d2f333a0; no-klobber-test: "I should still be here after it is all over!"; -*-
 # [[file:::orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an org-mode file using file local variables
 
 # [[file:./orgstrap.pdf]]
 # [[file:./orgstrap.html]]
 
-=orgstrap= a specification and tools for standalone self-bootstrapping =org-mode= files.
+=orgstrap= is a specification and tools for standalone self-bootstrapping =org-mode= files.
 
 This file +bootstraps+ orgstraps itself to provide the functionality needed to use
 =orgstrap= in any =org-mode= file.
 
+* TODO melpa
+* DONE finish patch
+* TODO ruby org so that github can render footnotes correctly
+[[file:~/git/NOFORK/org-ruby]]
 * Getting started
 Using =orgstrap= is easy.
 
@@ -36,7 +40,7 @@ The bare minimum needed to make an =org-mode= file executable (with a bit of saf
 # TODO This is what should be produced by a call to C-u M-x `orgstrap-add-all-to-current-buffer'
 #+caption: [[file:./orgstrap-minimal.org]]
 #+begin_src org :tangle ./orgstrap-minimal.org
-# -*- orgstrap-block-checksum: 0cb7d43c88b1a9522d3dd794a9827cf4d89f8f25be4ae855010da2176c036f33; -*-
+# -*- orgstrap-cypher: sha256; orgstrap-block-checksum: 66ba9b040e22cc1d30b6f1d428b2641758ce1e5f6ff9ac8afd32ce7d2f4a1bae; -*-
 # [[file:::orgstrap][jump to orgstrap block for this file]]
 
 ,#+name: orgstrap
@@ -47,12 +51,36 @@ The bare minimum needed to make an =org-mode= file executable (with a bit of saf
 =orgstrap= a plain-text executable format.
 
 # Local Variables:
-# eval: (defun orgstrap--confirm-eval (lang body) (and (member lang '("elisp" "emacs-lisp")) (equal (secure-hash orgstrap-cypher (pp (read (concat "(progn\n" body "\n)")))) orgstrap-block-checksum)))
+# eval: (defun orgstrap--confirm-eval (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (eq (intern (secure-hash orgstrap-cypher (prin1-to-string (read (concat "(progn\n" body "\n)"))))) orgstrap-block-checksum))))
 # eval: (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
 # eval: (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block))
 # eval: (setq-local org-confirm-babel-evaluate t)
 # eval: (fmakunbound #'orgstrap--confirm-eval)
 # End:
+#+end_src
+*NOTE* This set of local variables will only work if you don't use noweb OR
+if the version of org-mode you are using has had =org-babel-check-confirm-evaluate=
+patched to expand the body of the block prior to evaluation. Version 1.0 of the
+local variables described below has a portable version that works with unpatched
+versions of org-mode.
+#+name: org-babel-check-confirm-evaluate-patch
+#+begin_src diff
+diff --git a/lisp/ob-core.el b/lisp/ob-core.el
+index e798595bd..230706b7f 100644
+--- a/lisp/ob-core.el
++++ b/lisp/ob-core.el
+@@ -238,7 +238,10 @@ (defun org-babel-check-confirm-evaluate (info)
+                    (if (functionp org-confirm-babel-evaluate)
+                        (funcall org-confirm-babel-evaluate
+                                 ;; Language, code block body.
+-                                (nth 0 info) (nth 1 info))
++                                (nth 0 info)
++                                (if (org-babel-noweb-p headers :eval)
++                                    (org-babel-expand-noweb-references info)
++                                  (nth 1 info)))
+                      org-confirm-babel-evaluate))))
+     (cond
+      (noeval nil)
 #+end_src
 * Inspiration
 By default =org-mode= source block headers can only take existing elisp functions as arguments.
@@ -128,7 +156,7 @@ checksum of the orgstrap block has changed and if so tangle the file."
   (let* ((elv (orgstrap--read-current-local-variables))
          (checksum-existing (assoc 'orgstrap-block-checksum elv))
          (checksum (orgstrap-add-block-checksum)))
-    (unless (equal checksum-existing checksum)
+    (unless (eq checksum-existing checksum)
       (remove-hook 'before-save-hook #'orgstrap-add-checksum-and-tangle-on-change t)
       ;; have to remove the hook because for some reason tangling from a buffer
       ;; counts as saving from that buffer?
@@ -166,7 +194,7 @@ checksum of the orgstrap block has changed and if so tangle the file."
   (let* ((elv (orgstrap--read-current-local-variables))
          (checksum-existing (assoc 'orgstrap-block-checksum elv))
          (checksum (orgstrap-add-block-checksum)))
-    (unless (equal checksum-existing checksum)
+    (unless (eq checksum-existing checksum)
       (org-babel-tangle-file))))
 
 ,#+end_src
@@ -203,7 +231,7 @@ file then ref:orgstrap-helper-defuns will be (was already) run for you.
 #+end_src
 
 #+RESULTS: do-orgstrap-add-block-checksum
-: 6801e53195d7afe19317f0b8034ddc16f072ea334148614701d2ce2325b587b8
+: d1ef02d2ca64f6e861031dbc2769dd4a8e78ba2fde7ccc6c6c613d2f622a380b
 
 ** =orgstrap= implementation
 Functions to calculate =orgstrap-block-checksum= and set it as a file local variable.
@@ -263,7 +291,7 @@ The macro provides local bindings for four names: `info', `params', `body-unexpa
   (interactive)
   (orgstrap--with-block orgstrap-orgstrap-block-name
     (let ((cypher (or cypher (orgstrap--current-buffer-cypher)))
-          (body-normalized (with-output-to-string (pp (read (concat "(progn\n" body "\n)"))))))
+          (body-normalized (prin1-to-string (read (concat "(progn\n" body "\n)")))))
       ;;(message "%s" body-normalized)
       (secure-hash cypher body-normalized))))
 
@@ -383,11 +411,12 @@ Use a prefix argument (i.e. C-u) to add file local variables comments instead of
               (not (and (member lang '("elisp" "emacs-lisp"))
                         (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info)))
                                (content-checksum
+                               (intern
                                 (secure-hash
                                  orgstrap-cypher
-                                 (pp (read (concat "(progn\n" body "\n)"))))))
+                                 (prin1-to-string (read (concat "(progn\n" body "\n)")))))))
                           (message "%s %s" orgstrap-block-checksum content-checksum)
-                          (equal orgstrap-block-checksum content-checksum)))))
+                          (eq orgstrap-block-checksum content-checksum)))))
             (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
             (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block))
             (setq-local org-confirm-babel-evaluate t)
@@ -501,7 +530,7 @@ Here is a more readable version of what the compacted local variables code
 at the end of the file is doing. *Make sure to check that the code matches.*
 # TODO it is entirely possible to automate that check.
 
-=(with-output-to-string (pp (read (concat "(progn\n" body "\n)"))))= is used to normalize the code in
+=(prin1-to-string (read (concat "(progn\n" body "\n)")))= is used to normalize the code in
 the orgstrap block, removing any comments and formatting irregularities.
 This is important for two reasons. First it helps prevent denial of service
 attacks against human auditors who have low bandwidth for detecting fiddly
@@ -515,17 +544,22 @@ the meaningful code itself has not changed
 #+name: local-variables-readable
 #+begin_src emacs-lisp :eval never :exports code
 ;; code from modeline at the top of file
+
 (setq-local orgstrap-cypher 'sha256)
 (setq-local orgstrap-block-checksum "sha256-sum-of-the-orgstrap-block")
 
 ;; code from local variables
 ;; XXX CHECK THAT THIS MATCHES WHAT IS IN THE FILE
+
+(setq-local orgstrap-local-variables-block-version 1.0)
+
 (defun orgstrap--confirm-eval (lang body)
   (and (member lang '("elisp" "emacs-lisp"))
-       (equal (secure-hash
-               orgstrap-cypher
-               (with-output-to-string (pp (read (concat "(progn\n" body "\n)")) t)))
-              orgstrap-block-checksum)))
+       (eq (intern
+            (secure-hash
+             orgstrap-cypher
+             (prin1-to-string (read (concat "(progn\n" body "\n)")))))
+           orgstrap-block-checksum)))
 
 (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
 
@@ -549,13 +583,43 @@ Here is what the =:noexport:= block below this looks like.
 #+begin_example org
 ,* Local Variables Footer :noexport:
 Local Variables:
-eval: (defun orgstrap--confirm-eval (lang body) (and (member lang '("elisp" "emacs-lisp")) (equal (secure-hash orgstrap-cypher (pp (read (concat "(progn\n" body "\n)")))) orgstrap-block-checksum)))
+eval: (defun orgstrap--confirm-eval (lang body) (and (member lang '("elisp" "emacs-lisp")) (string= (secure-hash orgstrap-cypher (prin1-to-string (read (concat "(progn\n" body "\n)")))) orgstrap-block-checksum)))
 eval: (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
 eval: (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block))
 eval: (setq-local org-confirm-babel-evaluate t)
 eval: (fmakunbound #'orgstrap--confirm-eval)
 End:
 #+end_example
+* Best practices
+** Use the system package manager.
+There is a big difference between using a script to install a program directly
+from the internet and using a script to ask the host system to install a program.
+
+Even if you audit a random script from the internet it is unlikely that you will
+be able to do due diligence. On the other hand, if you ask your system package
+manager to install something for you, there is a much better chance that it has
+at least been somewhat audited, and there is usually an existing process for
+getting a package into the system which helps to mitigate certain types of attacks.
+
+To give a military example it is the difference between inspecting and accepting a
+package from a random person because they say you asked for it yesterday (maybe you
+did!) versus only every allowing packages to come through procurement. You are much
+less likely to get a bomb or a packaged rigged to exfil data if you go through
+procurement because there is an established process for how to do things and that
+process enshrines generations experience about how to not get blown up by the pizza guy.
+
+So, if you are writing instructions that require a certain tool, it is better to tell
+whoever is following them to ask procurement to get the tool for them than to tell them
+to going out to the hardware store and get it themselves, or worse, give them the address
+of a random tool delivery man who happens to be a good buddy of yours. Even if everyone
+involved is trustworthy those kinds of relationships are much easier for some third party
+to compromise and use for their own purposes.
+
+The obvious corollary when you are the user rather than the author, is that if you
+encounter instructions that ask you to directly install software from a random place
+you should be suspicious, even, perhaps especially, if that random place is housed
+within a larger reputable site. If you're not in a hurry, ask for the software to be
+packaged, or package it yourself so that it can go through the process.
 * Future work
 :PROPERTIES:
 :CUSTOM_ID: future-work
@@ -741,16 +805,20 @@ use =orgstrap--expand-body=
   "non-nil => prompt"
   (not (and (member lang '("elisp" "emacs-lisp"))
             (let ((content-checksum
-                   (secure-hash
-                    orgstrap-cypher
-                    (with-output-to-string (pp (read (concat "(progn\n" body "\n)")))))))
+                   (intern
+                    (secure-hash
+                     orgstrap-cypher
+                     (prin1-to-string (read (concat "(progn\n" body "\n)")))))))
               (message "%s %s" orgstrap-block-checksum content-checksum)
-              (equal orgstrap-block-checksum content-checksum)))))
+              (eq orgstrap-block-checksum content-checksum)))))
 ' ; AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaa
 (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
+
+# eval: (defun orgstrap--confirm-eval (lang body) (and (member lang '("elisp" "emacs-lisp")) (let* ((content-checksum (secure-hash orgstrap-cypher (prin1-to-string (read (concat "(progn\n" body "\n)")))))) (message "%s %s" orgstrap-block-checksum content-checksum) (eq orgstrap-block-checksum content-checksum))))
 #+end_src
 
 Local Variables:
+orgstrap-local-variables-block-version: 0.1
 eval: (defun orgstrap--expand-body (info)
   "expand noweb references if noweb is set"
   (let ((coderef (nth 6 info))
@@ -764,14 +832,18 @@ eval: (defun orgstrap--expand-body (info)
        (org-src-coderef-regexp coderef) "" expand nil nil 1))))
 eval: (defun orgstrap--confirm-eval (lang body)
   "non-nil => prompt"
+  ;;(message lang)
+  ;;(message "%s" (prin1-to-string (read (concat "(progn\n" body "\n)"))))
   (not (and (member lang '("elisp" "emacs-lisp"))
        (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info)))
               (content-checksum
-                   (secure-hash
-                    orgstrap-cypher
-                    (pp (read (concat "(progn\n" body "\n)"))))))
-              (message "%s %s" orgstrap-block-checksum content-checksum)
-              (equal orgstrap-block-checksum content-checksum)))))
+                  (intern
+                    (secure-hash
+                      orgstrap-cypher
+                      (prin1-to-string (read (concat "(progn\n" body "\n)")))))))
+              ;;(message "%s %s" orgstrap-block-checksum content-checksum)
+              ;;(message "should we prompt? %s" (not (eq orgstrap-block-checksum content-checksum)))
+              (eq orgstrap-block-checksum content-checksum)))))
 eval: (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
 eval: (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block))
 eval: (setq-local org-confirm-babel-evaluate t)
