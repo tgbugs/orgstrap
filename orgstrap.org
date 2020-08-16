@@ -1,6 +1,7 @@
 # -*- orgstrap-cypher: sha256; orgstrap-block-checksum: d1421a5bbc8df225ad4abdf9e910019126eeb6f03e405f44c6a9e8834cf5d2ab; no-klobber-test: "I should still be here after it is all over!"; -*-
 # [[file:::orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an org-mode file using file local variables
+#+options: num:nil
 
 # [[file:./orgstrap.pdf]]
 # [[file:./orgstrap.html]]
@@ -10,16 +11,17 @@
 This file +bootstraps+ orgstraps itself to provide the functionality needed to use
 =orgstrap= in any =org-mode= file.
 
-* TODO melpa :noexport:
-* TODO ruby org so that github can render footnotes correctly :noexport:
-[[file:~/git/NOFORK/org-ruby]]
 * Getting started
 Using =orgstrap= is easy.
 
-1. Open this file in emacs[fn::This is usually the most difficult step.
-   See [[file:::#future-work][Future work]] for ideas about how to get from zero to emacs.].
-2. +Accept the file local variables.+ CHECK THE FILE LOCAL VARIABLES.
-3. Accept the file local variables.
+1. Obtain the org mode source for this file. (e.g.
+   [[https://raw.githubusercontent.com/tgbugs/orgstrap/master/orgstrap.org][from GitHub]]).
+2. Open it in emacs (e.g. =M-x= =url-handler-mode=
+   =C-x C-f= =https://raw.githubusercontent.com/tgbugs/orgstrap/master/orgstrap.org=)
+   [fn::This is usually the most difficult step. See [[file:::#future-work][Future work]]
+   for ideas about how to get from zero to emacs.].
+3. +Accept the file local variables.+ CHECK THE FILE LOCAL VARIABLES.
+4. Accept the file local variables.
 
 Congratulations you can now use =orgstrap= with your own files!
 
@@ -57,10 +59,15 @@ The bare minimum needed to make an =org-mode= file executable (with a bit of saf
 # eval: (fmakunbound #'orgstrap--confirm-eval)
 # End:
 #+end_src
-*NOTE* This set of local variables will only work if you don't use noweb OR
-if the version of org-mode you are using has had =org-babel-check-confirm-evaluate=
-patched to expand the body of the block prior to evaluation. The full local variables
-described below have a portable version that works with unpatched versions of org-mode.
+*NOTE* This set of local variables will only work if you don't use noweb or if your
+copy of org-mode has had the patch for =org-babel-check-confirm-evaluate= applied.
+This either means you have applied the manual patch below, or the following commit
+is in the tree of the code you are running. Unfortunately this is not in emacs 27.1,
+but it is in =maint= so it should make it into core next time there is a sync.
+https://code.orgmode.org/bzg/org-mode/commit/df5a83637518ad9aa586d49884a6271f11afc592
+
+Version =0.1= of the =orgstrap= local variables described below has a portable version
+that works with unpatched versions of org-mode.
 #+name: org-babel-check-confirm-evaluate-patch
 #+begin_src diff
 diff --git a/lisp/ob-core.el b/lisp/ob-core.el
@@ -125,14 +132,14 @@ source block only when it matches the hash.
 | Detect and set environment variables   | Yes        |                                |
 |----------------------------------------+------------+--------------------------------|
 # Actually I'm kind of hyped for though of describing the system used to version
-# control the code in a file in the file itself. Not so simple to pull off though.
+# control the code in the file itself. Not so simple to pull off though.
 # It only sort of works in this case because we have the rest of the file under
 # version control in another system.
 * Details
 The first emacs lisp source block named =orgstrap= in an org file is
 automatically run using the =exec:= file local variable. Users can
-thus review and add the file local variables to their known safe
-list so that the code can be run in the future without the need to
+review and add the file local variables to their known safe list
+so that the code can be run in the future without the need to
 bother them again.
 
 This is the =orgstrap= block that is used for this file.
@@ -180,7 +187,6 @@ Here is the full source of the block above.
 ;; use this pattern to create and update orgstrap blocks
 (defun orgstrap-demo-function (arg)
   (if arg "yes" "no"))
-  "some value")
 
 <<orgstrap-edit-helper-defuns>>
 <<orgstrap-init-helper-defuns>>
@@ -193,8 +199,19 @@ checksum of the orgstrap block has changed and if so tangle the file."
          (checksum-existing (assoc 'orgstrap-block-checksum elv))
          (checksum (orgstrap-add-block-checksum)))
     (unless (eq checksum-existing checksum)
-      (org-babel-tangle-file))))
+      (remove-hook 'before-save-hook #'orgstrap-add-checksum-and-tangle-on-change t)
+      ;; have to remove the hook because for some reason tangling from a buffer
+      ;; counts as saving from that buffer?
+      (org-babel-tangle)
+      (add-hook 'before-save-hook #'orgstrap-add-checksum-and-tangle-on-change 0 t))))
 
+(add-hook 'before-save-hook #'orgstrap-add-checksum-and-tangle-on-change 0 t)
+;; this is kind of evil because `before-save-hook' is a risky local variable
+;; which you can't accept permanently because someone could rebind the name
+;; in this context it is not quite as risky because we can see what it is
+;; being bound to right here, though that could be changed in the future
+
+(message "orgstrap complete!")
 ,#+end_src
 #+end_example
 
@@ -203,9 +220,9 @@ require confirmation so you would need to reused the code from
 ref:local-variables-readable. It is simpler to use noweb syntax like
 I do in the ref:orgstrap block for this file.
 
-If you use noweb syntax and you make changes to any of the webbed blocks
-you will need to run ref:do-orgstrap-add-block-checksum again since the
-checksum will change.
+If you use noweb syntax and you make changes to a webbed block you will
+need to run ref:do-orgstrap-add-block-checksum again since the checksum
+will change.
 
 Additional machinery is provided as part of this file to update the local
 variable value of =orgstrap-block-checksum= so that only known blocks can
@@ -399,6 +416,7 @@ in a comment on the second line of the file."
   (goto-char (point-min))
   (next-line)
   (let ((link-message (or link-message orgstrap-link-message)))
+  ;; FIXME issue with evil respect visual line
     (unless (looking-at-p (format "^# \\[\\[file:::%s\\]\\[.+\\]\\]$" orgstrap-orgstrap-block-name))
       (insert (format "\n# [[file:::%s][%s]]\n"
                       orgstrap-orgstrap-block-name
@@ -732,6 +750,10 @@ function.
    some part of compiler theory but can't quite put my finger on it.
 ** Auto update block checksum on save
 Before save hook and/or before commit hook to automatically update the block checksum.
+** TODO use orgstrap to automatically keep example blocks in sync  :noexport:
+** TODO melpa                                                      :noexport:
+** TODO ruby org so that github can render footnotes correctly     :noexport:
+[[file:~/git/NOFORK/org-ruby]]
 * Background, file local variables, and checksums
 As mentioned above, the primary use case for =orgstrap= was that I was sick of having
 to work around the limitation that I had to do one of three things. I either one, had
