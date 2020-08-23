@@ -1,4 +1,4 @@
-# -*- orgstrap-cypher: sha256; orgstrap-block-checksum: d1421a5bbc8df225ad4abdf9e910019126eeb6f03e405f44c6a9e8834cf5d2ab; no-klobber-test: "I should still be here after it is all over!"; -*-
+# -*- orgstrap-cypher: sha256; orgstrap-block-checksum: aee974c390d460d805777513dc071f6603456e7b62424156a88e3b015885ad73; no-klobber-test: "I should still be here after it is all over!"; -*-
 # [[file:::orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an org-mode file using file local variables
 #+options: num:nil
@@ -20,8 +20,9 @@ Using =orgstrap= is easy.
    =C-x C-f= =https://raw.githubusercontent.com/tgbugs/orgstrap/master/orgstrap.org=)
    [fn::This is usually the most difficult step. See [[file:::#future-work][Future work]]
    for ideas about how to get from zero to emacs.].
-3. +Accept the file local variables.+ CHECK THE FILE LOCAL VARIABLES.
-4. Accept the file local variables.
+4. Decline the file local variables.
+5. Inspect the [[orgstrap][orgstrap block]] and file local variables.
+7. Reload the file and accept the file local variables.
 
 Congratulations you can now use =orgstrap= with your own files!
 
@@ -38,7 +39,6 @@ the implementation of =orgstrap= along with discussion and commentary. Thus
 this file is itself an example of how to use =orgstrap=.
 * Hello =orgstrap=
 The bare minimum needed to make an =org-mode= file executable (with a bit of safety).
-# TODO This is what should be produced by a call to C-u M-x `orgstrap-init'
 #+caption: [[file:./orgstrap-minimal.org]]
 #+begin_src org :tangle ./orgstrap-minimal.org
 # -*- orgstrap-cypher: sha256; orgstrap-block-checksum: 66ba9b040e22cc1d30b6f1d428b2641758ce1e5f6ff9ac8afd32ce7d2f4a1bae; -*-
@@ -450,7 +450,7 @@ Use a prefix argument (i.e. C-u) to add file local variables comments instead of
     ;; good enough to start
     (cond ((equal commands-existing orgstrap--local-variable-eval-commands) nil)
           ((not commands-existing)
-           (progn
+           (let ((print-escape-newlines t))  ; needed to preserve the escaped newlines
              (add-file-local-variable 'orgstrap-local-variables-block-version
                                       orgstrap--default-local-variables-block-version)
              (mapcar (lambda (sexp) (add-file-local-variable 'eval sexp))
@@ -575,13 +575,24 @@ hopefully reduces one of the obstacles to enhancing the
 documentation of orgstrap code and blocks over time when
 the meaningful code itself has not changed
 
-#+name: local-variables-generated-from-code
-#+begin_src emacs-lisp :results output raw :wrap "src emacs-lisp"
-(mapcar (lambda (s) (pp s standard-output) nil) orgstrap--local-variable-eval-commands)
+#+name: local-variables-readable
+#+begin_src emacs-lisp :results output raw :wrap "src emacs-lisp :eval never" :exports results :eval no-export
+(princ ";; code for modeline at the top of file\n")
+(pp `(setq-local orgstrap-cypher ',orgstrap-default-cypher))
+(pp `(setq-local orgstrap-block-checksum 'sha256-sum-of-the-orgstrap-block))
+(princ ";; code for local variables\n;;XXX VERIFY THAT YOUR LOCAL VARIABLES MATCH WHAT YOU SEE HERE\n")
+(pp `(setq-local 'orgstrap-local-variables-block-version ,orgstrap--default-local-variables-block-version))
+(mapcar #'pp orgstrap--local-variable-eval-commands)
 #+end_src
 
-#+RESULTS:
-#+begin_src emacs-lisp
+#+RESULTS: local-variables-readable
+#+begin_src emacs-lisp :eval never
+;; code for modeline at the top of file
+(setq-local orgstrap-cypher 'sha256)
+(setq-local orgstrap-block-checksum 'sha256-sum-of-the-orgstrap-block)
+;; code for local variables
+;;XXX VERIFY THAT YOUR LOCAL VARIABLES MATCH WHAT YOU SEE HERE
+(setq-local 'orgstrap-local-variables-block-version 0.1)
 (defun orgstrap--expand-body (info)
   "expand noweb references if noweb is set"
   (let ((coderef (nth 6 info))
@@ -607,37 +618,6 @@ the meaningful code itself has not changed
   (org-babel-goto-named-src-block "orgstrap")
   (org-babel-execute-src-block))
 (setq-local org-confirm-babel-evaluate t)
-(fmakunbound #'orgstrap--confirm-eval)
-#+end_src
-
-#+name: local-variables-readable
-#+begin_src emacs-lisp :eval never :exports code
-;; code from modeline at the top of file
-
-(setq-local orgstrap-cypher 'sha256)
-(setq-local orgstrap-block-checksum "sha256-sum-of-the-orgstrap-block")
-
-;; code from local variables
-;; XXX CHECK THAT THIS MATCHES WHAT IS IN THE FILE
-
-(setq-local orgstrap-local-variables-block-version 0.0)
-
-(defun orgstrap--confirm-eval (lang body)
-  (and (member lang '("elisp" "emacs-lisp"))
-       (eq (intern
-            (secure-hash
-             orgstrap-cypher
-             (prin1-to-string (read (concat "(progn\n" body "\n)")))))
-           orgstrap-block-checksum)))
-
-(setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
-
-(save-excursion
-  (org-babel-goto-named-src-block "orgstrap")
-  (org-babel-execute-src-block))
-
-(setq-local org-confirm-babel-evaluate t)
-
 (fmakunbound #'orgstrap--confirm-eval)
 #+end_src
 
@@ -867,11 +847,7 @@ When running a file.
    (assuming no hash collisions).
 4. *Observe whether org-mode complains that the orgstrap block has changed.*
 * Local Variables Footer :noexport:
-=org-confirm-babel-evaluate= does not work right now because it gives the unexpanded body.
-The easiest workaround is to either advise around =org-babel-confirm-evaluate= and just do
-our check there, or to get info ourselves again inside of =orgstrap--confirm-eval= and then
-use =orgstrap--expand-body=
-#+begin_src elisp
+#+begin_src elisp :exports none
 (defun orgstrap--confirm-eval (lang body) t)
 (defun orgstrap--confirm-eval (lang body) nil)
 (defun orgstrap--confirm-eval (lang body)
@@ -886,8 +862,6 @@ use =orgstrap--expand-body=
               (eq orgstrap-block-checksum content-checksum)))))
 ' ; AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaa
 (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
-
-# eval: (defun orgstrap--confirm-eval (lang body) (and (member lang '("elisp" "emacs-lisp")) (let* ((content-checksum (secure-hash orgstrap-cypher (prin1-to-string (read (concat "(progn\n" body "\n)")))))) (message "%s %s" orgstrap-block-checksum content-checksum) (eq orgstrap-block-checksum content-checksum))))
 #+end_src
 
 Local Variables:
