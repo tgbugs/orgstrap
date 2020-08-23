@@ -414,11 +414,13 @@ to the reversed list of read variables which are the first argument in the lambd
 in a comment on the second line of the file."
   (interactive)  ; TODO prompt for message with C-u ?
   (goto-char (point-min))
-  (next-line)
+  (next-logical-line)  ; use logical-line to avoid issues with visual line mode
   (let ((link-message (or link-message orgstrap-link-message)))
-  ;; FIXME issue with evil respect visual line
-    (unless (looking-at-p (format "^# \\[\\[file:::%s\\]\\[.+\\]\\]$" orgstrap-orgstrap-block-name))
-      (insert (format "\n# [[file:::%s][%s]]\n"
+    (unless (save-excursion (re-search-forward
+                             (format "^# \\[\\[file:::%s\\]\\[.+\\]\\]$"
+                                     orgstrap-orgstrap-block-name)
+                             nil t))
+      (insert (format "# [[file:::%s][%s]]\n"
                       orgstrap-orgstrap-block-name
                       (or link-message orgstrap-link-message))))))
 
@@ -461,14 +463,17 @@ Use a prefix argument (i.e. C-u) to add file local variables comments instead of
 (defun orgstrap-init ()
   "Initialize orgstrap in the current buffer."
   (interactive)
+  (when (not (eq major-mode 'org-mode))
+    (error "Cannot orgstrap, buffer not in org-mode it is in %s!" major-mode))
   ;; TODO orgstrap-mode? Doesn't quite make sense since it is a one shot thing.
   ;; TODO option for no link?
   ;; TODO option for local variables in comments vs noexport
-  (orgstrap--add-orgstrap-block)
-  (orgstrap-add-block-checksum)
-  (orgstrap--add-link-to-orgstrap-block) ; FIXME at the moment this breaks the headline, probably due to my recent switch to use evil respect visual line mode which means that others will encounter the issue as well
-  (orgstrap--add-file-local-variables) ; FIXME sometimes this doesn't populate due to an out of range error
-)
+  (save-excursion
+    (orgstrap--add-orgstrap-block)
+    (orgstrap-add-block-checksum)
+    (orgstrap--add-link-to-orgstrap-block)
+    ;; FIXME sometimes local variables don't populate due to an out of range error
+    (orgstrap--add-file-local-variables)))
 
 ;;(defvar orgstrap--helpers nil)
 ;;(setq orgstrap--helpers nil)
@@ -569,6 +574,41 @@ This makes it possible to add comments to the code without changing the checksum
 hopefully reduces one of the obstacles to enhancing the
 documentation of orgstrap code and blocks over time when
 the meaningful code itself has not changed
+
+#+name: local-variables-generated-from-code
+#+begin_src emacs-lisp :results output raw :wrap "src emacs-lisp"
+(mapcar (lambda (s) (pp s standard-output) nil) orgstrap--local-variable-eval-commands)
+#+end_src
+
+#+RESULTS:
+#+begin_src emacs-lisp
+(defun orgstrap--expand-body (info)
+  "expand noweb references if noweb is set"
+  (let ((coderef (nth 6 info))
+        (expand (if (org-babel-noweb-p (nth 2 info) :eval)
+                    (org-babel-expand-noweb-references info)
+                  (nth 1 info))))
+    (if (not coderef)
+        expand
+      (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1))))
+(defun orgstrap--confirm-eval (lang body)
+  "non-nil => prompt"
+  (not (and (member lang '("elisp" "emacs-lisp"))
+            (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info)))
+                   (content-checksum
+                    (intern
+                     (secure-hash
+                      orgstrap-cypher
+                      (prin1-to-string
+                       (read (concat "(progn\n" body "\n)")))))))
+              (eq orgstrap-block-checksum content-checksum)))))
+(setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
+(save-excursion
+  (org-babel-goto-named-src-block "orgstrap")
+  (org-babel-execute-src-block))
+(setq-local org-confirm-babel-evaluate t)
+(fmakunbound #'orgstrap--confirm-eval)
+#+end_src
 
 #+name: local-variables-readable
 #+begin_src emacs-lisp :eval never :exports code
