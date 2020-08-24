@@ -1,4 +1,4 @@
-# -*- orgstrap-cypher: sha256; orgstrap-block-checksum: e5bbcc80b167796e39482b6b8c69c5bce1bcaaff3194f6b0f4ca2a18807c0e9e; no-klobber-test: "I should still be here after it is all over!"; -*-
+# -*- orgstrap-cypher: sha256; orgstrap-block-checksum: 2f80d736dab7b8376c069226593453c9cc5f3c032cacf55878ba64625e887d11; no-klobber-test: "I should still be here after it is all over!"; -*-
 # [[file:::orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an org-mode file using file local variables
 #+options: num:nil
@@ -37,6 +37,9 @@ orgstrap is available on melpa.
 The rest of this file is an overview of use cases for =orgstrap= as well as
 the implementation of =orgstrap= along with discussion and commentary. Thus
 this file is itself an example of how to use =orgstrap=.
+
+=orgstrap= supports =>=emacs-24=, though the =orgstrap= block for this
+file only works in =>=emacs-26= at the moment.
 * Hello =orgstrap=
 The bare minimum needed to make an =org-mode= file executable (with a bit of safety).
 #+caption: [[file:./orgstrap-minimal.org]]
@@ -339,7 +342,14 @@ The optional `cypher' argument should almost never be used, instead change the v
 in the file local variables in `orgstrap--add-file-local-variables'")
 
 (defconst orgstrap--local-variable-eval-commands-0.1
-  '((defun orgstrap--expand-body (info)
+  '((when (< emacs-major-version 26)
+      (defun org-src-coderef-regexp (fmt &optional label)
+        (format "\\([ \t]*\\(%s\\)[ \t]*\\)$"
+                (replace-regexp-in-string
+                 "%s"
+                 (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)")
+                 (regexp-quote fmt) nil t))))
+    (defun orgstrap--expand-body (info)
       "expand noweb references if noweb is set"
       (let ((coderef (nth 6 info))
             (expand
@@ -580,6 +590,15 @@ requiring any additional steps."
 
 ;;; orgstrap.el ends here
 #+end_src
+** Testing :noexport:
+#+begin_src bash :var THIS_FILE=(buffer-file-name) :results none
+#emacs-24 -q orgstrap-minimal.org
+emacs-24 -q $THIS_FILE
+emacs-25 -q $THIS_FILE
+emacs-26 -q $THIS_FILE
+emacs-27 -q $THIS_FILE
+emacs-28-vcs -q $THIS_FILE
+#+end_src
 * Local Variables
 Local variables must go at the end of a file.
 We have to use =setq= on =org-confirm-babel-evaluate= because it is marked
@@ -616,7 +635,7 @@ required when the meaningful code itself has not changed.
 (pp `(setq-local orgstrap-cypher ',orgstrap-default-cypher))
 (pp `(setq-local orgstrap-block-checksum 'sha256-sum-of-the-orgstrap-block))
 (princ ";; code for local variables\n;;XXX VERIFY THAT YOUR LOCAL VARIABLES MATCH WHAT YOU SEE HERE\n")
-(pp `(setq-local 'orgstrap-local-variables-block-version ,orgstrap--default-local-variables-block-version))
+(pp `(setq-local orgstrap-local-variables-block-version ,orgstrap--default-local-variables-block-version))
 (mapcar #'pp (orgstrap--local-variable-eval-commands))
 #+end_src
 
@@ -627,7 +646,18 @@ required when the meaningful code itself has not changed.
 (setq-local orgstrap-block-checksum 'sha256-sum-of-the-orgstrap-block)
 ;; code for local variables
 ;;XXX VERIFY THAT YOUR LOCAL VARIABLES MATCH WHAT YOU SEE HERE
-(setq-local 'orgstrap-local-variables-block-version "0.1")
+(setq-local orgstrap-local-variables-block-version "0.1")
+(when (< emacs-major-version 26)
+  (defun org-src-coderef-regexp
+      (fmt &optional label)
+    (format "\\([ 	]*\\(%s\\)[ 	]*\\)$"
+            (replace-regexp-in-string
+             "%s"
+             (if label
+                 (regexp-quote label)
+               "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)")
+             (regexp-quote fmt)
+             nil t))))
 (defun orgstrap--expand-body (info)
   "expand noweb references if noweb is set"
   (let ((coderef (nth 6 info))
@@ -886,12 +916,13 @@ When running a file.
    (assuming no hash collisions).
 4. *Observe whether org-mode complains that the orgstrap block has changed.*
 * Local Variables Footer :noexport:
-Local Variables:
-orgstrap-local-variables-block-version: "0.1"
-eval: (defun orgstrap--expand-body (info) "expand noweb references if noweb is set" (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1))))
-eval: (defun orgstrap--confirm-eval (lang body) "non-nil => prompt" (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (let ((print-quoted nil)) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum)))))
-eval: (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
-eval: (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block))
-eval: (setq-local org-confirm-babel-evaluate t)
-eval: (fmakunbound #'orgstrap--confirm-eval)
-End:
+# Local Variables:
+# orgstrap-local-variables-block-version: "0.1"
+# eval: (when (< emacs-major-version 26) (defun org-src-coderef-regexp (fmt &optional label) (format "\\([ 	]*\\(%s\\)[ 	]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t))))
+# eval: (defun orgstrap--expand-body (info) "expand noweb references if noweb is set" (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1))))
+# eval: (defun orgstrap--confirm-eval (lang body) "non-nil => prompt" (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (let ((print-quoted nil)) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum)))))
+# eval: (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
+# eval: (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block))
+# eval: (setq-local org-confirm-babel-evaluate t)
+# eval: (fmakunbound #'orgstrap--confirm-eval)
+# End:
