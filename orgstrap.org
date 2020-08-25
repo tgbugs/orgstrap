@@ -887,15 +887,18 @@ is entirely possible to use the more compact version.
 [[file:~/git/NOFORK/org-ruby]]
 * Background, file local variables, and checksums
 As mentioned above, the primary use case for =orgstrap= was that I was sick of having
-to work around the limitation that I had to do one of three things. I either one, had
+to work around the limitation that I had to do one of four things. I either one, had
 to remember to eval the source block containing defuns used later before I could
 eval other source blocks that used those functions in headers, or two, had to put those
-functions in =init.el=, destroying ability to use org files as standalone self describing
-portable and reusable computational artifacts, or three, had to copy and paste verbose
-elisp bits around to achieve what I wanted. Furthermore, it is hard for humans to follow
-all the steps needed to get everything working -- even when 'everything' is just invoking
-=C-c C-c= on a single source block I still forget. This can lead to _bad things_
-if some of those source blocks were interdependent, or proceeded with a nil, etc.
+functions in =init.el=, destroying the ability to use org files as standalone self describing
+portable and reusable computational artifacts, three, had to copy and paste verbose
+elisp bits around to achieve what I wanted, or four, had to double tangle a file so that
+the results of the first tangle could be loaded before calling the second tangle so that
+the functionality would be available (this also produces the situation described in three).
+Furthermore, it is hard for humans to follow all the steps needed to get everything
+working -- even when 'everything' is just invoking =C-c C-c= on a single source block
+I still forget. This can lead to _bad things_ if some of those source blocks were
+interdependent, or proceeded with a nil, etc.
 
 File local variables to the rescue!
 I'm slightly embarrassed to say how long it took me to arrive at the current solution.
