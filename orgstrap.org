@@ -1,52 +1,55 @@
-# -*- orgstrap-cypher: sha256; orgstrap-block-checksum: e0cd143ce06dd8e10a62bf48a9aa8e56b2d82f8a58ede1338a099070e75980bf; no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; -*-
-
+# -*- orgstrap-cypher: sha256; orgstrap-block-checksum: 4859d1dc22b90e646c79d6a678db7133e6cfd6d53d843d0f6e68bd1667245420; no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an org-mode file using file local variables
-#+options: num:nil
+#+options: num:nil \n:nil
+#+LATEX_HEADER: \usepackage[margin=0.8in]{geometry}
+#+LATEX_HEADER: \setlength\parindent{0pt}
 
 # [[file:./orgstrap.pdf]]
 # [[file:./orgstrap.html]]
 
 =orgstrap= is a specification and tools for standalone self-bootstrapping =org-mode= files.
 
-This file +bootstraps+ orgstraps itself to provide the functionality needed to use
+This file bootstraps itself to provide the functionality needed to use
 =orgstrap= in any =org-mode= file.
 
+=orgstrap= works with all versions of emacs since =24.1= and all versions of org since =8.2.10=.
+
 * Getting started
+
 Using =orgstrap= is easy.
 
 1. Obtain the org mode source for this file. (e.g.
    [[https://raw.githubusercontent.com/tgbugs/orgstrap/master/orgstrap.org][from GitHub]]).
-2. Open it in emacs (e.g. =M-x= =url-handler-mode=
-   =C-x C-f= =https://raw.githubusercontent.com/tgbugs/orgstrap/master/orgstrap.org=)
-   [fn::This is usually the most difficult step. See [[file:::#future-work][Future work]]
-   for ideas about how to get from zero to emacs.].
+2. Open the source in emacs[fn::This is usually the most difficult step. See
+   [[file:::#future-work][Future work]] for ideas about how to get from zero to emacs.]
+   (e.g. =M-x= =url-handler-mode= then =C-x C-f= @@latex: \\@@
+   =https://raw.githubusercontent.com/tgbugs/orgstrap/master/orgstrap.org=).
 3. Decline the file local variables.
 4. Inspect the [[orgstrap][orgstrap block]] and file local variables.
 5. Reload the file and accept the file local variables.
 
 Congratulations you can now use =orgstrap= with your own files!
 
-Invoke =M-x= =orgstrap-init= to add all
-the =orgstrap= machinery to the file in current buffer.
+Use =M-x= =orgstrap-init= to add the basic the =orgstrap=
+machinery to the file in the current buffer.
 
 # SOON TM
 Alternately if you would prefer a slightly more sane installation experience
 that doesn't vanish until you reopen this file every time you restart emacs,
 orgstrap is available on melpa.
 
-The rest of this file is an overview of use cases for =orgstrap= as well as
-the implementation of =orgstrap= along with discussion and commentary. Thus
-this file is itself an example of how to use =orgstrap=.
+The rest of this file is an overview of the use cases for =orgstrap= and
+the implementation of =orgstrap= along with discussion and commentary.
 
-=orgstrap= supports =>=emacs-24=, though the =orgstrap= block for this
-file only works in =>=emacs-26= at the moment.
+If you are looking for examples of how to use =orgstrap= this files is a good place to start.
+
 * Hello =orgstrap=
 The bare minimum needed to make an =org-mode= file executable (with a bit of safety).
 #+caption: [[file:./orgstrap-minimal.org]]
 #+begin_src org :tangle ./orgstrap-minimal.org
 # -*- orgstrap-cypher: sha256; orgstrap-block-checksum: 66ba9b040e22cc1d30b6f1d428b2641758ce1e5f6ff9ac8afd32ce7d2f4a1bae; -*-
-# [[file:::orgstrap][jump to orgstrap block for this file]]
+# [[orgstrap][jump to orgstrap block for this file]]
 
 ,#+name: orgstrap
 ,#+begin_src elisp :results none :noweb yes
@@ -57,20 +60,24 @@ The bare minimum needed to make an =org-mode= file executable (with a bit of saf
 
 # Local Variables:
 # orgstrap-local-variables-block-version: "0.2"
-# eval: (defun orgstrap--confirm-eval (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (eq orgstrap-block-checksum (intern (secure-hash orgstrap-cypher (let ((print-quoted nil)) (prin1-to-string (read (concat "(progn\n" body "\n)"))))))))))
+# eval: (defun orgstrap--confirm-eval (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (eq orgstrap-block-checksum (intern (secure-hash orgstrap-cypher (let* ((print-quoted nil) (bname (format "body-norm-%s" emacs-major-version)) (buffer (let ((existing (get-buffer bname))) (if existing existing (create-file-buffer bname)))) (body-normalized (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (with-current-buffer buffer (erase-buffer) (insert body-normalized)) body-normalized)))))))
 # eval: (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
 # eval: (unwind-protect (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block)) (setq-local org-confirm-babel-evaluate t) (fmakunbound #'orgstrap--confirm-eval))
 # End:
 #+end_src
+
 *NOTE* This set of local variables will only work if you don't use noweb or if your
 copy of org-mode has had the patch for =org-babel-check-confirm-evaluate= applied.
 This either means you have applied the manual patch below, or the following commit
 is in the tree of the code you are running. Unfortunately this is not in emacs 27.1,
 but it is in =maint= so it should make it into core next time there is a sync.
 https://code.orgmode.org/bzg/org-mode/commit/df5a83637518ad9aa586d49884a6271f11afc592
+# orgit-rev:~/git/NOFORK/org-mode::df5a83637518ad9aa586d49884a6271f11afc592
 
 Version =0.1= of the =orgstrap= local variables described below is a portable version
-that works with unpatched versions of org-mode.
+that works with unpatched versions of org-mode as far back as =8.2.10= (the version
+bundled with =emacs-24.5=).
+
 #+name: org-babel-check-confirm-evaluate-patch
 #+begin_src diff
 diff --git a/lisp/ob-core.el b/lisp/ob-core.el
@@ -104,8 +111,8 @@ With =orgstrap= you can.
 
 =orgstrap= makes sure that the functionality that you need is available when you need it.
 Whether it is =(defun dir-tramp-sudo (host) (format "/ssh:%s|sudo:%s:" host host))= to
-simplify a pattern for remote execution when using the =:dir= header, or a function to
-detect and set the right environment variables, =orgstrap= is there for you.
+simplify a pattern for remote execution when using the =:dir= header argument, or a
+function to detect and set the right environment variables, =orgstrap= is there for you.
 * Use cases
 =orgstrap= essentially specifies a plain-text executable file format.
 Thus, in principle it can be used for literally anything.
@@ -115,16 +122,16 @@ better, saner, and safer ways to execute arbitrary code than to hash some elisp
 source blocks and use emacs file local variables to automatically eval a specially
 named[fn::Since all the conventions for how this is done are defined locally by each
 file you can rename the special block however you see fit, perhaps from =orgstrap= to
-=main= if need to pretend that the file is actually c source code with some special syntax.]
+=main= if you need to pretend that the file is actually c source code with some special syntax.]
 source block only when it matches the hash.
 
-#+name: table-use-cases
 #+caption: Things you can do with arbitrary code execution.
+#+name: table-use-cases
 |----------------------------------------+------------+--------------------------------|
 | Use case                               | Good idea  | Alternative                    |
 |----------------------------------------+------------+--------------------------------|
 | Always run defuns used in file         | Yes        | init.el, =C-c C-c=             |
-| Install elisp code directly            | No         | Use packages.el                |
+| Install elisp code directly            | No         | Use =packages.el=              |
 | Self tangling files                    | I do it    | =C-c C-v C-t=                  |
 | Install packages required by file      | Probably   | System package manager         |
 | Create an emacs based botnet           | Definitely | ???                            |
@@ -140,12 +147,17 @@ source block only when it matches the hash.
 # version control in another system.
 * Details
 The first emacs lisp source block named =orgstrap= in an org file is
-automatically run using the =exec:= file local variable. Users can
+automatically run using an =exec:= file local variable. Users can
 review and add the file local variables to their known safe list
-so that the code can be run in the future without the need to
-bother them again.
+so that the code can be run in the future without the need to bother
+them again.
+
+When opening a file for the first time, users should decline the local
+variables, review the =orgstrap= block directly, and then reload revisit,
+or =M-x= =org-mode= and only then accept the local variables.
 
 This is the =orgstrap= block that is used for this file.
+#+caption: The =orgstrap= block that is used for this file.
 #+name: orgstrap
 #+begin_src elisp :results none :noweb no-export
 ;; This is an example that also nowebs in the source for
@@ -180,41 +192,12 @@ checksum of the orgstrap block has changed and if so tangle the file."
 (message "orgstrap complete!")
 #+end_src
 
-Here is the full source of the block above. 
+The headers for the block above look like this.
 #+name: orgstrap-example
-#+begin_example org :eval never :noweb no
+#+begin_example org :eval never :noweb yes
 ,#+name: orgstrap
 ,#+begin_src elisp :results none :noweb no-export
-;; This is an example that also nowebs in the source for
-;; `orgstrap-get-block-checksum' so it is easy to
-;; use this pattern to create and update orgstrap blocks
-(defun orgstrap-demo-function (arg)
-  (if arg "yes" "no"))
-
-<<orgstrap-edit-helper-defuns>>
-<<orgstrap-init-helper-defuns>>
-<<orgstrap-install-helper-defuns>>
-
-(defun orgstrap-add-checksum-and-tangle-on-change ()
-  "Use with the `before-save-hook' local variable to test whether the
-checksum of the orgstrap block has changed and if so tangle the file."
-  (let* ((elv (orgstrap--read-current-local-variables))
-         (checksum-existing (assoc 'orgstrap-block-checksum elv))
-         (checksum (orgstrap-add-block-checksum)))
-    (unless (eq checksum-existing checksum)
-      (remove-hook 'before-save-hook #'orgstrap-add-checksum-and-tangle-on-change t)
-      ;; have to remove the hook because for some reason tangling from a buffer
-      ;; counts as saving from that buffer?
-      (org-babel-tangle)
-      (add-hook 'before-save-hook #'orgstrap-add-checksum-and-tangle-on-change 0 t))))
-
-(add-hook 'before-save-hook #'orgstrap-add-checksum-and-tangle-on-change 0 t)
-;; this is kind of evil because `before-save-hook' is a risky local variable
-;; which you can't accept permanently because someone could rebind the name
-;; in this context it is not quite as risky because we can see what it is
-;; being bound to right here, though that could be changed in the future
-
-(message "orgstrap complete!")
+<<orgstrap>>
 ,#+end_src
 #+end_example
 
@@ -298,12 +281,8 @@ that anyone anywhere is running one of those versions is approximately zero.
       (replace-regexp-in-string
        (org-src-coderef-regexp coderef) "" expand nil nil 1))))
 #+end_src
-
-#+begin_src elisp
-(orgstrap--with-block "orgstrap"
-  (setq *test-info* (org-babel-get-src-block-info)))
-#+end_src
 *** Edit
+#+caption: edit helpers
 #+name: orgstrap-edit-helper-defuns
 #+begin_src emacs-lisp :results none :lexical yes :noweb yes
 ;;; edit helpers
@@ -377,6 +356,7 @@ A note on filter aka =cl-remove-if-not= in =orgstrap--add-file-local-variables=.
 The most portable thing to do for now is =(require 'cl-lib)= since we
 don't currently support anything below 23. Then use =cl-remove-if-not=.
 
+#+caption: init helpers
 #+name: orgstrap-init-helper-defuns
 #+begin_src emacs-lisp :results none :lexical yes :noweb yes
 ;;; init helpers
@@ -523,6 +503,7 @@ Use a prefix argument (i.e. C-u) to add file local variables comments instead of
 ;; embed all of this block or orgstrap.el in a block in * orgstrap helpers :noexport: 
 #+end_src
 *** TODO Install
+#+caption: install helpers
 #+name: orgstrap-install-helper-defuns
 #+begin_src emacs-lisp :results none
 ;; install helpers
@@ -552,8 +533,8 @@ requiring any additional steps."
 ** orgstrap.el :noexport:
 # XXX TODO it would be a super cool feature if xref could resolve to elisp source
 # blocks in org-mode files, because then half the need for the .el file would go away
-#+name: orgstrap.el
 #+caption: Retangle this if something changes.
+#+name: orgstrap.el
 #+header: :exports none
 #+begin_src elisp :noweb yes :eval never :tangle ./orgstrap.el
 ;;; orgstrap.el --- Bootstrap an org-mode file using file local variables -*- lexical-binding: t -*-
@@ -594,15 +575,6 @@ requiring any additional steps."
 ;;; orgstrap.el ends here
 #+end_src
 ** Testing :noexport:
-#+begin_src bash :results none
-emacs-24 -q orgstrap-minimal.org
-#+end_src
-#+begin_src bash :results none
-emacs-24 -q problem.org
-#+end_src
-#+begin_src bash :results none
-emacs-24 -q orgstrap.org
-#+end_src
 #+begin_src bash :var THIS_FILE=(buffer-file-name) :results none
 emacs-24 -q $THIS_FILE
 emacs-25 -q $THIS_FILE
@@ -617,15 +589,48 @@ Local variables must go at the end of a file.
 We have to use =setq-local= on =org-confirm-babel-evaluate= because it is marked
 as a =safe-local-variable=.  In this context this workaround seems reasonable and
 not malicious because the use of =eval:= should alert users that some arbitrary
-stuff is going on and that they should check it very carefully.
+stuff is going on and that they should be on high alert to check it.
 
-Below is a more readable version of what the compacted local variables code
-at the end of the file is doing. *Make sure to check that the code matches.*
-# TODO it is entirely possible to automate that check.
+Below in [[#local-variable-definitions][Definitions]] there is a more readable
+version of what the compacted local variables code at the end of the file is doing.
+*Make sure to check that the code matches when reviewing local variables.*
+# TODO it is entirely possible to automate that check
+# but not without already having orgstrap available.
 ** Normalization
-
 #+name: orgstrap-code-normalization
 #+begin_src elisp :eval never
+(let ((print-quoted nil))
+  (prin1-to-string (read (concat "(progn\n" body "\n)"))))
+#+end_src
+
+=prin1-to-string= is used to normalize the code in the orgstrap block,
+removing any comments and formatting irregularities. This is important
+for two reasons.
+
+First it helps prevent denial of service attacks against human auditors
+who have low bandwidth for detecting fiddly changes.
+
+Second, normalization that ignores comments makes it possible to improve
+the documentation of code without changing the checksum. Hopefully this
+will reduce one of the obstacles to enhancing the documentation of orgstrap
+code and blocks over time since rehashing will not be required when the
+meaningful code itself has not changed.
+
+=(print-quoted nil)= is needed for backward compatibility due to a change
+to the default from =nil= to =t= in emacs-27 (sigh). See
+[[orgit-rev:~/git/NOFORK/emacs::72ee93d68daea00e2ee69417afd4e31b3145a9fa][emacs commit 72ee93d68daea00e2ee69417afd4e31b3145a9fa]].
+
+#+caption: XXX portability note
+#+begin_verse
+For emacs < 26 (org < 9) either lowercase =#+caption:= must be placed _BEFORE_ =#+name:=
+OR =#+CAPTION:= must be uppercase and can come after =#+name:=,
+otherwise =#+name:= will not be associated with the block.
+What a fun bug.
+#+end_verse
+
+#+caption: rename to orgstrap-code-normalization to use this block for debug
+#+name: orgstrap-code-normalization-debug
+#+begin_src elisp :eval never :exports none
 (let* ((print-quoted nil)
        (bname (format "body-norm-%s" emacs-major-version))
        (buffer (let ((existing (get-buffer bname)))
@@ -637,37 +642,14 @@ at the end of the file is doing. *Make sure to check that the code matches.*
     (insert body-normalized))
   body-normalized)
 #+end_src
-
-#+name: wat
-#+begin_src elisp :noweb yes
-(+ 1 2)
-<<orgstrap-code-normalization>>
-#+end_src
-
-#+begin_src elisp :tangle ./wat.el :noweb yes
-<<wat>>
-(+ 3 4)
-#+end_src
-
-=prin1-to-string= is used to normalize the code in the orgstrap block,
-removing any comments and formatting irregularities. This is important
-for two reasons. First it helps prevent denial of service attacks
-against human auditors who have low bandwidth for detecting fiddly
-changes. =(print-quoted nil)= is needed for backward compatibility
-due to a change to the default from =nil= to =t= in emacs-27 (sigh).
-
-Normalization that ignores comments makes it possible to add improve
-the documentation of code without changing the checksum. Hopefully
-this will reduce one of the obstacles to enhancing the documentation
-of orgstrap code and blocks over time since rehashing will not be
-required when the meaningful code itself has not changed.
-
 ** Definitions
 :PROPERTIES:
 :CUSTOM_ID:  local-variable-definitions
 :END:
 These blocks are nowebbed into ref:orgstrap-init-helper-defuns and are
-used directly by =orgstrap-init= to populate the file local variables.
+used directly by =orgstrap-init= to populate file local variables.
+
+#+caption: local variables version 0.1 (portable)
 #+name: orgstrap-file-local-variables-0.1
 #+begin_src elisp :eval never :noweb yes
 <<orgstrap-expand-body>>
@@ -691,6 +673,7 @@ used directly by =orgstrap-init= to populate the file local variables.
 <<orgstrap-file-local-variables-shared>>
 #+end_src
 
+#+caption: local variables version 0.2 (portable if not using noweb)
 #+name: orgstrap-file-local-variables-0.2
 #+begin_src elisp :eval never :noweb yes
 (defun orgstrap--confirm-eval (lang body)
@@ -705,6 +688,7 @@ used directly by =orgstrap-init= to populate the file local variables.
 #+end_src
 
 Once =orgstrap-confirm-eval= is defined the rest of the =eval:= local variables are the same.
+#+caption: common local variables
 #+name: orgstrap-file-local-variables-shared
 #+begin_src elisp :eval never
 (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
@@ -732,7 +716,7 @@ Here is what the =:noexport:= block below this looks like.
 # orgstrap-local-variables-block-version: "0.1"
 # eval: (when (not (fboundp 'org-src-coderef-regexp)) (defun org-src-coderef-regexp (fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))))
 # eval: (defun orgstrap--expand-body (info) "expand noweb references if noweb is set" (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1))))
-# eval: (defun orgstrap--confirm-eval (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (let* ((print-quoted nil) (bname (format "body-norm-%s" emacs-major-version)) (buffer (let ((existing (get-buffer bname))) (if existing existing (create-file-buffer bname)))) (body-normalized (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (with-current-buffer buffer (erase-buffer) (insert body-normalized)) body-normalized)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum)))))
+# eval: (defun orgstrap--confirm-eval (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (let ((print-quoted nil)) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum)))))
 # eval: (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
 # eval: (unwind-protect (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block)) (setq-local org-confirm-babel-evaluate t) (fmakunbound #'orgstrap--confirm-eval))
 # End:
@@ -868,6 +852,11 @@ function.
    some part of compiler theory but can't quite put my finger on it.
 ** Auto update block checksum on save
 Before save hook and/or before commit hook to automatically update the block checksum.
+** determine whether to use 0.1 vs 0.2 based on the :noweb header
+The smaller 0.2 block is portable without noweb, so as long as the noweb header
+is not set on the block (or really, as long as there are no references) then it
+is entirely possible to use the more compact version.
+** TODO resolve the issue with tabs in < 26                        :noexport:
 ** TODO command to checksum the file local variables               :noexport:
 ** TODO use orgstrap to automatically keep example blocks in sync  :noexport:
 ** TODO melpa                                                      :noexport:
@@ -951,7 +940,7 @@ When running a file.
 # orgstrap-local-variables-block-version: "0.1"
 # eval: (when (not (fboundp 'org-src-coderef-regexp)) (defun org-src-coderef-regexp (fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))))
 # eval: (defun orgstrap--expand-body (info) "expand noweb references if noweb is set" (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1))))
-# eval: (defun orgstrap--confirm-eval (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (let* ((print-quoted nil) (bname (format "body-norm-%s" emacs-major-version)) (buffer (let ((existing (get-buffer bname))) (if existing existing (create-file-buffer bname)))) (body-normalized (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (with-current-buffer buffer (erase-buffer) (insert body-normalized)) body-normalized)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum)))))
+# eval: (defun orgstrap--confirm-eval (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (let ((print-quoted nil)) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum)))))
 # eval: (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
 # eval: (unwind-protect (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block)) (setq-local org-confirm-babel-evaluate t) (fmakunbound #'orgstrap--confirm-eval))
 # End:
