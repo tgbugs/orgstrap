@@ -16,7 +16,6 @@ This file bootstraps itself to provide the functionality needed to use
 =orgstrap= works with all versions of emacs since =24.1= and all versions of org since =8.2.10=.
 
 * Getting started
-
 Using =orgstrap= is easy.
 
 1. Obtain the org mode source for this file. (e.g.
@@ -43,7 +42,6 @@ The rest of this file is an overview of the use cases for =orgstrap= and
 the implementation of =orgstrap= along with discussion and commentary.
 
 If you are looking for examples of how to use =orgstrap= this files is a good place to start.
-
 * Hello =orgstrap=
 The bare minimum needed to make an =org-mode= file executable (with a bit of safety).
 #+caption: [[file:./orgstrap-minimal.org]]
@@ -64,38 +62,6 @@ The bare minimum needed to make an =org-mode= file executable (with a bit of saf
 # eval: (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
 # eval: (unwind-protect (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block)) (setq-local org-confirm-babel-evaluate t) (fmakunbound #'orgstrap--confirm-eval))
 # End:
-#+end_src
-
-*NOTE* This set of local variables will only work if you don't use noweb or if your
-copy of org-mode has had the patch for =org-babel-check-confirm-evaluate= applied.
-This either means you have applied the manual patch below, or the following commit
-is in the tree of the code you are running. Unfortunately this is not in emacs 27.1,
-but it is in =maint= so it should make it into core next time there is a sync.
-https://code.orgmode.org/bzg/org-mode/commit/df5a83637518ad9aa586d49884a6271f11afc592
-# orgit-rev:~/git/NOFORK/org-mode::df5a83637518ad9aa586d49884a6271f11afc592
-
-Version =0.1= of the =orgstrap= local variables described below is a portable version
-that works with unpatched versions of org-mode as far back as =8.2.10= (the version
-bundled with =emacs-24.5=).
-
-#+name: org-babel-check-confirm-evaluate-patch
-#+begin_src diff
-diff --git a/lisp/ob-core.el b/lisp/ob-core.el
-index e798595bd..230706b7f 100644
---- a/lisp/ob-core.el
-+++ b/lisp/ob-core.el
-@@ -238,7 +238,10 @@ (defun org-babel-check-confirm-evaluate (info)
-                    (if (functionp org-confirm-babel-evaluate)
-                        (funcall org-confirm-babel-evaluate
-                                 ;; Language, code block body.
--                                (nth 0 info) (nth 1 info))
-+                                (nth 0 info)
-+                                (if (org-babel-noweb-p headers :eval)
-+                                    (org-babel-expand-noweb-references info)
-+                                  (nth 1 info)))
-                      org-confirm-babel-evaluate))))
-     (cond
-      (noeval nil)
 #+end_src
 * Inspiration
 By default =org-mode= source block headers can only take existing elisp functions as arguments.
@@ -335,6 +301,38 @@ Once =orgstrap-confirm-eval= is defined the rest of the =eval:= local variables 
       (org-babel-execute-src-block))
   (setq-local org-confirm-babel-evaluate t)
   (fmakunbound #'orgstrap--confirm-eval))
+#+end_src
+** Note on noweb support
+*NOTE* This set of local variables will only work if you don't use noweb or if your
+copy of org-mode has had the patch for =org-babel-check-confirm-evaluate= applied.
+This either means you have applied the manual patch below, or the following commit
+is in the tree of the code you are running. Unfortunately this is not in emacs 27.1,
+but it is in =maint= so it should make it into core next time there is a sync.
+https://code.orgmode.org/bzg/org-mode/commit/df5a83637518ad9aa586d49884a6271f11afc592
+# orgit-rev:~/git/NOFORK/org-mode::df5a83637518ad9aa586d49884a6271f11afc592
+
+Version =0.1= of the =orgstrap= local variables described below is a portable version
+that works with unpatched versions of org-mode as far back as =8.2.10= (the version
+bundled with =emacs-24.5=).
+
+#+name: org-babel-check-confirm-evaluate-patch
+#+begin_src diff
+diff --git a/lisp/ob-core.el b/lisp/ob-core.el
+index e798595bd..230706b7f 100644
+--- a/lisp/ob-core.el
++++ b/lisp/ob-core.el
+@@ -238,7 +238,10 @@ (defun org-babel-check-confirm-evaluate (info)
+                    (if (functionp org-confirm-babel-evaluate)
+                        (funcall org-confirm-babel-evaluate
+                                 ;; Language, code block body.
+-                                (nth 0 info) (nth 1 info))
++                                (nth 0 info)
++                                (if (org-babel-noweb-p headers :eval)
++                                    (org-babel-expand-noweb-references info)
++                                  (nth 1 info)))
+                      org-confirm-babel-evaluate))))
+     (cond
+      (noeval nil)
 #+end_src
 ** How local variables appear in the file
 Here is what the modeline at the start of the file looks like.
