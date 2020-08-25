@@ -1,4 +1,4 @@
-# -*- orgstrap-cypher: sha256; orgstrap-block-checksum: 9c2a0a5e903edcf58e793d36f4bea48e8e24d40108ebfe1e429520a372567dbf; no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; -*-
+# -*- orgstrap-cypher: sha256; orgstrap-block-checksum: c02a2bdf599c7a3032b6585f53fea4b91bb2fdb6eff86270d749ce9e156cc39f; no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; -*-
 
 # [[file:::orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an org-mode file using file local variables
@@ -250,7 +250,7 @@ file then ref:orgstrap-edit-helper-defuns will be (was already) run for you.
 #+end_src
 
 #+RESULTS: do-orgstrap-add-block-checksum
-: e5bbcc80b167796e39482b6b8c69c5bce1bcaaff3194f6b0f4ca2a18807c0e9e
+: c02a2bdf599c7a3032b6585f53fea4b91bb2fdb6eff86270d749ce9e156cc39f
 
 ** =orgstrap= implementation
 Functions to calculate =orgstrap-block-checksum= and set it as a file local variable.
@@ -277,7 +277,7 @@ that anyone anywhere is running one of those versions is approximately zero.
 (when (not (fboundp 'org-src-coderef-regexp))
   (defun org-src-coderef-regexp (fmt &optional label)
     (let ((fmt org-coderef-label-format))
-      (format "\\([ 	]*\\(%s\\)[ 	]*\\)$"
+      (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$"
               (replace-regexp-in-string
                "%s"
                (if label
@@ -350,8 +350,8 @@ The macro provides local bindings for four names: `info', `params', `body-unexpa
   (interactive)
   (orgstrap--with-block orgstrap-orgstrap-block-name
     (let ((cypher (or cypher (orgstrap--current-buffer-cypher)))
-          (body-normalized (let ((print-quoted nil))
-                             (prin1-to-string (read (concat "(progn\n" body "\n)"))))))
+          (body-normalized
+           <<orgstrap-code-normalization>>))
       (secure-hash cypher body-normalized))))
 
 (defun orgstrap-add-block-checksum (&optional cypher)
@@ -623,11 +623,30 @@ Below is a more readable version of what the compacted local variables code
 at the end of the file is doing. *Make sure to check that the code matches.*
 # TODO it is entirely possible to automate that check.
 ** Normalization
-#+name: code-normalization
-#+caption: code normalization
+
+#+name: orgstrap-code-normalization
 #+begin_src elisp :eval never
-(let ((print-quoted nil))
-  (prin1-to-string (read (concat "(progn\n" body "\n)"))))
+(let* ((print-quoted nil)
+       (bname (format "body-norm-%s" emacs-major-version))
+       (buffer (let ((existing (get-buffer bname)))
+                 (if existing existing
+                   (create-file-buffer bname))))
+       (body-normalized (prin1-to-string (read (concat "(progn\n" body "\n)")))))
+  (with-current-buffer buffer
+    (erase-buffer)
+    (insert body-normalized))
+  body-normalized)
+#+end_src
+
+#+name: wat
+#+begin_src elisp :noweb yes
+(+ 1 2)
+<<orgstrap-code-normalization>>
+#+end_src
+
+#+begin_src elisp :tangle ./wat.el :noweb yes
+<<wat>>
+(+ 3 4)
 #+end_src
 
 =prin1-to-string= is used to normalize the code in the orgstrap block,
@@ -659,7 +678,7 @@ used directly by =orgstrap-init= to populate the file local variables.
   (not (and (member lang '("elisp" "emacs-lisp"))
             (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info)))
                    (body-normalized
-                    <<code-normalization>>)
+                    <<orgstrap-code-normalization>>)
                    (content-checksum
                     (intern
                      (secure-hash
@@ -680,7 +699,7 @@ used directly by =orgstrap-init= to populate the file local variables.
                 (intern
                  (secure-hash
                   orgstrap-cypher
-                  <<code-normalization>>))))))
+                  <<orgstrap-code-normalization>>))))))
 
 <<orgstrap-file-local-variables-shared>>
 #+end_src
@@ -711,13 +730,13 @@ Here is what the =:noexport:= block below this looks like.
 
 # Local Variables:
 # orgstrap-local-variables-block-version: "0.1"
-# eval: (when (not (fboundp 'org-src-coderef-regexp)) (defun org-src-coderef-regexp (fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([ 	]*\\(%s\\)[ 	]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))))
+# eval: (when (not (fboundp 'org-src-coderef-regexp)) (defun org-src-coderef-regexp (fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))))
 # eval: (defun orgstrap--expand-body (info) "expand noweb references if noweb is set" (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1))))
-# eval: (defun orgstrap--confirm-eval (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (let ((print-quoted nil)) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum)))))
+# eval: (defun orgstrap--confirm-eval (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (let* ((print-quoted nil) (bname (format "body-norm-%s" emacs-major-version)) (buffer (let ((existing (get-buffer bname))) (if existing existing (create-file-buffer bname)))) (body-normalized (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (with-current-buffer buffer (erase-buffer) (insert body-normalized)) body-normalized)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum)))))
 # eval: (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
 # eval: (unwind-protect (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block)) (setq-local org-confirm-babel-evaluate t) (fmakunbound #'orgstrap--confirm-eval))
 # End:
-#+end_example
+#+end_src
 * Best practices
 ** Use the system package manager.
 There is a big difference between using a script to install a program directly
@@ -930,9 +949,9 @@ When running a file.
 
 # Local Variables:
 # orgstrap-local-variables-block-version: "0.1"
-# eval: (when (not (fboundp 'org-src-coderef-regexp)) (defun org-src-coderef-regexp (fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([ 	]*\\(%s\\)[ 	]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))))
+# eval: (when (not (fboundp 'org-src-coderef-regexp)) (defun org-src-coderef-regexp (fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))))
 # eval: (defun orgstrap--expand-body (info) "expand noweb references if noweb is set" (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1))))
-# eval: (defun orgstrap--confirm-eval (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (let ((print-quoted nil)) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum)))))
+# eval: (defun orgstrap--confirm-eval (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (let* ((print-quoted nil) (bname (format "body-norm-%s" emacs-major-version)) (buffer (let ((existing (get-buffer bname))) (if existing existing (create-file-buffer bname)))) (body-normalized (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (with-current-buffer buffer (erase-buffer) (insert body-normalized)) body-normalized)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum)))))
 # eval: (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
 # eval: (unwind-protect (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block)) (setq-local org-confirm-babel-evaluate t) (fmakunbound #'orgstrap--confirm-eval))
 # End:
