@@ -161,8 +161,9 @@ This is the =orgstrap= block that is used for this file.
 #+name: orgstrap
 #+begin_src elisp :results none :noweb no-export
 ;; This is an example that also nowebs in the source for
-;; `orgstrap-get-block-checksum' so it is easy to
-;; use this pattern to create and update orgstrap blocks
+;; `orgstrap-init' and `orgstrap-add-block-checksum' along
+;; with the rest of the orgstrap machinery so it is easy to
+;; use orgstrap to create and update orgstrap blocks
 (defun orgstrap-demo-function (arg)
   (if arg "yes" "no"))
 
@@ -184,10 +185,10 @@ checksum of the orgstrap block has changed and if so tangle the file."
       (add-hook 'before-save-hook #'orgstrap-add-checksum-and-tangle-on-change 0 t))))
 
 (add-hook 'before-save-hook #'orgstrap-add-checksum-and-tangle-on-change 0 t)
-;; this is kind of evil because `before-save-hook' is a risky local variable
-;; which you can't accept permanently because someone could rebind the name
-;; in this context it is not quite as risky because we can see what it is
-;; being bound to right here, though that could be changed in the future
+;; This is kind of evil because `before-save-hook' is a risky local variable
+;; which you can't accept permanently because someone could rebind the name.
+;; In this context it is not quite as risky because we can see what it is
+;; being bound to right here, though that could be changed in the future.
 
 (message "orgstrap complete!")
 #+end_src
@@ -500,7 +501,7 @@ The optional `cypher' argument should almost never be used, instead change the v
     orgstrap-block-checksum))
 #+end_src
 *** Init
-A note on filter aka =cl-remove-if-not= in =orgstrap--add-file-local-variables=.
+A note on filter aka =cl-remove-if-not= in =orgstrap--add-file-local-variables= at [[(clrin)]].
 | emacs version | require |
 |---------------+---------|
 | < 24          | 'cl     |
@@ -619,7 +620,7 @@ Use a prefix argument (i.e. C-u) to add file local variables comments instead of
   (let* ((version (or version orgstrap--default-local-variables-block-version))
          (lv-commands (orgstrap--local-variable-eval-commands version))
          (elv (orgstrap--read-current-local-variables))
-         (commands-existing (mapcar #'cdr (cl-remove-if-not (lambda (l) (eq (car l) 'eval)) elv))))
+         (commands-existing (mapcar #'cdr (cl-remove-if-not (lambda (l) (eq (car l) 'eval)) elv)))) (ref:clrin)
     ;; good enough to start
     (cond ((equal commands-existing lv-commands) nil)
           ((not commands-existing)
