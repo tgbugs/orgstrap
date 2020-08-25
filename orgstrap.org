@@ -1,6 +1,6 @@
-# -*- orgstrap-cypher: sha256; orgstrap-block-checksum: c02a2bdf599c7a3032b6585f53fea4b91bb2fdb6eff86270d749ce9e156cc39f; no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; -*-
+# -*- orgstrap-cypher: sha256; orgstrap-block-checksum: e0cd143ce06dd8e10a62bf48a9aa8e56b2d82f8a58ede1338a099070e75980bf; no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; -*-
 
-# [[file:::orgstrap][jump to orgstrap block for this file]]
+# [[orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an org-mode file using file local variables
 #+options: num:nil
 
@@ -410,19 +410,19 @@ in the file local variables in `orgstrap--add-file-local-variables'")
 `header-args' is an alist of symbols that are converted to strings"
   (save-excursion
     (goto-char (point-min))
-    (org-next-visible-heading 1)  ;; alternately outline-next-heading
+    (outline-next-heading)  ;; alternately outline-next-heading
     (org-meta-return)
-    (org-edit-headline heading)
-    (when noexport (org-set-tags "noexport"))
+    (insert (format "%s%s\n" heading (if noexport " :noexport:" "")))
+    ;;(org-edit-headline heading)
+    ;;(when noexport (org-set-tags "noexport"))
     (move-end-of-line 1)
     (insert "\n#+name: " block-name "\n")
-    (org-insert-structure-template "src")
-    (insert "elisp")
+    (insert "#+begin_src elisp")
     (mapcar (lambda (header-arg-value)
-              (org-babel-insert-header-arg
-               (symbol-name (car header-arg-value))
-               (symbol-name (cdr header-arg-value))))
-            header-args)))
+              (insert " :" (symbol-name (car header-arg-value))
+                      " " (symbol-name (cdr header-arg-value))))
+            header-args)
+    (insert "\n#+end_src\n")))
 
 (defun orgstrap--trap-hack-locals (command &rest args)
   "Advise `hack-local-variables-filter' to do nothing but set `orgstrap--local-variables'
@@ -455,10 +455,10 @@ in a comment on the second line of the file."
   (next-logical-line)  ; use logical-line to avoid issues with visual line mode
   (let ((link-message (or link-message orgstrap-link-message)))
     (unless (save-excursion (re-search-forward
-                             (format "^# \\[\\[file:::%s\\]\\[.+\\]\\]$"
+                             (format "^# \\[\\[%s\\]\\[.+\\]\\]$"
                                      orgstrap-orgstrap-block-name)
                              nil t))
-      (insert (format "# [[file:::%s][%s]]\n"
+      (insert (format "# [[%s][%s]]\n"
                       orgstrap-orgstrap-block-name
                       (or link-message orgstrap-link-message))))))
 
@@ -720,7 +720,7 @@ Once =orgstrap-confirm-eval= is defined the rest of the =eval:= local variables 
 Here is what the modeline at the start of the file looks like.
 #+name: local-variables-example-header
 #+begin_example org
-# -*- orgstrap-cypher: sha256; orgstrap-block-checksum: f58cbf2c0d1afea98e99c7c775fe3a1e6f9a3c13d5e4db68d26ea96e28f60d04; no-klobber-test: "I should still be here after it is all over!"; -*-
+# -*- orgstrap-cypher: sha256; orgstrap-block-checksum: e0cd143ce06dd8e10a62bf48a9aa8e56b2d82f8a58ede1338a099070e75980bf; no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; -*-
 #+end_example
 
 Here is what the =:noexport:= block below this looks like.
