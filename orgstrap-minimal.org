@@ -10,7 +10,7 @@
 
 # Local Variables:
 # orgstrap-local-variables-block-version: "0.2"
-# eval: (defun orgstrap--confirm-eval (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (eq orgstrap-block-checksum (intern (secure-hash orgstrap-cypher (let* ((print-quoted nil) (bname (format "body-norm-%s" emacs-major-version)) (buffer (let ((existing (get-buffer bname))) (if existing existing (create-file-buffer bname)))) (body-normalized (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (with-current-buffer buffer (erase-buffer) (insert body-normalized)) body-normalized)))))))
+# eval: (defun orgstrap--confirm-eval (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (eq orgstrap-block-checksum (intern (secure-hash orgstrap-cypher (let ((print-quoted nil)) (prin1-to-string (read (concat "(progn\n" body "\n)"))))))))))
 # eval: (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
 # eval: (unwind-protect (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block)) (setq-local org-confirm-babel-evaluate t) (fmakunbound #'orgstrap--confirm-eval))
 # End:
