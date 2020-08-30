@@ -194,6 +194,15 @@ be run. Note that this DOES NOT PROTECT against someone changing the block
 and the checksum at the same time and sending you a malicious file! You need
 an alternate and trusted source against which to verify the checksum of the
 bootstrap block.
+** Portability
+A couple of notes on portability and backward compatibility with older
+versions of emacs. I have tried to get =orgstrap= running on emacs-23,
+however the differences between org =6.33x= and org =8.2.10= are too
+large to be able to manage. First, all uses of =(setq-local var "value")=
+have to be changed to =(set (make-local-variable 'var) "value")= so that
+the local variable eval code can run. However once that is done, you discover
+that all of the org-babel functions are missing. Therefore, we don't support
+emacs-23 and older versions.
 * Local Variables
 ** Overview
 Local variables must go at the end of a file.
