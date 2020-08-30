@@ -1,4 +1,4 @@
-# -*- orgstrap-cypher: sha256; orgstrap-block-checksum: 4859d1dc22b90e646c79d6a678db7133e6cfd6d53d843d0f6e68bd1667245420; no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; -*-
+# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-auto-update: t; orgstrap-cypher: sha256; orgstrap-block-checksum: 0e2aa349b432bb463cd9cdd283a2918e9ff3dcffda9ec7954b946f8ff4d84232; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an org-mode file using file local variables
 #+options: num:nil \n:nil
@@ -123,6 +123,7 @@ variables, review the =orgstrap= block directly, and then reload revisit,
 or =M-x= =org-mode= and only then accept the local variables.
 
 This is the =orgstrap= block that is used for this file.
+
 #+caption: The =orgstrap= block that is used for this file.
 #+name: orgstrap
 #+begin_src elisp :results none :noweb no-export
@@ -137,26 +138,35 @@ This is the =orgstrap= block that is used for this file.
 <<orgstrap-init-helper-defuns>>
 <<orgstrap-install-helper-defuns>>
 
-(defun orgstrap-add-checksum-and-tangle-on-change ()
-  "Use with the `before-save-hook' local variable to test whether the
-checksum of the orgstrap block has changed and if so tangle the file."
-  (let* ((elv (orgstrap--read-current-local-variables))
-         (checksum-existing (assoc 'orgstrap-block-checksum elv))
-         (checksum (orgstrap-add-block-checksum)))
-    (unless (eq checksum-existing checksum)
-      (remove-hook 'before-save-hook #'orgstrap-add-checksum-and-tangle-on-change t)
-      ;; have to remove the hook because for some reason tangling from a buffer
-      ;; counts as saving from that buffer?
-      (org-babel-tangle)
-      (add-hook 'before-save-hook #'orgstrap-add-checksum-and-tangle-on-change 0 t))))
+(add-hook 'orgstrap-on-change-hook #'org-babel-tangle)
 
-(add-hook 'before-save-hook #'orgstrap-add-checksum-and-tangle-on-change 0 t)
-;; This is kind of evil because `before-save-hook' is a risky local variable
-;; which you can't accept permanently because someone could rebind the name.
-;; In this context it is not quite as risky because we can see what it is
-;; being bound to right here, though that could be changed in the future.
+(defun orgstrap-update-src-block (name content-function)
+  "set the content of source block with name name to content"
+  (let ((content-function (if (symbol-function content-function)
+                              content-function
+                            (lambda () (insert content-function)))))
+    (save-excursion
+      (org-babel-goto-named-src-block name)
+      (org-edit-special)
+      (erase-buffer)
+      (funcall content-function)
+      (org-edit-src-exit))))
+
+(orgstrap-update-example "test-block" (format "%s" (current-time)))
+
+(defun orgstrap-update-examples ()
+  "Use with the `before-save-hook' local variable to automatically
+keep the contents of the example blocks in sync."
+  ("local-variables-example-header" "TODO")  ;; do we read the local variables or do we copy the top line?
+  ("local-variables-example-footer" #'orgstrap--add-file-local-variables)
+  (orgstrap-update-src-block name content))
 
 (message "orgstrap complete!")
+#+end_src
+
+#+name: test-block
+#+begin_src elisp
+(24395 21548 93190 984000)
 #+end_src
 
 The headers for the block above look like this.
@@ -445,6 +455,19 @@ if someone encounters an orgstrapped file and wants to know what is going on.")
 (defvar orgstrap-default-cypher 'sha256
   "default cypher passed to `secure-hash' when hashing blocks")
 
+(defcustom orgstrap-auto-update t
+  "A buffer local variable that controls whether or not `orgstrap-block-checksum' is
+updated automatically or not when the file is saved. When not set or non-nil defaults
+to the value customized here if orgstrap is installed, otherwise defaults to t"
+  :type 'boolean
+  :group 'orgstrap)
+
+(defcustom orgstrap-on-change-hook nil
+  "Hook that is run via `before-save-hook' but only runs when `orgstrap-auto-update' is
+non-nil and the contents of the orgstrap block have changed."
+  :type 'hook
+  :group 'orgstrap)
+
 ;; edit utility functions
 (defun orgstrap--current-buffer-cypher ()
   "Return the cypher used for the current buffer `orgstrap-cypher' or
@@ -485,18 +508,45 @@ The macro provides local bindings for four names: `info', `params', `body-unexpa
            <<orgstrap-code-normalization>>))
       (secure-hash cypher body-normalized))))
 
-(defun orgstrap-add-block-checksum (&optional cypher)
+(defun orgstrap-add-block-checksum (&optional cypher checksum)
   "Add new value of `orgstrap-block-checksum' to file local variables of the `current-buffer'
 The optional `cypher' argument should almost never be used, instead change the value of
 `orgstrap-default-cypher' or manually change the file property line variable."
   (interactive)
   (let* ((cypher (or cypher (orgstrap--current-buffer-cypher)))
-         (orgstrap-block-checksum (orgstrap-get-block-checksum cypher)))
+         (orgstrap-block-checksum (or checksum (orgstrap-get-block-checksum cypher))))
     (when orgstrap-block-checksum
       (save-excursion
         (add-file-local-variable-prop-line 'orgstrap-cypher cypher)
         (add-file-local-variable-prop-line 'orgstrap-block-checksum (intern orgstrap-block-checksum))))
     orgstrap-block-checksum))
+
+(defun orgstrap-update-on-change ()
+  "Use with the `before-save-hook' local variable to test whether the
+checksum of the orgstrap block has changed and if so tangle the file."
+  (when (or (not (boundp 'orgstrap-auto-update)) orgstrap-auto-update)
+    (let* ((elv (orgstrap--read-current-local-variables))
+           (checksum-existing (assoc 'orgstrap-block-checksum elv))
+           (checksum (orgstrap-get-block-checksum)))
+      (unless (eq checksum-existing checksum)
+        (remove-hook 'before-save-hook #'orgstrap-update-on-change t)
+        ;; have to remove the hook because for some reason tangling from a buffer
+        ;; counts as saving from that buffer?
+        (save-excursion
+          ;; using save-excusion here is a good for insurance against wierd hook issues
+          ;; however it does not deal with the fact that updating `orgstrap-add-block-checksum'
+          ;; adds an entry to the undo ring, which is bad
+          ;;(undo-boundary)  ; undo-boundary doesn't quite work the way we want
+          ;; related https://emacs.stackexchange.com/q/7558
+          (orgstrap-add-block-checksum nil checksum)
+          (run-hooks 'orgstrap-on-change-hook))
+        (add-hook 'before-save-hook #'orgstrap-update-on-change 0 t)))))
+
+;; This is kind of evil because `before-save-hook' is a risky local variable
+;; which you can't accept permanently because someone could rebind the name.
+;; In this context it is not quite as risky because we can see what it is
+;; being bound to right here, though that could be changed in the future.
+(add-hook 'before-save-hook #'orgstrap-update-on-change 0 t)
 #+end_src
 *** Init
 A note on filter aka =cl-remove-if-not= in =orgstrap--add-file-local-variables= at [[(clrin)]].
@@ -569,7 +619,7 @@ to the reversed list of read variables which are the first argument in the lambd
   ;; orgstrap--local-variables is a temporary local variable that is used to
   ;; capture the input to `hack-local-variables-filter' it is unset at the end
   ;; of this function so that it cannot accidentally be used when it might be stale
-  (set (make-local-variable 'orgstrap--local-variables) nil)
+  (setq-local orgstrap--local-variables nil)
   (let ((enable-local-variables t))
     (advice-add #'hack-local-variables-filter :around #'orgstrap--trap-hack-locals)
     (unwind-protect
