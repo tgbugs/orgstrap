@@ -141,6 +141,7 @@ and then run `orgstrap-on-change-hook'."
         (run-hooks 'orgstrap-on-change-hook))
       (add-hook 'before-save-hook #'orgstrap--update-on-change 0 t))))
 
+;;;###autoload
 (define-minor-mode orgstrap-mode
   "Minor mode for working with orgstrapped files."
   nil "" nil
@@ -257,10 +258,10 @@ in the file local variables in `orgstrap--add-file-local-variables'")
     (move-end-of-line 1)
     (insert "\n#+name: " block-name "\n")
     (insert "#+begin_src elisp")
-    (mapcar (lambda (header-arg-value)
-              (insert " :" (symbol-name (car header-arg-value))
-                      " " (symbol-name (cdr header-arg-value))))
-            header-args)
+    (mapc (lambda (header-arg-value)
+            (insert " :" (symbol-name (car header-arg-value))
+                    " " (symbol-name (cdr header-arg-value))))
+          header-args)
     (insert "\n#+end_src\n")))
 
 (defun orgstrap--trap-hack-locals (command &rest args)

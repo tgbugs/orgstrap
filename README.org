@@ -1,4 +1,4 @@
-# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: e99432b1012bd75090e7c322ebb13063aa55f31e77c32495c835a3607b84de36; -*-
+# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: dfd1f64a8320e77cfc4568bf3fd01bbfc427f51e89363c663d9bf731936ffc2a; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an org-mode file using file local variables
 #+options: num:nil \n:nil
@@ -342,7 +342,7 @@ if you need them. See [[(clrin)]] and [[(oab)]] for examples in this file.
 Here is what the prop line local variables at the start of the file looks like.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: e99432b1012bd75090e7c322ebb13063aa55f31e77c32495c835a3607b84de36; -*-
+# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: dfd1f64a8320e77cfc4568bf3fd01bbfc427f51e89363c663d9bf731936ffc2a; -*-
 #+end_src
 
 Here is what the =:noexport:= at the end of the file looks like.
@@ -498,6 +498,7 @@ and then run `orgstrap-on-change-hook'."
         (run-hooks 'orgstrap-on-change-hook))
       (add-hook 'before-save-hook #'orgstrap--update-on-change 0 t))))
 
+;;;###autoload
 (define-minor-mode orgstrap-mode
   "Minor mode for working with orgstrapped files."
   nil "" nil
@@ -566,10 +567,10 @@ in the file local variables in `orgstrap--add-file-local-variables'")
     (move-end-of-line 1)
     (insert "\n#+name: " block-name "\n")
     (insert "#+begin_src elisp")
-    (mapcar (lambda (header-arg-value)
-              (insert " :" (symbol-name (car header-arg-value))
-                      " " (symbol-name (cdr header-arg-value))))
-            header-args)
+    (mapc (lambda (header-arg-value)
+            (insert " :" (symbol-name (car header-arg-value))
+                    " " (symbol-name (cdr header-arg-value))))
+          header-args)
     (insert "\n#+end_src\n")))
 
 (defun orgstrap--trap-hack-locals (command &rest args)
