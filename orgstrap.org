@@ -1,4 +1,4 @@
-# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-auto-update: t; orgstrap-cypher: sha256; orgstrap-block-checksum: 05d1f57b94eb7133b25b0a7348b0ebced81592de915c11ad4712565c9f064330; -*-
+# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-auto-update: t; orgstrap-cypher: sha256; orgstrap-block-checksum: 028e2021582293ff8c03229ec439be533b75ea775baf5b1d87bff1de41539ce3; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an org-mode file using file local variables
 #+options: num:nil \n:nil
@@ -131,8 +131,6 @@ This is the =orgstrap= block that is used for this file.
 ;; `orgstrap-init' and `orgstrap-add-block-checksum' along
 ;; with the rest of the orgstrap machinery so it is easy to
 ;; use orgstrap to create and update orgstrap blocks
-(defun orgstrap-demo-function (arg)
-  (if arg "yes" "no"))
 
 <<orgstrap-edit-helper-defuns>>
 <<orgstrap-init-helper-defuns>>
@@ -140,44 +138,51 @@ This is the =orgstrap= block that is used for this file.
 
 (add-hook 'orgstrap-on-change-hook #'org-babel-tangle)
 
-;; lol of course it existed `org-babel-update-block-body'
-(defun orgstrap-update-src-block (name content-or-thunk)
+(defun orgstrap-update-src-block (name content)
   "set the content of source block with name name to content
 XXX NOTE THAT THIS CANNOT BE USED WITH EXAMPLE BLOCKS."
-  (let ((content-function (if (and (symbolp content-or-thunk)
-                                   (symbol-function content-or-thunk))
-                              content-or-thunk
-                            (lambda () (insert content-or-thunk))))
-        (block (org-babel-find-named-block name)))
-    (message "usb: %s %s" name content-function)
+  (let ((block (org-babel-find-named-block name)))
     (if block
         (save-excursion
           (org-babel-goto-named-src-block name)  ; FIXME why is not not erroring on failure !?
-          (org-edit-special)
-          (erase-buffer)
-          (funcall content-function)
-          (org-edit-src-exit))
+          (org-babel-update-block-body content))
       (error "no block with name %s" name))))
 
 (orgstrap-update-src-block "test-block" (format "%s" (current-time)))
-;;(orgstrap-update-src-block "local-variables-example-header" (format "%s" (current-time)))
 
-(defun orgstrap-update-examples ()
+(defun orgstrap--update-examples ()
   "Use with the `orgstrap-on-change-hook' local variable to automatically
 keep the contents of the example blocks in sync."
-  (let ((pairs '(("local-variables-example-header" "TODO")
-                 ;; do we read the local variables or do we copy the top line?
-                 ("local-variables-example-footer" #'orgstrap--add-file-local-variables))))
+  (let ((pairs `(("local-variables-example-header" ,(orgstrap--local-variables-header-string))
+                 ("local-variables-example-footer" ,(orgstrap--file-local-variables-string)))))
     (mapcar (lambda (name-content) (apply #'orgstrap-update-src-block name-content)) pairs)))
 
-(add-hook 'orgstrap-on-change-hook #'orgstrap-update-examples)
+(defun orgstrap--local-variables-header-string ()
+  "Copy the first logical line of the file since it is easier and faster
+than trying to sort out which variables were in the header and which were in the footer.
+
+XXX NOTE There are some cases involving bootstrapping to emacs where the first line of
+an org-mode file is a shebang, but we will deal with those if and when they arrise."
+  (buffer-substring-no-properties 1 (save-excursion (goto-char 0) (next-logical-line) (point))))
+
+(defun orgstrap--file-local-variables-string ()
+  (with-temp-buffer
+    (orgstrap--add-file-local-variables)
+    (buffer-string)))
+
+(add-hook 'orgstrap-on-change-hook #'orgstrap--update-examples)
 
 (message "orgstrap complete!")
 #+end_src
 
+#+begin_src elisp
+(orgstrap--read-current-local-variables)
+(orgstrap--local-variables-header-string)
+#+end_src
+
 #+name: test-block
 #+begin_src elisp
-(24396 30942 887092 622000)
+(24396 33321 547135 134000)
 #+end_src
 
 The headers for the block above look like this.
@@ -368,13 +373,12 @@ index e798595bd..230706b7f 100644
 Here is what the modeline at the start of the file looks like.
 #+name: local-variables-example-header
 #+begin_src org :eval never
-# -*- orgstrap-cypher: sha256; orgstrap-block-checksum: e0cd143ce06dd8e10a62bf48a9aa8e56b2d82f8a58ede1338a099070e75980bf; no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; -*-
+# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-auto-update: t; orgstrap-cypher: sha256; orgstrap-block-checksum: 028e2021582293ff8c03229ec439be533b75ea775baf5b1d87bff1de41539ce3; -*-
 #+end_src
 
-Here is what the =:noexport:= block below this looks like.
+Here is what the =:noexport:= at the end of the file looks like.
 #+name: local-variables-example-footer
 #+begin_src org :eval never
-,* Local Variables Footer :noexport:
 
 # Local Variables:
 # orgstrap-local-variables-block-version: "0.1"
