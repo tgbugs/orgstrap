@@ -2,6 +2,10 @@
 
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
+;; Keywords: lisp org org-mode bootstrap
+;; Version: 1.0
+;; URL: https://github.com/purcell/flycheck-package
+;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
 
@@ -14,7 +18,7 @@
 ;; `orgstrap-get-block-checksum' reuses code from
 ;; `org-babel-check-confirm-evaluate' which is
 ;; (at the time of writing) in ob-core.el and licensed
-;; as part of emacs.
+;; as part of Emacs.
 
 ;; Code in an orgstrap block is usually meant to be executed directly by its
 ;; containing org file. However, if the code is something that will be reused
@@ -371,8 +375,7 @@ requiring any additional steps."
                                        t)
 
     (orgstrap--with-block orgstrap-helper-block-name
-      (error "TODO")
-      )))
+      (error "TODO"))))
 
 ;;(defvar orgstrap--helpers nil)
 ;;(setq orgstrap--helpers nil)
