@@ -1,4 +1,4 @@
-# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-auto-update: t; orgstrap-cypher: sha256; orgstrap-block-checksum: 028e2021582293ff8c03229ec439be533b75ea775baf5b1d87bff1de41539ce3; -*-
+# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-auto-update: t; orgstrap-cypher: sha256; orgstrap-block-checksum: 07c0388b14dad296dd768420898d9e192c3148b2be58f5b43166a55518a941e3; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an org-mode file using file local variables
 #+options: num:nil \n:nil
@@ -137,18 +137,6 @@ This is the =orgstrap= block that is used for this file.
 <<orgstrap-install-helper-defuns>>
 
 (add-hook 'orgstrap-on-change-hook #'org-babel-tangle)
-
-(defun orgstrap-update-src-block (name content)
-  "set the content of source block with name name to content
-XXX NOTE THAT THIS CANNOT BE USED WITH EXAMPLE BLOCKS."
-  (let ((block (org-babel-find-named-block name)))
-    (if block
-        (save-excursion
-          (org-babel-goto-named-src-block name)  ; FIXME why is not not erroring on failure !?
-          (org-babel-update-block-body content))
-      (error "no block with name %s" name))))
-
-(orgstrap-update-src-block "test-block" (format "%s" (current-time)))
 
 (defun orgstrap--update-examples ()
   "Use with the `orgstrap-on-change-hook' local variable to automatically
@@ -373,7 +361,7 @@ index e798595bd..230706b7f 100644
 Here is what the modeline at the start of the file looks like.
 #+name: local-variables-example-header
 #+begin_src org :eval never
-# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-auto-update: t; orgstrap-cypher: sha256; orgstrap-block-checksum: 028e2021582293ff8c03229ec439be533b75ea775baf5b1d87bff1de41539ce3; -*-
+# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-auto-update: t; orgstrap-cypher: sha256; orgstrap-block-checksum: 07c0388b14dad296dd768420898d9e192c3148b2be58f5b43166a55518a941e3; -*-
 #+end_src
 
 Here is what the =:noexport:= at the end of the file looks like.
@@ -391,36 +379,25 @@ Here is what the =:noexport:= at the end of the file looks like.
 #+end_src
 * Code
 ** Get the checksum of the =orgstrap= block for the current file
-The easiest way to add the orgstrap checksum to a file is to invoke
-=M-x= =orgstrap-add-block-checksum=.
+By default once you run =orgstrap-init= the =orgstrap-block-checksum=
+should update automatically.
 
-=orgstrap-add-block-checksum= is not currently bound to a key, but it could be.
+This is achieved by having =orgstrap-init= install =orgstrap-auto-update=
+as a file local variable set to =t= so that while you are authoring an
+orgstrapped file the =orgstrap-block-checksum= update automatically whenever
+a change is detected.
 
-# If you are willing to assume that users already have orgstrap installed
-# then you can just use `orgstrap-add-block-checksum' without anything else
+When publishing a file it is suggested to either set =orgstrap-auto-update= to
+=nil= or remove it from the file local variables entirely. Both options have the
+same effect and prevent automatic updates to the checksum. In theory this is
+only an issue if you bundle the machinery for editing orgstrap files along with
+the file (as is the case for this file).
 
-While developing =orgstrap= I have found that it is usually more useful to
-have =orgstrap-add-checksum-and-tangle-on-change= or similar automatically
-update the checksums for you. This points to the fact that an orgstrap minor
-mode might be a more reasonable idea than I had originally thought.
+If =orgstrap-auto-update= is customized globally to be =nil= then
+it will not be included as a file local variable when =orgstrap-init= is called.
 
-Alternately, if you want to drive everything from =org-mode= directly
-you can copy the ref:do-orgstrap-add-block-checksum block into any org file
-that contains a block with =#+name: orgstrap= and then run it with =C-c C-c=
-after you have run the ref:orgstrap-edit-helper-defuns block in this file.
-
-Note that ref:orgstrap-edit-helper-defuns is nowebbed into the ref:orgstrap
-block for this file. Therefore if you allow(ed) local variables for this
-file then ref:orgstrap-edit-helper-defuns will be (was already) run for you.
-
-#+name: do-orgstrap-add-block-checksum
-#+begin_src elisp :exports code
-(orgstrap-add-block-checksum)
-#+end_src
-
-#+RESULTS: do-orgstrap-add-block-checksum
-: 4859d1dc22b90e646c79d6a678db7133e6cfd6d53d843d0f6e68bd1667245420
-
+If you do not use =orgstrap-auto-update= then the easiest way to add the orgstrap
+checksum to a file is to invoke =M-x= =orgstrap-add-block-checksum=.
 ** =orgstrap= implementation
 Functions to calculate =orgstrap-block-checksum= and set it as a file local variable.
 Add the necessary local variables to the end of the file.
@@ -480,9 +457,9 @@ if someone encounters an orgstrapped file and wants to know what is going on.")
   "default cypher passed to `secure-hash' when hashing blocks")
 
 (defcustom orgstrap-auto-update t
-  "A buffer local variable that controls whether or not `orgstrap-block-checksum' is
-updated automatically or not when the file is saved. When not set or non-nil defaults
-to the value customized here if orgstrap is installed, otherwise defaults to t"
+  "A buffer local variable that controls whether or not `orgstrap-update-on-change' does anything.
+If non-nil `orgstrap-update-on-change' will run, otherwise if it is nil then `orgstrap-update-on-change'
+will not run AND `orgstrap-auto-update' will not be included as a file local variable by `orgstrap-init'."
   :type 'boolean
   :group 'orgstrap)
 
@@ -523,27 +500,6 @@ The macro provides local bindings for four names: `info', `params', `body-unexpa
        (org-mark-ring-goto))))
 
 ;; edit user facing functions
-(defun orgstrap-get-src-block-checksum (&optional cypher)
-  "Calculate of the checksum of the current source block."
-  (interactive)
-  (let* ((info (org-babel-get-src-block-info))
-         (params (nth 2 info))
-         (body-unexpanded (nth 1 info))
-         (body (orgstrap--expand-body info))
-         (body-normalized
-          <<orgstrap-code-normalization>>)
-         (cypher (or cypher (orgstrap--current-buffer-cypher))))
-    (secure-hash cypher body-normalized)))
-
-(defun orgstrap-get-named-src-block-checksum (name &optional cypher)
-  "Calculate of the checksum of a named source block."
-  (interactive)
-  (orgstrap--with-block name
-    (let ((cypher (or cypher (orgstrap--current-buffer-cypher)))
-          (body-normalized
-           <<orgstrap-code-normalization>>))
-      (secure-hash cypher body-normalized))))
-
 (defun orgstrap-get-block-checksum (&optional cypher)
   "Calculate the `orgstrap-block-checksum' for the current buffer."
   (interactive)
@@ -567,9 +523,11 @@ The optional `cypher' argument should almost never be used, instead change the v
     orgstrap-block-checksum))
 
 (defun orgstrap-update-on-change ()
-  "Use with the `before-save-hook' local variable to test whether the
-checksum of the orgstrap block has changed and if so tangle the file."
-  (when (or (not (boundp 'orgstrap-auto-update)) orgstrap-auto-update)
+  "Use with the `before-save-hook' local variable to test whether the checksum of
+the orgstrap block has changed and if so update the `orgstrap-block-checksum'
+local variable and then run `orgstrap-on-change-hook'."
+  (message "RUNNING %s" orgstrap-auto-update)
+  (when (and (boundp 'orgstrap-auto-update) orgstrap-auto-update)
     (let* ((elv (orgstrap--read-current-local-variables))
            (checksum-existing (assoc 'orgstrap-block-checksum elv))
            (checksum (orgstrap-get-block-checksum)))
@@ -590,7 +548,7 @@ checksum of the orgstrap block has changed and if so tangle the file."
 ;; This is kind of evil because `before-save-hook' is a risky local variable
 ;; which you can't accept permanently because someone could rebind the name.
 ;; In this context it is not quite as risky because we can see what it is
-;; being bound to right here, though that could be changed in the future.
+;; being bound to right here, though that binding could change in the future.
 (add-hook 'before-save-hook #'orgstrap-update-on-change 0 t)
 #+end_src
 
@@ -717,7 +675,7 @@ Use a prefix argument (i.e. C-u) to add file local variables comments instead of
   (let* ((version (or version orgstrap--default-local-variables-block-version))
          (lv-commands (orgstrap--local-variable-eval-commands version))
          (elv (orgstrap--read-current-local-variables))
-         (commands-existing (mapcar #'cdr (cl-remove-if-not (lambda (l) (eq (car l) 'eval)) elv)))) (ref:clrin)
+         (commands-existing (mapcar #'cdr (cl-remove-if-not (lambda (l) (eq (car l) 'eval)) elv)))) ;(ref:clrin)
     ;; good enough to start
     (cond ((equal commands-existing lv-commands) nil)
           ((not commands-existing)
@@ -741,17 +699,13 @@ Use a prefix argument (i.e. C-u) to add file local variables comments instead of
   ;; TODO option for local variables in comments vs noexport
   (save-excursion
     (orgstrap--add-orgstrap-block)
+    (when orgstrap-auto-update
+      (add-file-local-variable-prop-line 'orgstrap-auto-update orgstrap-auto-update)
+      (add-hook 'before-save-hook #'orgstrap-update-on-change 0 t))
     (orgstrap-add-block-checksum)
     (orgstrap--add-link-to-orgstrap-block)
     ;; FIXME sometimes local variables don't populate due to an out of range error
     (orgstrap--add-file-local-variables)))
-
-;;(defvar orgstrap--helpers nil)
-;;(setq orgstrap--helpers nil)
-;;; TODO
-;; options are link to docs
-;; embed (defun orgstrap-install-helpers () (interactive) (use-package orgstrap)) or similar
-;; embed all of this block or orgstrap.el in a block in * orgstrap helpers :noexport: 
 #+end_src
 *** TODO Install
 #+caption: install helpers
@@ -780,7 +734,67 @@ requiring any additional steps."
     (orgstrap--with-block orgstrap-helper-block-name
       (error "TODO")
       )))
+
+;;(defvar orgstrap--helpers nil)
+;;(setq orgstrap--helpers nil)
+;;; TODO
+;; options are link to docs or
+;; embed (defun orgstrap-install-helpers () (interactive) (use-package orgstrap)) or similar or
+;; embed all of this block or orgstrap.el in a block in * orgstrap helpers :noexport:
 #+end_src
+*** Extras
+#+caption: extra helpers
+#+name: orgstrap-extra-helper-defuns
+#+begin_src elisp
+;;; extra helpers
+(defun orgstrap-update-src-block (name content)
+  "set the content of source block with name name to content
+XXX NOTE THAT THIS CANNOT BE USED WITH EXAMPLE BLOCKS."
+  (let ((block (org-babel-find-named-block name)))
+    (if block
+        (save-excursion
+          (org-babel-goto-named-src-block name)
+          (org-babel-update-block-body content))
+      (error "no block with name %s" name))))
+
+(defun orgstrap-get-src-block-checksum (&optional cypher)
+  "Calculate of the checksum of the current source block."
+  (interactive)
+  (let* ((info (org-babel-get-src-block-info))
+         (params (nth 2 info))
+         (body-unexpanded (nth 1 info))
+         (body (orgstrap--expand-body info))
+         (body-normalized
+          <<orgstrap-code-normalization>>)
+         (cypher (or cypher (orgstrap--current-buffer-cypher))))
+    (secure-hash cypher body-normalized)))
+
+(defun orgstrap-get-named-src-block-checksum (name &optional cypher)
+  "Calculate of the checksum of a named source block."
+  (interactive)
+  (orgstrap--with-block name
+    (let ((cypher (or cypher (orgstrap--current-buffer-cypher)))
+          (body-normalized
+           <<orgstrap-code-normalization>>))
+      (secure-hash cypher body-normalized))))
+
+(defun orgstrap-run-additional-blocks (&rest name-checksum) ;(ref:oab)
+  "Securely run additional blocks in languages other than elisp
+by providing the name of the block and the checksum to be embedded
+in the orgstrap block."
+  (error "TODO"))
+#+end_src
+
+Ideally we want to call [[(oab)][orgstrap-run-additional-blocks]] as
+=(orgstrap-run-additional-blocks "additional-block-name" "checksum-value-hash-thing" "ab2" "cs2")=
+It probably makes sense to house this in its own orgstrap-aux block or something.
+I want to keep the file local variables as minimal as possible, so having another
+aux block that could be automatically updated with the names and hashes of additional
+blocks would be nice ... probably via something like =orgstrap-add-additional-block=
+but it will not go in the local variables because we want there to be some hope of
+orgstrap being portable to other platforms outside of emacs at some point in the
+very distant future, so keeping the machinery outside of the org file itself as
+minimal as possible is critical.
 ** orgstrap.el :noexport:
 # XXX TODO it would be a super cool feature if xref could resolve to elisp source
 # blocks in org-mode files, because then half the need for the .el file would go away
@@ -820,6 +834,8 @@ requiring any additional steps."
 <<orgstrap-init-helper-defuns>>
 
 <<orgstrap-install-helper-defuns>>
+
+<<orgstrap-extra-helper-defuns>>
 
 (provide 'orgstrap)
 
@@ -923,7 +939,7 @@ echo lol
 #+end_src
 ** Multiple blocks
 There must be only a single one of those blocks so that the rest of
-the blocks can safely use the functions defined in the orgstrap block. 
+the blocks can safely use the functions defined in the orgstrap block.
 
 A single elisp block is sufficient to enable nearly all use cases involving
 tangling source blocks to file without having to fight the prompts. However,
