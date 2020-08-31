@@ -31,22 +31,21 @@
 
 ;;; edit helpers
 (defvar orgstrap-orgstrap-block-name "orgstrap"
-  "Set to orgstrap by convention to make it easier to search for orgstrap
-if someone encounters an orgstrapped file and wants to know what is going on.")
+  "Set the default blockname to orgstrap by convention.
+This makes it easier to search for orgstrap if someone encounters
+an orgstrapped file and wants to know what is going on.")
 
 (defvar orgstrap-default-cypher 'sha256
-  "default cypher passed to `secure-hash' when hashing blocks")
+  "The default cypher passed to `secure-hash' when hashing blocks.")
 
 (defcustom orgstrap-on-change-hook nil
-  "When `orgstrap-mode' is enabled this hook that is run via `before-save-hook'
-when the contents of the orgstrap block have changed."
+  "This hook is run via `before-save-hook' when symbol `orgstrap-mode' is enabled and when the contents of the orgstrap block have changed."
   :type 'hook
   :group 'orgstrap)
 
 ;; edit utility functions
 (defun orgstrap--current-buffer-cypher ()
-  "Return the cypher used for the current buffer `orgstrap-cypher' or
-`orgstrap-default-cypher' if there is not buffer local cypher"
+  "Return the cypher used for the current buffer `orgstrap-cypher' or `orgstrap-default-cypher' if there is not buffer local cypher."
   (if (boundp 'orgstrap-cypher) orgstrap-cypher orgstrap-default-cypher))
 
 (when (not (fboundp 'org-src-coderef-regexp))
@@ -74,7 +73,7 @@ when the contents of the orgstrap block have changed."
        (org-src-coderef-regexp coderef) "" expand nil nil 1))))
 
 (defmacro orgstrap--with-block (blockname &rest macro-body)
-  "Go to a named source block and do something.
+  "Go to the source block named BLOCKNAME and execute MACRO-BODY.
 The macro provides local bindings for four names: `info', `params', `body-unexpanded', and `body'."
   (declare (indent defun))
   ;; consider accepting :lite or a keyword or something to pass
@@ -97,7 +96,7 @@ The macro provides local bindings for four names: `info', `params', `body-unexpa
 
 ;; edit user facing functions
 (defun orgstrap-get-block-checksum (&optional cypher)
-  "Calculate the `orgstrap-block-checksum' for the current buffer."
+  "Calculate the `orgstrap-block-checksum' for the current buffer using CYPHER."
   (interactive)
   (orgstrap--with-block orgstrap-orgstrap-block-name
     (let ((cypher (or cypher (orgstrap--current-buffer-cypher)))
@@ -107,9 +106,11 @@ The macro provides local bindings for four names: `info', `params', `body-unexpa
       (secure-hash cypher body-normalized))))
 
 (defun orgstrap-add-block-checksum (&optional cypher checksum)
-  "Add new value of `orgstrap-block-checksum' to file local variables of the `current-buffer'
-The optional `cypher' argument should almost never be used, instead change the value of
-`orgstrap-default-cypher' or manually change the file property line variable."
+  "Add `orgstrap-block-checksum' to file local variables of `current-buffer'.
+The optional CYPHER argument should almost never be used,
+instead change the value of `orgstrap-default-cypher' or manually
+change the file property line variable. CHECKSUM can be passed
+directly if it has been calculated before and only needs to be set."
   (interactive)
   (let* ((cypher (or cypher (orgstrap--current-buffer-cypher)))
          (orgstrap-block-checksum (or checksum (orgstrap-get-block-checksum cypher))))
