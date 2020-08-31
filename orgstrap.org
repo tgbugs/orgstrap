@@ -1,4 +1,4 @@
-# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-auto-update: t; orgstrap-cypher: sha256; orgstrap-block-checksum: 07c0388b14dad296dd768420898d9e192c3148b2be58f5b43166a55518a941e3; -*-
+# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 3e6211261d3b46a9e0751cf8d25b12e237b8a63b30eaba5ca67b9b30a0396ee6; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an org-mode file using file local variables
 #+options: num:nil \n:nil
@@ -30,7 +30,7 @@ Using =orgstrap= is easy.
 
 Congratulations you can now use =orgstrap= with your own files!
 
-Use =M-x= =orgstrap-init= to add the basic the =orgstrap=
+Use =M-x= =orgstrap-init= to add the basic =orgstrap=
 machinery to the file in the current buffer.
 
 # SOON TM
@@ -135,6 +135,7 @@ This is the =orgstrap= block that is used for this file.
 <<orgstrap-edit-helper-defuns>>
 <<orgstrap-init-helper-defuns>>
 <<orgstrap-install-helper-defuns>>
+<<orgstrap-extra-helper-defuns>>
 
 (add-hook 'orgstrap-on-change-hook #'org-babel-tangle)
 
@@ -361,7 +362,7 @@ index e798595bd..230706b7f 100644
 Here is what the modeline at the start of the file looks like.
 #+name: local-variables-example-header
 #+begin_src org :eval never
-# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-auto-update: t; orgstrap-cypher: sha256; orgstrap-block-checksum: 07c0388b14dad296dd768420898d9e192c3148b2be58f5b43166a55518a941e3; -*-
+# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 3e6211261d3b46a9e0751cf8d25b12e237b8a63b30eaba5ca67b9b30a0396ee6; -*-
 #+end_src
 
 Here is what the =:noexport:= at the end of the file looks like.
@@ -382,21 +383,11 @@ Here is what the =:noexport:= at the end of the file looks like.
 By default once you run =orgstrap-init= the =orgstrap-block-checksum=
 should update automatically.
 
-This is achieved by having =orgstrap-init= install =orgstrap-auto-update=
-as a file local variable set to =t= so that while you are authoring an
-orgstrapped file the =orgstrap-block-checksum= update automatically whenever
-a change is detected.
+This is achieved by having =orgstrap-init= activate =orgstrap-mode= so that
+while you are authoring an orgstrapped file the =orgstrap-block-checksum=
+updates automatically whenever a change is detected.
 
-When publishing a file it is suggested to either set =orgstrap-auto-update= to
-=nil= or remove it from the file local variables entirely. Both options have the
-same effect and prevent automatic updates to the checksum. In theory this is
-only an issue if you bundle the machinery for editing orgstrap files along with
-the file (as is the case for this file).
-
-If =orgstrap-auto-update= is customized globally to be =nil= then
-it will not be included as a file local variable when =orgstrap-init= is called.
-
-If you do not use =orgstrap-auto-update= then the easiest way to add the orgstrap
+If you do not use =orgstrap-mode= then the easiest way to add the orgstrap
 checksum to a file is to invoke =M-x= =orgstrap-add-block-checksum=.
 ** =orgstrap= implementation
 Functions to calculate =orgstrap-block-checksum= and set it as a file local variable.
@@ -456,16 +447,9 @@ if someone encounters an orgstrapped file and wants to know what is going on.")
 (defvar orgstrap-default-cypher 'sha256
   "default cypher passed to `secure-hash' when hashing blocks")
 
-(defcustom orgstrap-auto-update t
-  "A buffer local variable that controls whether or not `orgstrap-update-on-change' does anything.
-If non-nil `orgstrap-update-on-change' will run, otherwise if it is nil then `orgstrap-update-on-change'
-will not run AND `orgstrap-auto-update' will not be included as a file local variable by `orgstrap-init'."
-  :type 'boolean
-  :group 'orgstrap)
-
 (defcustom orgstrap-on-change-hook nil
-  "Hook that is run via `before-save-hook' but only runs when `orgstrap-auto-update' is
-non-nil and the contents of the orgstrap block have changed."
+  "When `orgstrap-mode' is enabled this hook that is run via `before-save-hook'
+when the contents of the orgstrap block have changed."
   :type 'hook
   :group 'orgstrap)
 
@@ -522,36 +506,41 @@ The optional `cypher' argument should almost never be used, instead change the v
         (add-file-local-variable-prop-line 'orgstrap-block-checksum (intern orgstrap-block-checksum))))
     orgstrap-block-checksum))
 
-(defun orgstrap-update-on-change ()
-  "Use with the `before-save-hook' local variable to test whether the checksum of
-the orgstrap block has changed and if so update the `orgstrap-block-checksum'
-local variable and then run `orgstrap-on-change-hook'."
-  (message "RUNNING %s" orgstrap-auto-update)
-  (when (and (boundp 'orgstrap-auto-update) orgstrap-auto-update)
-    (let* ((elv (orgstrap--read-current-local-variables))
-           (checksum-existing (assoc 'orgstrap-block-checksum elv))
-           (checksum (orgstrap-get-block-checksum)))
-      (unless (eq checksum-existing checksum)
-        (remove-hook 'before-save-hook #'orgstrap-update-on-change t)
-        ;; have to remove the hook because for some reason tangling from a buffer
-        ;; counts as saving from that buffer?
-        (save-excursion
-          ;; using save-excusion here is a good for insurance against wierd hook issues
-          ;; however it does not deal with the fact that updating `orgstrap-add-block-checksum'
-          ;; adds an entry to the undo ring, which is bad
-          ;;(undo-boundary)  ; undo-boundary doesn't quite work the way we want
-          ;; related https://emacs.stackexchange.com/q/7558
-          (orgstrap-add-block-checksum nil checksum)
-          (run-hooks 'orgstrap-on-change-hook))
-        (add-hook 'before-save-hook #'orgstrap-update-on-change 0 t)))))
+(defun orgstrap--update-on-change ()
+  "Run via the `before-save-hook' local variable.
+Test if the checksum of the orgstrap block has changed,
+if so update the `orgstrap-block-checksum' local variable
+and then run `orgstrap-on-change-hook'."
+  (let* ((elv (orgstrap--read-current-local-variables))
+         (checksum-existing (assoc 'orgstrap-block-checksum elv))
+         (checksum (orgstrap-get-block-checksum)))
+    (unless (eq checksum-existing checksum)
+      (remove-hook 'before-save-hook #'orgstrap--update-on-change t)
+      ;; have to remove the hook because for some reason tangling from a buffer
+      ;; counts as saving from that buffer?
+      (save-excursion
+        ;; using save-excusion here is a good for insurance against wierd hook issues
+        ;; however it does not deal with the fact that updating `orgstrap-add-block-checksum'
+        ;; adds an entry to the undo ring, which is bad
+        ;;(undo-boundary)  ; undo-boundary doesn't quite work the way we want
+        ;; related https://emacs.stackexchange.com/q/7558
+        (orgstrap-add-block-checksum nil checksum)
+        (run-hooks 'orgstrap-on-change-hook))
+      (add-hook 'before-save-hook #'orgstrap--update-on-change 0 t))))
 
-;; This is kind of evil because `before-save-hook' is a risky local variable
-;; which you can't accept permanently because someone could rebind the name.
-;; In this context it is not quite as risky because we can see what it is
-;; being bound to right here, though that binding could change in the future.
-(add-hook 'before-save-hook #'orgstrap-update-on-change 0 t)
+(define-minor-mode orgstrap-mode
+  "Minor mode for working with orgstrapped files."
+  nil "" nil
+
+  (unless (eq major-mode 'org-mode)
+    (setq orgstrap-mode nil)
+    (user-error "orgstrap-mode only works with org-mode buffers"))
+
+  (cond (orgstrap-mode
+         (add-hook 'before-save-hook #'orgstrap--update-on-change 0 t))
+        (t
+         (remove-hook 'before-save-hook #'orgstrap--update-on-change))))
 #+end_src
-
 #+name: orgstrap-aux-safe-blocks
 #+begin_src elisp
 #+end_src
@@ -694,18 +683,15 @@ Use a prefix argument (i.e. C-u) to add file local variables comments instead of
   (interactive)
   (when (not (eq major-mode 'org-mode))
     (error "Cannot orgstrap, buffer not in org-mode it is in %s!" major-mode))
-  ;; TODO orgstrap-mode? Doesn't quite make sense since it is a one shot thing.
   ;; TODO option for no link?
   ;; TODO option for local variables in comments vs noexport
   (save-excursion
     (orgstrap--add-orgstrap-block)
-    (when orgstrap-auto-update
-      (add-file-local-variable-prop-line 'orgstrap-auto-update orgstrap-auto-update)
-      (add-hook 'before-save-hook #'orgstrap-update-on-change 0 t))
     (orgstrap-add-block-checksum)
     (orgstrap--add-link-to-orgstrap-block)
     ;; FIXME sometimes local variables don't populate due to an out of range error
-    (orgstrap--add-file-local-variables)))
+    (orgstrap--add-file-local-variables)
+    (orgstrap-mode)))
 #+end_src
 *** TODO Install
 #+caption: install helpers
