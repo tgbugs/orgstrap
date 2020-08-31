@@ -340,6 +340,7 @@ Use a prefix argument (i.e. C-u) to add file local variables comments instead of
           (t (error "Existing eval commands that do not match the commands to be installed have been detected. Please remove those commands and run `orgsrap-add-file-local-variables' again or manually add the orgstrap file local variables. The existing commands are as follows.\n%s" commands-existing)))))
 
 ;; init user facing functions
+;;;###autoload
 (defun orgstrap-init ()
   "Initialize orgstrap in the current buffer."
   (interactive)
