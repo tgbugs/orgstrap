@@ -1,4 +1,4 @@
-# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 3e6211261d3b46a9e0751cf8d25b12e237b8a63b30eaba5ca67b9b30a0396ee6; -*-
+# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: e99432b1012bd75090e7c322ebb13063aa55f31e77c32495c835a3607b84de36; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an org-mode file using file local variables
 #+options: num:nil \n:nil
@@ -33,10 +33,18 @@ Congratulations you can now use =orgstrap= with your own files!
 Use =M-x= =orgstrap-init= to add the basic =orgstrap=
 machinery to the file in the current buffer.
 
+A minor mode for editing orgstrapped files is included as =orgstrap-mode=.
+It is also activated by =orgstrap-init= and when enabled it automatically
+updates the =orgstrap-block-checksum= local variable whenever the =orgstrap=
+block changes.
+
+If you do not use =orgstrap-mode= then the easiest way to add the orgstrap
+checksum to a file is to invoke =M-x= =orgstrap-add-block-checksum=.
+
 # SOON TM
-Alternately if you would prefer a slightly more sane installation experience
-that doesn't vanish until you reopen this file every time you restart emacs,
-orgstrap is available on melpa.
+If you would prefer a slightly more sane installation experience that doesn't
+vanish until you reopen this file every time you restart emacs, orgstrap is
+available on melpa.
 
 The rest of this file is an overview of the use cases for =orgstrap= and
 the implementation of =orgstrap= along with discussion and commentary.
@@ -64,7 +72,7 @@ The bare minimum needed to make an =org-mode= file executable (with a bit of saf
 # End:
 #+end_src
 * Inspiration
-By default =org-mode= source block headers can only take existing elisp functions as arguments.
+By default =org-mode= source block headers only take existing elisp functions as arguments.
 
 This means that header arguments can become extremely verbose.
 
@@ -137,16 +145,15 @@ This is the =orgstrap= block that is used for this file.
 <<orgstrap-install-helper-defuns>>
 <<orgstrap-extra-helper-defuns>>
 
-(add-hook 'orgstrap-on-change-hook #'org-babel-tangle)
-
+;; helper functions to update examples
 (defun orgstrap--update-examples ()
   "Use with the `orgstrap-on-change-hook' local variable to automatically
 keep the contents of the example blocks in sync."
-  (let ((pairs `(("local-variables-example-header" ,(orgstrap--local-variables-header-string))
-                 ("local-variables-example-footer" ,(orgstrap--file-local-variables-string)))))
+  (let ((pairs `(("local-variables-prop-line-example" ,(orgstrap--local-variables-prop-line-string))
+                 ("local-variables-example" ,(orgstrap--file-local-variables-string)))))
     (mapcar (lambda (name-content) (apply #'orgstrap-update-src-block name-content)) pairs)))
 
-(defun orgstrap--local-variables-header-string ()
+(defun orgstrap--local-variables-prop-line-string ()
   "Copy the first logical line of the file since it is easier and faster
 than trying to sort out which variables were in the header and which were in the footer.
 
@@ -159,19 +166,13 @@ an org-mode file is a shebang, but we will deal with those if and when they arri
     (orgstrap--add-file-local-variables)
     (buffer-string)))
 
+;; tangle blocks and update examples on change
+(add-hook 'orgstrap-on-change-hook #'org-babel-tangle)
 (add-hook 'orgstrap-on-change-hook #'orgstrap--update-examples)
+;; enable orgstrap mode locally for this file when this block runs
+(orgstrap-mode)
 
 (message "orgstrap complete!")
-#+end_src
-
-#+begin_src elisp
-(orgstrap--read-current-local-variables)
-(orgstrap--local-variables-header-string)
-#+end_src
-
-#+name: test-block
-#+begin_src elisp
-(24396 33321 547135 134000)
 #+end_src
 
 The headers for the block above look like this.
@@ -183,31 +184,22 @@ The headers for the block above look like this.
 ,#+end_src
 #+end_example
 
-You could chain this block to run other blocks as well but they will
-require confirmation so you would need to reused the code from
-[[#local-variable-definitions][Local variable definitions]].
-It is simpler to use noweb syntax like I do in the ref:orgstrap
-block for this file.
-
-If you use noweb syntax and you make changes to a webbed block you will
-need to run =orgstrap-add-block-checksum= again since the checksum
-will change.
-
 Additional machinery is provided as part of this file to update the local
 variable value of =orgstrap-block-checksum= so that only known blocks can
 be run. Note that this DOES NOT PROTECT against someone changing the block
 and the checksum at the same time and sending you a malicious file! You need
 an alternate and trusted source against which to verify the checksum of the
-bootstrap block.
+=orgstrap= block.
 ** Portability
 A couple of notes on portability and backward compatibility with older
 versions of emacs. I have tried to get =orgstrap= running on emacs-23,
 however the differences between org =6.33x= and org =8.2.10= are too
-large to be able to manage. First, all uses of =(setq-local var "value")=
-have to be changed to =(set (make-local-variable 'var) "value")= so that
-the local variable eval code can run. However once that is done, you discover
-that all of the org-babel functions are missing. Therefore, we don't support
-emacs-23 and older versions.
+large to be overcome without significant additional code. First, all
+uses of =(setq-local var "value")= have to be changed to
+=(set (make-local-variable 'var) "value")= so that the local variable
+eval code can run. However once that is done, you discover that all of
+the org-babel functions are missing. Therefore, we don't support emacs-23
+and older versions.
 * Local Variables
 ** Overview
 Local variables must go at the end of a file.
@@ -252,6 +244,10 @@ For emacs < 26 (org < 9) either lowercase =#+caption:= must be placed _BEFORE_ =
 OR =#+CAPTION:= must be uppercase and can come after =#+name:=,
 otherwise =#+name:= will not be associated with the block.
 What a fun bug.
+
+Addendum. Apparently in the older version of org =:noweb= is always yes.
+Therefore if you forget to set =:noweb= on a block, testing against emacs
+24 or 25 will alert you to this.
 #+end_verse
 
 #+caption: rename to orgstrap-code-normalization to use this block for debug
@@ -358,15 +354,20 @@ index e798595bd..230706b7f 100644
      (cond
       (noeval nil)
 #+end_src
+** Note on coderefs
+Older versions of =org-mode= do not know what to do with coderefs.
+The simplest solution is to hide them in comments as =;(ref:coderef)=
+if you need them. See [[(clrin)]] and [[(oab)]] for examples in this file.
 ** How local variables appear in the file
-Here is what the modeline at the start of the file looks like.
-#+name: local-variables-example-header
+# DO NOT EDIT THESE BLOCKS THEY ARE UPDATED AUTOMATICALLY
+Here is what the prop line local variables at the start of the file looks like.
+#+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 3e6211261d3b46a9e0751cf8d25b12e237b8a63b30eaba5ca67b9b30a0396ee6; -*-
+# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: e99432b1012bd75090e7c322ebb13063aa55f31e77c32495c835a3607b84de36; -*-
 #+end_src
 
 Here is what the =:noexport:= at the end of the file looks like.
-#+name: local-variables-example-footer
+#+name: local-variables-example
 #+begin_src org :eval never
 
 # Local Variables:
@@ -379,16 +380,6 @@ Here is what the =:noexport:= at the end of the file looks like.
 # End:
 #+end_src
 * Code
-** Get the checksum of the =orgstrap= block for the current file
-By default once you run =orgstrap-init= the =orgstrap-block-checksum=
-should update automatically.
-
-This is achieved by having =orgstrap-init= activate =orgstrap-mode= so that
-while you are authoring an orgstrapped file the =orgstrap-block-checksum=
-updates automatically whenever a change is detected.
-
-If you do not use =orgstrap-mode= then the easiest way to add the orgstrap
-checksum to a file is to invoke =M-x= =orgstrap-add-block-checksum=.
 ** =orgstrap= implementation
 Functions to calculate =orgstrap-block-checksum= and set it as a file local variable.
 Add the necessary local variables to the end of the file.
@@ -731,7 +722,7 @@ requiring any additional steps."
 *** Extras
 #+caption: extra helpers
 #+name: orgstrap-extra-helper-defuns
-#+begin_src elisp
+#+begin_src elisp :noweb yes
 ;;; extra helpers
 (defun orgstrap-update-src-block (name content)
   "set the content of source block with name name to content
@@ -884,6 +875,11 @@ packaged, or package it yourself so that it can go through the process.
 onto a source block we probably need to do this. For the time being users need to check
 for any hidden header properties that might be attached if the source block is buried
 within a tree somewhere.
+** Known issues
+*** Starting orgstrap in =*scratch*= and saving to file loses =before-save-hook=
+This is a general issue any time a file local variable is set on a buffer that is
+not backed by a file. In this case the fix is to disable and then enable =orgstrap-mode=,
+however it would be nice if we could detect those cases automatically.
 ** Run once
 In principle the simplest way to do this is to use the =:cache yes= header on a block.
 However, unless the state is persisted into a users =init.el= file or equivalent, then
@@ -974,12 +970,20 @@ function.
    any later assignment. Then defuns and assignments, finally procedure invocations
    which might also include assignments. I get the sense that this is covered under
    some part of compiler theory but can't quite put my finger on it.
-** Auto update block checksum on save
+** DONE Auto update block checksum on save
 Before save hook and/or before commit hook to automatically update the block checksum.
 ** determine whether to use 0.1 vs 0.2 based on the :noweb header
 The smaller 0.2 block is portable without noweb, so as long as the noweb header
 is not set on the block (or really, as long as there are no references) then it
 is entirely possible to use the more compact version.
+** Smart update/upgrade using the version specifier
+At the moment I'm making changes too quickly, but it would be nice to be able
+to automatically swap out sets of known =eval:= local variables when we can
+identify them.
+** Figure out how to demo loading the packages used in this file
+#+begin_src elisp
+(use-package org-ref)
+#+end_src
 ** TODO resolve the issue with tabs in < 26                        :noexport:
 ** TODO command to checksum the file local variables               :noexport:
 ** TODO use orgstrap to automatically keep example blocks in sync  :noexport:
