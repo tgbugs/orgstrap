@@ -323,37 +323,16 @@ Once =orgstrap-confirm-eval= is defined the rest of the =eval:= local variables 
   (fmakunbound #'orgstrap--confirm-eval))
 #+end_src
 ** Note on noweb support
-*NOTE* This set of local variables will only work if you don't use noweb or if your
-copy of org-mode has had the patch for =org-babel-check-confirm-evaluate= applied.
-This either means you have applied the manual patch below, or the following commit
-is in the tree of the code you are running. Unfortunately this is not in emacs 27.1,
-but it is in =maint= so it should make it into core next time there is a sync.
-https://code.orgmode.org/bzg/org-mode/commit/df5a83637518ad9aa586d49884a6271f11afc592
+The minimal set of local variables (=0.2=) only works if you don't use noweb or if your
+copy of =org-mode= has the fix for =org-babel-check-confirm-evaluate= applied from
+https://code.orgmode.org/bzg/org-mode/commit/df5a83637518ad9aa586d49884a6271f11afc592.
 # orgit-rev:~/git/NOFORK/org-mode::df5a83637518ad9aa586d49884a6271f11afc592
+The fix is available in org version =9.3.7-22=. Note that coderefs must be
+in comments to get consistent hashing when using this patch.
 
 Version =0.1= of the =orgstrap= local variables described below is a portable version
 that works with unpatched versions of org-mode as far back as =8.2.10= (the version
 bundled with =emacs-24.5=).
-
-#+name: org-babel-check-confirm-evaluate-patch
-#+begin_src diff
-diff --git a/lisp/ob-core.el b/lisp/ob-core.el
-index e798595bd..230706b7f 100644
---- a/lisp/ob-core.el
-+++ b/lisp/ob-core.el
-@@ -238,7 +238,10 @@ (defun org-babel-check-confirm-evaluate (info)
-                    (if (functionp org-confirm-babel-evaluate)
-                        (funcall org-confirm-babel-evaluate
-                                 ;; Language, code block body.
--                                (nth 0 info) (nth 1 info))
-+                                (nth 0 info)
-+                                (if (org-babel-noweb-p headers :eval)
-+                                    (org-babel-expand-noweb-references info)
-+                                  (nth 1 info)))
-                      org-confirm-babel-evaluate))))
-     (cond
-      (noeval nil)
-#+end_src
 ** Note on coderefs
 Older versions of =org-mode= do not know what to do with coderefs.
 The simplest solution is to hide them in comments as =;(ref:coderef)=
