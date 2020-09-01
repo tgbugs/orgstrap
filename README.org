@@ -1,4 +1,4 @@
-# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: c79796710534469a02ab2ef7d86f0d82d64b340405102183d553524075e984ee; -*-
+# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: e9991e89b1141692463f2710789c34343ed4084205e19a208f3cd09a29aea3ba; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an org-mode file using file local variables
 #+options: num:nil \n:nil
@@ -162,6 +162,7 @@ than trying to sort out which variables were or were not in the prop line."
 
 (defun orgstrap--file-local-variables-string ()
   (with-temp-buffer
+    (org-mode)
     (orgstrap--add-file-local-variables)
     (buffer-string)))
 
@@ -341,21 +342,23 @@ if you need them. See [[(clrin)]] and [[(oab)]] for examples in this file.
 Here is what the prop line local variables at the start of the file looks like.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: c79796710534469a02ab2ef7d86f0d82d64b340405102183d553524075e984ee; -*-
+# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: e9991e89b1141692463f2710789c34343ed4084205e19a208f3cd09a29aea3ba; -*-
 #+end_src
 
+# BE VERY CAREFUL WITH MANUAL EDITS
+# If this block is being edited manually the automatic update will not work.
 Here is what the =:noexport:= at the end of the file looks like.
 #+name: local-variables-example
 #+begin_src org :eval never
 
-;; Local Variables:
-;; orgstrap-local-variables-block-version: "0.1"
-;; eval: (when (not (fboundp 'org-src-coderef-regexp)) (defun org-src-coderef-regexp (fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))))
-;; eval: (defun orgstrap--expand-body (info) "Expand references in INFO body if :noweb header is set." (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1))))
-;; eval: (defun orgstrap--confirm-eval (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (let ((print-quoted nil)) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum)))))
-;; eval: (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
-;; eval: (unwind-protect (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block)) (setq-local org-confirm-babel-evaluate t) (fmakunbound #'orgstrap--confirm-eval))
-;; End:
+# Local Variables:
+# orgstrap-local-variables-block-version: "0.1"
+# eval: (when (not (fboundp 'org-src-coderef-regexp)) (defun org-src-coderef-regexp (fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))))
+# eval: (defun orgstrap--expand-body (info) "Expand references in INFO body if :noweb header is set." (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1))))
+# eval: (defun orgstrap--confirm-eval (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (let ((print-quoted nil)) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum)))))
+# eval: (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
+# eval: (unwind-protect (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block)) (setq-local org-confirm-babel-evaluate t) (fmakunbound #'orgstrap--confirm-eval))
+# End:
 #+end_src
 * Code
 ** =orgstrap= implementation
@@ -728,6 +731,8 @@ the tools they need to make changes without requiring any additional steps."
 (defun orgstrap-update-src-block (name content)
   "Set the content of source block named NAME to string CONTENT.
 XXX NOTE THAT THIS CANNOT BE USED WITH EXAMPLE BLOCKS."
+  ;; FIXME this seems to fail if the existing block is empty?
+  ;; or at least adding file local variables fails?
   (let ((block (org-babel-find-named-block name)))
     (if block
         (save-excursion

@@ -412,6 +412,8 @@ the tools they need to make changes without requiring any additional steps."
 (defun orgstrap-update-src-block (name content)
   "Set the content of source block named NAME to string CONTENT.
 XXX NOTE THAT THIS CANNOT BE USED WITH EXAMPLE BLOCKS."
+  ;; FIXME this seems to fail if the existing block is empty?
+  ;; or at least adding file local variables fails?
   (let ((block (org-babel-find-named-block name)))
     (if block
         (save-excursion
