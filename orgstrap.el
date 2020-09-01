@@ -103,6 +103,7 @@ The macro provides local bindings for four names:
   "Calculate the `orgstrap-block-checksum' for the current buffer using CYPHER."
   (interactive)
   (orgstrap--with-block orgstrap-orgstrap-block-name
+    (ignore params body-unexpanded)
     (let ((cypher (or cypher (orgstrap--current-buffer-cypher)))
           (body-normalized
            (let ((print-quoted nil))
@@ -279,7 +280,7 @@ Set `orgstrap--local-variables' to the reversed list of read variables which
 are the first argument in the lambda list ARGS.
 COMMAND is unused since we don't actually want to hack the local variables,
 just get their current values."
-  ;;(message "%s" (reverse (car args)))
+  (ignore command)
   (setq-local orgstrap--local-variables (reverse (car args)))
   nil)
 
@@ -328,6 +329,7 @@ If a block with that name already exists raise an error."
                                            (lexical . yes))
                                          t)
       (orgstrap--with-block orgstrap-orgstrap-block-name
+        (ignore params body-unexpanded body)
         ;;(error "TODO insert some minimal message or something")
         nil))))
 
@@ -375,6 +377,8 @@ a version test and fail if the version is unsupported."
     (orgstrap-mode)))
 
 ;; install helpers
+(defvar orgstrap-helper-block-name "orgstrap-helper"
+  "Name for the embedded helper block.")
 (defun orgstrap-install-orgstrap ()
   "Install orgstrap.el directly from this file."
   (error "TODO"))
@@ -393,12 +397,13 @@ the tools they need to make changes without requiring any additional steps."
   (let ((block-name (or block-name orgstrap-helper-block-name)))
 
     (orgstrap--new-heading-elisp-block "orgstrap-helpers"
-                                       orgstrap-helper-block-name
+                                       block-name
                                        '((results . none)
                                          (lexical . yes))
                                        t)
 
-    (orgstrap--with-block orgstrap-helper-block-name
+    (orgstrap--with-block block-name
+      (ignore params body-unexpanded body)
       (error "TODO"))))
 
 ;;(defvar orgstrap--helpers nil)
@@ -432,12 +437,14 @@ XXX NOTE THAT THIS CANNOT BE USED WITH EXAMPLE BLOCKS."
           (let ((print-quoted nil))
             (prin1-to-string (read (concat "(progn\n" body "\n)")))))
          (cypher (or cypher (orgstrap--current-buffer-cypher))))
+    (ignore params body-unexpanded)
     (secure-hash cypher body-normalized)))
 
 (defun orgstrap-get-named-src-block-checksum (name &optional cypher)
   "Calculate the checksum of the first sourc block named NAME using CYPHER."
   (interactive)
   (orgstrap--with-block name
+    (ignore params body-unexpanded)
     (let ((cypher (or cypher (orgstrap--current-buffer-cypher)))
           (body-normalized
            (let ((print-quoted nil))
@@ -448,6 +455,7 @@ XXX NOTE THAT THIS CANNOT BE USED WITH EXAMPLE BLOCKS."
   "Securely run additional blocks in languages other than elisp.
 Do this by providing the name of the block and the checksum to be embedded
 in the orgstrap block as NAME-CHECKSUM pairs."
+  (ignore name-checksum)
   (error "TODO"))
 
 (provide 'orgstrap)
