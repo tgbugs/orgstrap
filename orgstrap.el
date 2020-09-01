@@ -21,10 +21,10 @@
 ;; as part of Emacs.
 
 ;; Code in an orgstrap block is usually meant to be executed directly by its
-;; containing org file. However, if the code is something that will be reused
+;; containing org file.  However, if the code is something that will be reused
 ;; over time outside the defining org file then it may be better to tangle and
-;; load the file so that it is easier to debug/xref functions. This code in
-;; particular is also tangled for inclusion in one of the *elpas so as to protect
+;; load the file so that it is easier to debug/xref functions.  This code in
+;; particular is tangled for inclusion in one of the *elpas so as to protect
 ;; the orgstrap namespace.
 
 ;;; Code:
@@ -39,13 +39,16 @@ an orgstrapped file and wants to know what is going on.")
   "The default cypher passed to `secure-hash' when hashing blocks.")
 
 (defcustom orgstrap-on-change-hook nil
-  "This hook is run via `before-save-hook' when symbol `orgstrap-mode' is enabled and when the contents of the orgstrap block have changed."
+  "Hook run via `before-save-hook' when command `orgstrap-mode' is enabled.
+Only runs when the contents of the orgstrap block have changed."
   :type 'hook
   :group 'orgstrap)
 
 ;; edit utility functions
 (defun orgstrap--current-buffer-cypher ()
-  "Return the cypher used for the current buffer `orgstrap-cypher' or `orgstrap-default-cypher' if there is not buffer local cypher."
+  "Return the cypher used for the current buffer.
+The value returned is `orgstrap-cypher' or if there is not buffer local cypher
+then `orgstrap-default-cypher' is returned."
   (if (boundp 'orgstrap-cypher) orgstrap-cypher orgstrap-default-cypher))
 
 (when (not (fboundp 'org-src-coderef-regexp))
@@ -61,7 +64,7 @@ an orgstrapped file and wants to know what is going on.")
                nil t)))))
 
 (defun orgstrap--expand-body (info)
-  "expand noweb references if noweb is set"
+  "Expand references in INFO body if :noweb header is set."
   (let ((coderef (nth 6 info))
         (expand
          (if (org-babel-noweb-p (nth 2 info) :eval)
@@ -74,7 +77,8 @@ an orgstrapped file and wants to know what is going on.")
 
 (defmacro orgstrap--with-block (blockname &rest macro-body)
   "Go to the source block named BLOCKNAME and execute MACRO-BODY.
-The macro provides local bindings for four names: `info', `params', `body-unexpanded', and `body'."
+The macro provides local bindings for four names:
+`info', `params', `body-unexpanded', and `body'."
   (declare (indent defun))
   ;; consider accepting :lite or a keyword or something to pass
   ;; lite as an optional argument to `org-babel-get-src-block-info'
@@ -109,7 +113,7 @@ The macro provides local bindings for four names: `info', `params', `body-unexpa
   "Add `orgstrap-block-checksum' to file local variables of `current-buffer'.
 The optional CYPHER argument should almost never be used,
 instead change the value of `orgstrap-default-cypher' or manually
-change the file property line variable. CHECKSUM can be passed
+change the file property line variable.  CHECKSUM can be passed
 directly if it has been calculated before and only needs to be set."
   (interactive)
   (let* ((cypher (or cypher (orgstrap--current-buffer-cypher)))
@@ -149,7 +153,7 @@ and then run `orgstrap-on-change-hook'."
 
   (unless (eq major-mode 'org-mode)
     (setq orgstrap-mode nil)
-    (user-error "orgstrap-mode only works with org-mode buffers"))
+    (user-error "`orgstrap-mode' only works with org-mode buffers"))
 
   (cond (orgstrap-mode
          (add-hook 'before-save-hook #'orgstrap--update-on-change 0 t))
@@ -160,11 +164,12 @@ and then run `orgstrap-on-change-hook'."
 (require 'cl-lib)
 
 (defvar orgstrap-link-message "jump to the orgstrap block for this file"
-  "default message for file internal links")
+  "Default message for file internal links.")
 
 (defconst orgstrap--default-local-variables-block-version "0.1"
-  "end of file local variables verion, used to set visible version number
-in the file local variables in `orgstrap--add-file-local-variables'")
+  "End of file local variables verion number.
+Used to set visible version number in the
+file local variables in `orgstrap--add-file-local-variables'")
 
 (defconst orgstrap--local-variable-eval-commands-0.1
   '(
@@ -181,7 +186,7 @@ in the file local variables in `orgstrap--add-file-local-variables'")
                    nil t)))))
     
     (defun orgstrap--expand-body (info)
-      "expand noweb references if noweb is set"
+      "Expand references in INFO body if :noweb header is set."
       (let ((coderef (nth 6 info))
             (expand
              (if (org-babel-noweb-p (nth 2 info) :eval)
@@ -239,6 +244,7 @@ in the file local variables in `orgstrap--add-file-local-variables'")
       (fmakunbound #'orgstrap--confirm-eval))))
 
 (defun orgstrap--local-variable-eval-commands (&optional version)
+  "Return the set of eval local variable commands for VERSION."
   (let ((version (or version orgstrap--default-local-variables-block-version)))
     (pcase version
       ("0.1" orgstrap--local-variable-eval-commands-0.1)
@@ -247,8 +253,10 @@ in the file local variables in `orgstrap--add-file-local-variables'")
 ;; init utility functions
 
 (defun orgstrap--new-heading-elisp-block (heading block-name &optional header-args noexport)
-  "Create a new elisp source block in a new heading at the top of the current file.
-`header-args' is an alist of symbols that are converted to strings"
+  "Create a new elisp block named BLOCK-NAME in a new heading titled HEADING.
+The heading is inserted at the top of the current file.
+HEADER-ARGS is an alist of symbols that are converted to strings.
+If NOEXPORT is non-nil then the :noexport: tag is added to the heading."
   (save-excursion
     (goto-char (point-min))
     (outline-next-heading)  ;; alternately outline-next-heading
@@ -266,14 +274,17 @@ in the file local variables in `orgstrap--add-file-local-variables'")
     (insert "\n#+end_src\n")))
 
 (defun orgstrap--trap-hack-locals (command &rest args)
-  "Advise `hack-local-variables-filter' to do nothing but set `orgstrap--local-variables'
-to the reversed list of read variables which are the first argument in the lambda list."
+  "Advice for `hack-local-variables-filter' to do nothing except the following.
+Set `orgstrap--local-variables' to the reversed list of read variables which
+are the first argument in the lambda list ARGS.
+COMMAND is unused since we don't actually want to hack the local variables,
+just get their current values."
   ;;(message "%s" (reverse (car args)))
   (setq-local orgstrap--local-variables (reverse (car args)))
   nil)
 
 (defun orgstrap--read-current-local-variables ()
-  "Read and return the local variables for the current file without applying them."
+  "Return the local variables for the current file without applying them."
   (interactive)
   ;; orgstrap--local-variables is a temporary local variable that is used to
   ;; capture the input to `hack-local-variables-filter' it is unset at the end
@@ -289,8 +300,9 @@ to the reversed list of read variables which are the first argument in the lambd
       local-variables)))
 
 (defun orgstrap--add-link-to-orgstrap-block (&optional link-message)
-  "Add an org-mode internal link pointing to the orgstrap block
-in a comment on the second line of the file."
+  "Add an `org-mode' link pointing to the orgstrap block for the current file.
+The link is placed in comment on the second line of the file.  LINK-MESSAGE
+can be used to override the default value set via `orgstrap-link-message'"
   (interactive)  ; TODO prompt for message with C-u ?
   (goto-char (point-min))
   (next-logical-line)  ; use logical-line to avoid issues with visual line mode
@@ -304,8 +316,8 @@ in a comment on the second line of the file."
                       (or link-message orgstrap-link-message))))))
 
 (defun orgstrap--add-orgstrap-block ()
-  "Add a new emacs lisp source block with #+name: orgstrap
-to the current buffer or raise an error if one already exists."
+  "Add a new elisp source block with #+name: orgstrap to the current buffer.
+If a block with that name already exists raise an error."
   (interactive)
   (let ((all-block-names (org-babel-src-block-names)))
     (if (member orgstrap-orgstrap-block-name all-block-names)
@@ -321,8 +333,13 @@ to the current buffer or raise an error if one already exists."
 
 (defun orgstrap--add-file-local-variables (&optional version)
   "Add the file local variables needed to make orgstrap work.
-switching comments probably wont work ? we can try
-Use a prefix argument (i.e. C-u) to add file local variables comments instead of in a :noexport:"
+VERSION is currently used to control whether 0.1 or 0.2 is used.
+Version should be orthognal to whether the block supports noweb
+and old versions of `org-mode' and the selection for noweb should
+be detected automatically, similarly we could automatically include
+a version test and fail if the version is unsupported."
+  ;; switching comments probably wont work ? we can try
+  ;; Use a prefix argument (i.e. C-u) to add file local variables comments instead of in a :noexport:
   (interactive)
   (let* ((version (or version orgstrap--default-local-variables-block-version))
          (lv-commands (orgstrap--local-variable-eval-commands version))
@@ -338,15 +355,15 @@ Use a prefix argument (i.e. C-u) to add file local variables comments instead of
                      lv-commands)))
           ;; we could try to do something fancy here, but it is much simpler
           ;; to just alert the user and have them fix it
-          (t (error "Existing eval commands that do not match the commands to be installed have been detected. Please remove those commands and run `orgsrap-add-file-local-variables' again or manually add the orgstrap file local variables. The existing commands are as follows.\n%s" commands-existing)))))
+          (t (error "Existing eval commands that do not match the commands to be installed have been detected.  Please remove those commands and run `orgsrap-add-file-local-variables' again or manually add the orgstrap file local variables.  The existing commands are as follows.\n%s" commands-existing)))))
 
 ;; init user facing functions
 ;;;###autoload
 (defun orgstrap-init ()
-  "Initialize orgstrap in the current buffer."
+  "Initialize orgstrap in the current buffer and enable command `orgstrap-mode'."
   (interactive)
   (when (not (eq major-mode 'org-mode))
-    (error "Cannot orgstrap, buffer not in org-mode it is in %s!" major-mode))
+    (error "Cannot orgstrap, buffer not in `org-mode' it is in %s!" major-mode))
   ;; TODO option for no link?
   ;; TODO option for local variables in comments vs noexport
   (save-excursion
@@ -358,12 +375,16 @@ Use a prefix argument (i.e. C-u) to add file local variables comments instead of
     (orgstrap-mode)))
 
 ;; install helpers
-(defun orgstrap-install-orgstrap () (error "TODO"))
-(defun orgstrap--add-install-block () (error "TODO"))
+(defun orgstrap-install-orgstrap ()
+  "Install orgstrap.el directly from this file."
+  (error "TODO"))
+(defun orgstrap--add-install-block ()
+  "Install this block in an `org-mode' file." ; really? or was this meant to do something else?
+  (error "TODO"))
 (defun orgstrap--add-helper-block (&optional block-name)
-  "Embed one of the orgstrap helpers blocks (aka orgstrap.el) in the current buffer so that anyone
-encountering the file in the future has all the tools they need to make changes without
-requiring any additional steps."
+  "Embed orgstrap helpers block named BLOCK-NAME in the current buffer.
+This makes it so that anyone encountering the file in the future has all
+the tools they need to make changes without requiring any additional steps."
   ;; TODO minimal vs maximal, edit files vs propagate orgstrap
   ;; go to start of file
   ;; look for first heading
@@ -389,17 +410,17 @@ requiring any additional steps."
 
 ;;; extra helpers
 (defun orgstrap-update-src-block (name content)
-  "set the content of source block with name name to content
+  "Set the content of source block named NAME to string CONTENT.
 XXX NOTE THAT THIS CANNOT BE USED WITH EXAMPLE BLOCKS."
   (let ((block (org-babel-find-named-block name)))
     (if block
         (save-excursion
           (org-babel-goto-named-src-block name)
           (org-babel-update-block-body content))
-      (error "no block with name %s" name))))
+      (error "No block with name %s" name))))
 
 (defun orgstrap-get-src-block-checksum (&optional cypher)
-  "Calculate of the checksum of the current source block."
+  "Calculate of the checksum of the current source block using CYPHER."
   (interactive)
   (let* ((info (org-babel-get-src-block-info))
          (params (nth 2 info))
@@ -412,7 +433,7 @@ XXX NOTE THAT THIS CANNOT BE USED WITH EXAMPLE BLOCKS."
     (secure-hash cypher body-normalized)))
 
 (defun orgstrap-get-named-src-block-checksum (name &optional cypher)
-  "Calculate of the checksum of a named source block."
+  "Calculate the checksum of the first sourc block named NAME using CYPHER."
   (interactive)
   (orgstrap--with-block name
     (let ((cypher (or cypher (orgstrap--current-buffer-cypher)))
@@ -422,9 +443,9 @@ XXX NOTE THAT THIS CANNOT BE USED WITH EXAMPLE BLOCKS."
       (secure-hash cypher body-normalized))))
 
 (defun orgstrap-run-additional-blocks (&rest name-checksum) ;(ref:oab)
-  "Securely run additional blocks in languages other than elisp
-by providing the name of the block and the checksum to be embedded
-in the orgstrap block."
+  "Securely run additional blocks in languages other than elisp.
+Do this by providing the name of the block and the checksum to be embedded
+in the orgstrap block as NAME-CHECKSUM pairs."
   (error "TODO"))
 
 (provide 'orgstrap)
