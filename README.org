@@ -18,8 +18,8 @@
 
 It allows Org files to describe their own requirements, and
 define their own functionality, making them self-contained, standalone
-computational artifacts, dependent only on Emacs, and hopefully in
-the future any other implementation of the =org-babel= protocols.
+computational artifacts, dependent only on Emacs, or in the future
+hopefully on other implementations of the =org-babel= protocol as well.
 
 This file bootstraps itself to provide the functionality needed to use
 =orgstrap= in any Org file.
@@ -902,37 +902,44 @@ version of Emacs then all these fancy =orgstrap= tricks don't
 do us very much good.
 
 The following section tangles a nearly unreadable file that can
-be used to bootstrap an Emacs onto on a variety of systems.
+be used to bootstrap an Emacs onto on a variety of systems. The
+blocks below break it up into readable chunks.
+
 I'm not sure that anyone should use it, but it seems easier than
 other approaches I have taken for trying to get Emacs installed
 on a non-technical or semi-technical user's system. The variety
 of different ways that one can obtain, install, configure, and
-customize Emacs, makes it particularly bewildering.
+customize Emacs makes it particularly bewildering.
 
-=doom-emacs= =bin/doom= provides some inspiration here (not
-that anyone should ever want to be inspired to create such
-a monstrosity).
+=doom-emacs= =bin/doom= provided the initial inspiration for this
+solution[fn::Not that anyone should ever want to be inspired to
+create such a monstrosity.  But hey, if software packaging and
+distribution were a solve problem we wouldn't be doing this right
+now and there would be no such thing as cybercrime and we would
+all live in a wild happy techno-utopian futures ...]. The inspiration
+for the problem was entirely of my own making and comes from a painful
+experience trying write instructions that were followable[fn::
+[[https://github.com/SciCrunch/sparc-curation/blob/master/docs/setup.org#setup]].]
+for how to run a block in an Org file from scratch, thinking that if
+they could just manage to do that then _hard_ part of the setup would
+be handled for them by the code in the Org mode file. Live and learn.
 
-# Unfortunately I only worked out the cross-platform issues for
-# the steps that came after Emacs is present on the system.
-
-# Amazing <https://stackoverflow.com/questions/39421131/is-it-possible-to-write-one-script-that-runs-in-bash-shell-and-powershell>
-# that this works.
+So here we are, not quite at curl pipe bash, but hopefully at a form
+that is slightly more auditable[fn::Which means that this section may
+need to be broke out into its own file and published separately.].
+** Posix bootstrap
+# =apt= has some insane name collision on gentoo from the eselect-java ebuild.
+Package manager commands.
+#+name: &var-cmds
+: emerge apt yum dnf pacaman nix-env guix brew
 
 We start with builtin package managers rather than parasitic package managers
 because anyone using one of those should know enough to either already have emacs
 installed or to figure out how to get it installed without this script.
 
-# =apt= has some insane name collision on gentoo from the eselect-java ebuild.
-
 # shells ... bash dash zsh fish powershell
-We don't use hyphen-minus =-= in function names so that we can support bash
-running in posix mode.
-
-#+name: &var-cmds
-: emerge apt yum dnf pacaman nix-env guix brew
-
-#+name: the-whole-script-to-bootstrap-emacs
+We don't use hyphen-minus =-= in function names so that we can support bash running in posix mode.
+#+name: posix-bootstrap
 #+begin_src sh :noweb yes
 echo "Bootstrapping in posix mode."
 function package_manager {
@@ -984,7 +991,7 @@ exit $CODE
 #+name: &message-emacs-missing
 : Emacs missing, preparing to bootstrap.
 
-FIXME I do NOT like the fact that choco is pulling a =curl | bash= here.
+FIXME I do NOT like the fact that choco is effectively pulling a =curl | bash= here.
 This needs a signature.
 # https://chocolatey.org/install#install-with-powershellexe
 #+name: powershell-bootstrap
@@ -1012,46 +1019,47 @@ try {
     exit
 }
 #+end_src
-
-Right now this only works with bash, zsh, and powershell because 
+** Posix powershell switch
+Right now the switch only works with bash, zsh, and powershell because 
 https://unix.stackexchange.com/a/71137 is more than I want
-to try to deal with here.
+to try to deal with here. It will also run under =sh= if it
+points to bash running in =--posix= mode.
 
 It is unfortunate that there is no way to get this to work with dash,
 otherwise we could set =sh= for the shebang, but we can't due to the
 incompatible function syntax.
 
-At this point the basics of the script below should be working on
-darwin, various linux distros, various bsds, and windows. At the moment
-only windows and a subset of linux distros can bootstrap from scratch.
-There is also a question of whether forcing a package manager on an
-unsuspecting user is a good idea. I tend to say yes, but maybe we need
-to make sure that they are a little less unsuspecting? Though there is
-nothing like a cold baptism into the world of proper systems administration.
+The approach comes from https://stackoverflow.com/a/39422067. The block below
+is syntactically valid bash, zsh, and powershell. In a posix shell the quoted
+commands and ="exit"= run, whereas in powershell they are skipped. We then engage
+in some unspeakable hackery and parse the input file and grep for =#px= or =#ps=
+to select the code for the specific platform (see ref:bootstrap-from-shell).
+We then eval it[fn::If you are still nodding along in agreement, know that
+I am running in terror from this code block even as I write this footnote.].
+# A slight redeeming factor is that the use of =$0= means that you can't
+# curl pipe bash the output script because there is no =$0=. On the other hand
+# if you do want to simplify life by using streaming insecurities then we will
+# need to come up with an alternate approach.
 
-#+name: bootstrap-from-shell
-#+header: :shebang "#!/usr/bin/env bash"
-#+begin_src emacs-lisp :noweb no-export :tangle ./org-what-now.el.sh.ps1
-":"; # -*-emacs-lisp-*-
-":"; #px <<the-whole-script-to-bootstrap-emacs>>
-":"; function posix () {
-":";   eval "$(grep '^":";\ #px' $0 | sed -e 's/^":";\ #px //')"
-":";   return "$?"
-":"; }
-":"; function quirk () {
-":";   test "$ZSH_VERSION" && set +nofunctionargzero
-":"; }
-":"; function unquirk () {
-":";   test "$ZSH_VERSION" && set nofunctionargzero
-":"; }
-":"; "quirk"
-":"; "posix"
-":"; "unquirk"
-":"; "exit"  # NOTE can't pass error code out easily here
-":"; #ps <<powershell-bootstrap>>
-":"; ((Get-Content $MyInvocation.MyCommand.Source) -match '^":";\ #ps ' -replace '^":";\ #ps ') -join "`n" | Invoke-Expression
-":"; exit
-(message "We have emacs.")
+#+caption: This is where the magic happens.
+#+name: posix-powershell-switch
+#+begin_src bash :noweb yes
+function posix () {
+  eval "$(grep '^":";\ #px' $0 | sed -e 's/^":";\ #px //')"
+  return "$?"
+}
+function quirk () {
+  test "$ZSH_VERSION" && set +nofunctionargzero
+}
+function unquirk () {
+  test "$ZSH_VERSION" && set nofunctionargzero
+}
+"quirk"
+"posix"
+"unquirk"
+"exit"  # NOTE can't pass error code out easily here
+((Get-Content $MyInvocation.MyCommand.Source) -match '^":";\ #ps ' -replace '^":";\ #ps ') -join "`n" | Invoke-Expression
+exit
 #+end_src
 
 Many variants of the test for quirk have been tried and failed.
@@ -1063,13 +1071,72 @@ function quirk () {
 }
 #+end_src
 Furthermore, =test= is compatible with powershell syntax so it is better to use that
-for bootsrapping. On all my windows systems =test= is available, but I suspect
+for bootstrapping. On all my windows systems =test= is available, but I suspect
 that it is coming from something I have installed and cannot be relied upon.
+
+Quirks are required for zsh due to the fact that it will set =$0= to the name
+of the function which breaks grepping =$0= since we encounter the name of the
+function not the name of the source file.
+*** Tests
+Some test blocks to ensure shell portability.
+#+begin_src powershell :noweb yes :results output
+<<posix-powershell-switch>>
+#+end_src
+
+#+begin_src zsh :noweb yes :results output
+<<posix-powershell-switch>>
+#+end_src
+** Emacs lisp
+This block is somewhat more straight forward. All this is really just an
+Emacs lisp file! ... but with some quoted colons and comments.
+It just so happens that those quoted colons and comments are no-ops
+in both powershell and bash/zsh so we can include the shell functionality
+needed safely hidden away from elisp behind the comments.
+
+#+name: bootstrap-from-shell
+#+header: :shebang "#!/usr/bin/env bash"
+#+begin_src emacs-lisp :noweb no-export :tangle ./get-emacs.el.sh.ps1
+":"; # -*-emacs-lisp-*-
+":"; <<posix-powershell-switch>>
+":"; #px <<posix-bootstrap>>
+":"; #ps <<powershell-bootstrap>>
+(message "We have Emacs.")
+#+end_src
+
+*** Tests
+Bash
+#+name: bootstrap-from-shell-bash
+#+begin_src bash :noweb no-export :results output
+<<bootstrap-from-shell>>
+#+end_src
+
+Bash in posix mode.
+If you try to run this block via org-babel on a Debian derived
+distro this will fail, see the =:shebang= header for details.
+#+name: bootstrap-from-shell-sh
+#+header: :shebang "#!/usr/bin/env -S bash --norc --posix"
+#+begin_src sh :noweb no-export :results output
+<<bootstrap-from-shell>>
+#+end_src
+
+Zsh
+#+name: bootstrap-from-shell-zsh
+#+begin_src zsh :noweb no-export :results output
+<<bootstrap-from-shell>>
+#+end_src
 
 #+name: bootstrap-from-shell-powershell
 #+begin_src powershell :noweb no-export :results output
 <<bootstrap-from-shell>>
 #+end_src
+
+At this point the basics of the script below should be working on
+darwin, various linux distros, various bsds, and windows. At the moment
+only windows and a subset of linux distros can bootstrap from scratch.
+There is also a question of whether forcing a package manager on an
+unsuspecting user is a good idea. I tend to say yes, but maybe we need
+to make sure that they are a little less unsuspecting? Though there is
+nothing like a cold baptism into the world of proper systems administration.
 
 * Future work
 :PROPERTIES:
