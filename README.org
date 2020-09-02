@@ -5,15 +5,26 @@
 #+LATEX_HEADER: \usepackage[margin=0.8in]{geometry}
 #+LATEX_HEADER: \setlength\parindent{0pt}
 
-# [[file:./orgstrap.pdf]]
-# [[file:./orgstrap.html]]
+# [[file:./README.pdf]]
+# [[file:./README.html]]
+#+HTML: <a href="https://melpa.org/#/orgstrap"><img src="https://melpa.org/packages/orgstrap-badge.svg"></a> <a href="https://stable.melpa.org/#/orgstrap"><img src="https://stable.melpa.org/packages/orgstrap-badge.svg"></a>
+#+HTML: <img src="images/orgstrap-horse.svg" align="right" title="Why a horse? Read the source!">
+# orgstrap
+# Not quite a unicorn.
+# If you wan't to grow up to be a unicorn you're going to have to
+# pull yourself up by your own bootstraps!
 
-=orgstrap= is a specification and tools for standalone self-bootstrapping =org-mode= files.
+=orgstrap= is a specification and tools for bootstrapping Org files.
+
+It allows Org files to describe their own requirements, and
+define their own functionality, making them self-contained, standalone
+computational artifacts, dependent only on Emacs, and hopefully in
+the future any other implementation of the =org-babel= protocols.
 
 This file bootstraps itself to provide the functionality needed to use
-=orgstrap= in any =org-mode= file.
+=orgstrap= in any Org file.
 
-=orgstrap= works with all versions of emacs since =24.4= and all versions of org since =8.2.10=.
+=orgstrap= works with all versions of Emacs since =24.4= and all versions of Org since =8.2.10=.
 
 * Getting started
 Using =orgstrap= is easy.
@@ -41,10 +52,7 @@ block changes.
 If you do not use =orgstrap-mode= then the easiest way to add the orgstrap
 checksum to a file is to invoke =M-x= =orgstrap-add-block-checksum=.
 
-# SOON TM
-If you would prefer a slightly more sane installation experience that doesn't
-vanish until you reopen this file every time you restart emacs, orgstrap is
-available on melpa.
+For a somewhat more sane installation experience =orgstrap= is also available on melpa.
 
 The rest of this file is an overview of the use cases for =orgstrap= and
 the implementation of =orgstrap= along with discussion and commentary.
@@ -88,39 +96,39 @@ Whether it is =(defun dir-tramp-sudo (host) (format "/ssh:%s|sudo:%s:" host host
 simplify a pattern for remote execution when using the =:dir= header argument, or a
 function to detect and set the right environment variables, =orgstrap= is there for you.
 * Use cases
-=orgstrap= essentially specifies a plain-text executable file format.
-Thus, in principle it can be used for literally anything.
+=orgstrap= specifies what is essentially a plain-text executable file format.
+Thus, it can be used for nearly everything[fn::Now, whether it *should* be....].
 
-While I personally find this to be totally radically awesome, there are much
-better, saner, and safer ways to execute arbitrary code than to hash some elisp
-source blocks and use emacs file local variables to automatically eval a specially
-named[fn::Since all the conventions for how this is done are defined locally by each
-file you can rename the special block however you see fit, perhaps from =orgstrap= to
-=main= if you need to pretend that the file is actually c source code with some special syntax.]
-source block only when it matches the hash.
+While many (including the author) might find this to be totally radically awesome,
+there are much better, saner, and safer ways to execute arbitrary code than to hash
+some elisp blocks and use Emacs file local variables to automatically eval a specially
+named source block only when it matches the hash[fn::Since all the conventions for how
+this is done are defined locally by each file you can rename the special block however
+you see fit, perhaps from =orgstrap= to =main= if you need to pretend that the file is
+actually c source code with some special syntax.].
 
-#+caption: Things you can do with arbitrary code execution.
+#+caption: Things you can do with arbitrary code execution and checksums.
 #+name: table-use-cases
-|----------------------------------------+------------+--------------------------------|
-| Use case                               | Good idea  | Alternative                    |
-|----------------------------------------+------------+--------------------------------|
-| Always run defuns used in file         | Yes        | init.el, =C-c C-c=             |
-| Install elisp code directly            | No         | Use =packages.el=              |
-| Self tangling files                    | I do it    | =C-c C-v C-t=                  |
-| Install packages required by file      | Probably   | System package manager         |
-| Create an emacs based botnet           | Definitely | ???                            |
-| Replace hard to follow instructions    | Yes        | Hard to follow instructions    |
-| Tangle git hook files for publishing   | Yes        | Manually tangle                |
-| System specific behavior without edits | Yes        | #+name: literal blocks via =:= |
-| Version control for source blocks      | Please no  | git, hg, svn, anything please  |
-| Detect and set environment variables   | Yes        |                                |
-|----------------------------------------+------------+--------------------------------|
+|----------------------------------------+------------------+--------------------------------|
+| Use case                               | Good idea        | Alternative                    |
+|----------------------------------------+------------------+--------------------------------|
+| Always run defuns used in file         | ✅ Yes           | init.el, =C-c C-c=             |
+| Install elisp code directly            | ❌ No            | Use =packages.el=              |
+| Self tangling files                    | ✅ I do it       | =C-c C-v C-t=                  |
+| Install packages required by file      | Probably         | System package manager         |
+| Create an Emacs based botnet           | ✅ ✅ Definitely | ???                            |
+| Replace hard to follow instructions    | ✅ Yes           | Hard to follow instructions    |
+| Tangle git hook files for publishing   | ✅ Yes           | Manually tangle                |
+| System specific behavior without edits | ✅ Yes           | #+name: literal blocks via =:= |
+| Version control for source blocks      | ❌ ❌ Please no  | git, hg, svn, anything please  |
+| Detect and set environment variables   | ✅ Yes           |                                |
+|----------------------------------------+------------------+--------------------------------|
 # Actually I'm kind of hyped for though of describing the system used to version
 # control the code in the file itself. Not so simple to pull off though.
 # It only sort of works in this case because we have the rest of the file under
 # version control in another system.
 * Details
-The first emacs lisp source block named =orgstrap= in an org file is
+The first elisp source block named =orgstrap= in an org file is
 automatically run using an =exec:= file local variable. Users can
 review and add the file local variables to their known safe list
 so that the code can be run in the future without the need to bother
@@ -192,7 +200,7 @@ an alternate and trusted source against which to verify the checksum of the
 =orgstrap= block.
 ** Portability
 A couple of notes on portability and backward compatibility with older
-versions of emacs. I have tried to get =orgstrap= running on emacs-23,
+versions of Emacs. I have tried to get =orgstrap= running on emacs-23,
 however the differences between org =6.33x= and org =8.2.10= are too
 large to be overcome without significant additional code. First, all
 uses of =(setq-local var "value")= have to be changed to
@@ -211,10 +219,13 @@ stuff is going on and that they should be on high alert to check it.
 
 Below in [[#local-variable-definitions][Definitions]] there is a more readable
 version of what the compacted local variables code at the end of the file is doing.
-*Make sure to check that the code matches when reviewing local variables.*
+*Always check that the =eval:= local variables in unknown orgstrapped files*
+*match a known set when reviewing and accepting local variables.*
 # TODO it is entirely possible to automate that check
 # but not without already having orgstrap available.
+# TODO publish the hashes of the eval sexps.
 ** Normalization
+#+caption: The process used to normalize elisp source blocks.
 #+name: orgstrap-code-normalization
 #+begin_src elisp :eval never
 (let ((print-quoted nil))
@@ -245,7 +256,7 @@ OR =#+CAPTION:= must be uppercase and can come after =#+name:=,
 otherwise =#+name:= will not be associated with the block.
 What a fun bug.
 
-Addendum. Apparently in the older version of org =:noweb= is always yes.
+Addendum. Apparently in the older version of Org =:noweb= is always yes.
 Therefore if you forget to set =:noweb= on a block, testing against emacs
 24 or 25 will alert you to this.
 #+end_verse
@@ -327,8 +338,8 @@ The minimal set of local variables (=0.2=) only works if you don't use noweb or 
 copy of =org-mode= has the fix for =org-babel-check-confirm-evaluate= applied from
 https://code.orgmode.org/bzg/org-mode/commit/df5a83637518ad9aa586d49884a6271f11afc592.
 # orgit-rev:~/git/NOFORK/org-mode::df5a83637518ad9aa586d49884a6271f11afc592
-The fix is available in org version =9.3.7-22=. Note that coderefs must be
-in comments to get consistent hashing when using this patch.
+The fix is available in org version =9.3.7-22=. Coderefs must be in comments
+to get consistent hashing when using this patch.
 
 Version =0.1= of the =orgstrap= local variables described below is a portable version
 that works with unpatched versions of org-mode as far back as =8.2.10= (the version
@@ -339,7 +350,8 @@ The simplest solution is to hide them in comments as =;(ref:coderef)=
 if you need them. See [[(clrin)]] and [[(oab)]] for examples in this file.
 ** How local variables appear in the file
 # DO NOT EDIT THESE BLOCKS THEY ARE UPDATED AUTOMATICALLY
-Here is what the prop line local variables at the start of the file looks like.
+Here is the prop line from the first line of this file that
+includes the cypher and checksum of the =orgstrap= block.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
 # -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 595964ff8394ab1ea6282a13e76b3f4d757f358a337b4cb4c52df0b2266c9fd3; -*-
@@ -347,7 +359,7 @@ Here is what the prop line local variables at the start of the file looks like.
 
 # BE VERY CAREFUL WITH MANUAL EDITS
 # If this block is being edited manually the automatic update will not work.
-Here is what the =:noexport:= at the end of the file looks like.
+Here are the local variables from the end of the file.
 #+name: local-variables-example
 #+begin_src org :eval never
 
@@ -783,7 +795,7 @@ I want to keep the file local variables as minimal as possible, so having anothe
 aux block that could be automatically updated with the names and hashes of additional
 blocks would be nice ... probably via something like =orgstrap-add-additional-block=
 but it will not go in the local variables because we want there to be some hope of
-orgstrap being portable to other platforms outside of emacs at some point in the
+orgstrap being portable to other platforms outside of Emacs at some point in the
 very distant future, so keeping the machinery outside of the org file itself as
 minimal as possible is critical.
 ** orgstrap.el :noexport:
@@ -902,7 +914,7 @@ however it would be nice if we could detect those cases automatically.
 In principle the simplest way to do this is to use the =:cache yes= header on a block.
 However, unless the state is persisted into a users =init.el= file or equivalent, then
 the file would need a way to know that it had not been run when opened again in a new
-emacs session. Similar issue with opening the same file in multiple emacs sessions at
+Emacs session. Similar issue with opening the same file in multiple Emacs sessions at
 the same time. The block simply will not run again if the cached result is present.
 
 Therefore, since =:cache yes= by itself is a dead end for ensuring that functionality
@@ -914,7 +926,7 @@ is always available any time a file is loaded there are a couple of options.
    with accept klobbering.
 3. Figure out how to transparently wrap an elisp block in =unless=.
 4. Advise =defun= (say what!?)?  @@comment: TERROR@@
-5. Figure out how to un-cache a block when emacs exits.
+5. Figure out how to un-cache a block when Emacs exits.
    This will fail in nasty, unpredictable, and hard to debug ways.
 6. Set =:cache (if (boundp 'orgstrap-already-run) "yes" "no")=.
    This ALMOST works. If =:cache no= embedded the sha1 sum then
