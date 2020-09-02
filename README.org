@@ -942,6 +942,22 @@ We don't use hyphen-minus =-= in function names so that we can support bash runn
 #+name: posix-bootstrap
 #+begin_src sh :noweb yes
 echo "Bootstrapping in posix mode."
+scurl () {
+    # safe(r) curl, yet still scurrilous thus scurl
+    # example: scurl my-audited-checksum https://example.org/file.ext /tmp/file.ext
+    local CHECKSUM="${1}"
+    local URL="${2}"
+    local path="${3}"
+    curl --location "${URL}" --output "${path}" || return $?
+    echo "$(sha256sum "${path}" || shasum -a 256 "${path}")" | \
+    awk '$1!="'"${CHECKSUM}"'" { exit 1 }'
+    CODE=$?
+    if [ $CODE -ne 0 ]; then
+        echo failed with $CODE
+        echo "${path}" checksum did not pass! something evil is going on!
+        mv "${path}" "${path}_checksum_failure"
+    fi
+}
 function package_manager {
     local full;
     cmds=(<<&var-cmds()>>)

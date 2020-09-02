@@ -17,6 +17,22 @@
 ":"; ((Get-Content $MyInvocation.MyCommand.Source) -match '^":";\ #ps ' -replace '^":";\ #ps ') -join "`n" | Invoke-Expression
 ":"; exit
 ":"; #px echo "Bootstrapping in posix mode."
+":"; #px scurl () {
+":"; #px     # safe(r) curl, yet still scurrilous thus scurl
+":"; #px     # example: scurl my-audited-checksum https://example.org/file.ext /tmp/file.ext
+":"; #px     local CHECKSUM="${1}"
+":"; #px     local URL="${2}"
+":"; #px     local path="${3}"
+":"; #px     curl --location "${URL}" --output "${path}" || return $?
+":"; #px     echo "$(sha256sum "${path}" || shasum -a 256 "${path}")" | \
+":"; #px     awk '$1!="'"${CHECKSUM}"'" { exit 1 }'
+":"; #px     CODE=$?
+":"; #px     if [ $CODE -ne 0 ]; then
+":"; #px         echo failed with $CODE
+":"; #px         echo "${path}" checksum did not pass! something evil is going on!
+":"; #px         mv "${path}" "${path}_checksum_failure"
+":"; #px     fi
+":"; #px }
 ":"; #px function package_manager {
 ":"; #px     local full;
 ":"; #px     cmds=(emerge apt yum dnf pacaman nix-env guix brew)
