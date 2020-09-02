@@ -919,7 +919,7 @@ now and there would be no such thing as cybercrime and we would
 all live in a wild happy techno-utopian futures ...]. The inspiration
 for the problem was entirely of my own making and comes from a painful
 experience trying write instructions that were followable[fn::
-[[https://github.com/SciCrunch/sparc-curation/blob/master/docs/setup.org#setup]].]
+[[https://github.com/SciCrunch/sparc-curation/blob/master/docs/setup.org#setup]]]
 for how to run a block in an Org file from scratch, thinking that if
 they could just manage to do that then _hard_ part of the setup would
 be handled for them by the code in the Org mode file. Live and learn.
