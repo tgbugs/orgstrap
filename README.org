@@ -926,7 +926,7 @@ be handled for them by the code in the Org mode file. Live and learn.
 
 So here we are, not quite at curl pipe bash, but hopefully at a form
 that is slightly more auditable[fn::Which means that this section may
-need to be broke out into its own file and published separately.].
+need to be broken out into its own file and published separately.].
 ** Posix bootstrap
 # =apt= has some insane name collision on gentoo from the eselect-java ebuild.
 Package manager commands.
