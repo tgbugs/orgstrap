@@ -11,7 +11,7 @@
 
 (defcustom orgstrap-use-default-package-dir nil
   "If not `nil' orgstrap uses the default package-user-dir
-instead of creating one the same folder as this init.el file")
+instead of creating one in the same folder as this init.el file")
 
 (unless orgstrap-use-default-package-dir (setq package-user-dir (expand-file-name "elpa"  working-dir)))
 
@@ -69,7 +69,7 @@ instead of creating one the same folder as this init.el file")
 ;;; use additional packages
 (defmacro use-packages (&rest names)
   "enable multiple calls to `use-package' during bootstrap"
-  (cons 'progn (map 'list (lambda (name) `(use-package ,name)) names)))
+  (cons 'progn (mapcar (lambda (name) `(use-package ,name)) names)))
 
 ;;; pipe functions
 
