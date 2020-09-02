@@ -896,6 +896,181 @@ encounter instructions that ask you to directly install software from a random p
 you should be suspicious, even, perhaps especially, if that random place is housed
 within a larger reputable site. If you're not in a hurry, ask for the software to be
 packaged, or package it yourself so that it can go through the process.
+* Bootstrapping to Emacs, bootstrapping to Org.
+If you are dealing with a system that does not have a working
+version of Emacs then all these fancy =orgstrap= tricks don't
+do us very much good.
+
+The following section tangles a nearly unreadable file that can
+be used to bootstrap an Emacs onto on a variety of systems.
+I'm not sure that anyone should use it, but it seems easier than
+other approaches I have taken for trying to get Emacs installed
+on a non-technical or semi-technical user's system. The variety
+of different ways that one can obtain, install, configure, and
+customize Emacs, makes it particularly bewildering.
+
+=doom-emacs= =bin/doom= provides some inspiration here (not
+that anyone should ever want to be inspired to create such
+a monstrosity).
+
+# Unfortunately I only worked out the cross-platform issues for
+# the steps that came after Emacs is present on the system.
+
+# Amazing <https://stackoverflow.com/questions/39421131/is-it-possible-to-write-one-script-that-runs-in-bash-shell-and-powershell>
+# that this works.
+
+We start with builtin package managers rather than parasitic package managers
+because anyone using one of those should know enough to either already have emacs
+installed or to figure out how to get it installed without this script.
+
+# =apt= has some insane name collision on gentoo from the eselect-java ebuild.
+
+# shells ... bash dash zsh fish powershell
+We don't use hyphen-minus =-= in function names so that we can support bash
+running in posix mode.
+
+#+name: &var-cmds
+: emerge apt yum dnf pacaman nix-env guix brew
+
+#+name: the-whole-script-to-bootstrap-emacs
+#+begin_src sh :noweb yes
+echo "Bootstrapping in posix mode."
+function package_manager {
+    local full;
+    cmds=(<<&var-cmds()>>)
+    for cmd in "${cmds[@]}"; do
+        full=$(command -v ${cmd} 2>&1) && break;
+    done
+    echo "${cmd}"
+}
+function posix_bootstrap {
+    cmd=$(package_manager)
+    case $cmd in
+        emerge)  $cmd app-editors/emacs ;;
+        yum)     $cmd -y install emacs-nox ;;
+        dnf)     $cmd -y install emacs-nox ;;
+        pacman)  $cmd --noconfirm -S emacs-nox ;;
+        apt)     $cmd -y install emacs-nox ;;
+        nix-env) $cmd -i emacs-nox ;;
+        guix)    $cmd install emacs-nox ;;
+        brew)    $cmd cask install emacs ;;
+        *)       echo No package manager found! Checked <<&var-cmds()>>. ;return 1 ;;
+    esac
+    return $?
+    # TODO
+    # get-yourself-a-real-package-manager
+    # none -> os detection -> get the right one -> run this again
+    echo yay posix
+    # should probably run emacs in here ??
+}
+function missing_emacs {
+    echo "<<&message-emacs-missing()>>"
+    local BCMD="$(typeset -f package_manager); $(typeset -f posix_bootstrap); posix_bootstrap"
+    if command -v sudo; then
+        sudo "$0" -c "${BCMD}" || exit $?
+    else
+        echo For su on ${HOSTNAME} 1>& 2;
+        su -c "${BCMD}" || exit $?
+    fi
+}
+# FIXME sort out the argument passing
+( echo "${EMACS}" | grep -q "term" ) && EMACS=emacs || EMACS=${EMACS:-emacs} 
+command -v $EMACS >/dev/null || missing_emacs &&
+$EMACS --no-site-file --script "$0" -- "$@"
+CODE=$?
+exit $CODE
+#+end_src
+
+#+name: &message-emacs-missing
+: Emacs missing, preparing to bootstrap.
+
+FIXME I do NOT like the fact that choco is pulling a =curl | bash= here.
+This needs a signature.
+# https://chocolatey.org/install#install-with-powershellexe
+#+name: powershell-bootstrap
+#+begin_src powershell :noweb yes
+Write-Host "Bootstrapping in windows mode."
+$EMACS = if ($Env:EMACS -eq $null) { "emacs" } else { $Env:EMACS }
+function bootstrap-windows {
+    if (-not (Get-Command $EMACS -errorAction SilentlyContinue)) {
+        Write-Host "<<&message-emacs-missing()>>"
+        if (-not (Get-Command choco -errorAction SilentlyContinue)) {
+            Write-Host "Chocolatey missing, preparing to bootstrap."
+            Write-Host "Install chocolatey? [y/N]"
+            if ('y', 'Y' -contains $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").Character) {
+                Set-ExecutionPolicy AllSigned -Scope Process -Force;
+                [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072;
+                Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+                } else { Write-Host "Not installing chocolatey. If you want to continue you can install emacs manually.";
+                    throw "failed" } }
+        choco install $EMACS } }
+# FIXME may also need to use $MyInvocation.MyCommand.Path .Name
+try {
+    bootstrap-windows
+    emacs --script $MyInvocation.MyCommand.Source -- $args
+} finally {
+    exit
+}
+#+end_src
+
+Right now this only works with bash, zsh, and powershell because 
+https://unix.stackexchange.com/a/71137 is more than I want
+to try to deal with here.
+
+It is unfortunate that there is no way to get this to work with dash,
+otherwise we could set =sh= for the shebang, but we can't due to the
+incompatible function syntax.
+
+At this point the basics of the script below should be working on
+darwin, various linux distros, various bsds, and windows. At the moment
+only windows and a subset of linux distros can bootstrap from scratch.
+There is also a question of whether forcing a package manager on an
+unsuspecting user is a good idea. I tend to say yes, but maybe we need
+to make sure that they are a little less unsuspecting? Though there is
+nothing like a cold baptism into the world of proper systems administration.
+
+#+name: bootstrap-from-shell
+#+header: :shebang "#!/usr/bin/env bash"
+#+begin_src emacs-lisp :noweb no-export :tangle ./org-what-now.el.sh.ps1
+":"; # -*-emacs-lisp-*-
+":"; #px <<the-whole-script-to-bootstrap-emacs>>
+":"; function posix () {
+":";   eval "$(grep '^":";\ #px' $0 | sed -e 's/^":";\ #px //')"
+":";   return "$?"
+":"; }
+":"; function quirk () {
+":";   test "$ZSH_VERSION" && set +nofunctionargzero
+":"; }
+":"; function unquirk () {
+":";   test "$ZSH_VERSION" && set nofunctionargzero
+":"; }
+":"; "quirk"
+":"; "posix"
+":"; "unquirk"
+":"; "exit"  # NOTE can't pass error code out easily here
+":"; #ps <<powershell-bootstrap>>
+":"; ((Get-Content $MyInvocation.MyCommand.Source) -match '^":";\ #ps ' -replace '^":";\ #ps ') -join "`n" | Invoke-Expression
+":"; exit
+(message "We have emacs.")
+#+end_src
+
+Many variants of the test for quirk have been tried and failed.
+This variant works but was not selected because =test= is more
+portable (see https://stackoverflow.com/a/6535252).
+#+begin_src bash
+function quirk () {
+  (( $ZSH_VERSION )) && set +nofunctionargzero
+}
+#+end_src
+Furthermore, =test= is compatible with powershell syntax so it is better to use that
+for bootsrapping. On all my windows systems =test= is available, but I suspect
+that it is coming from something I have installed and cannot be relied upon.
+
+#+name: bootstrap-from-shell-powershell
+#+begin_src powershell :noweb no-export :results output
+<<bootstrap-from-shell>>
+#+end_src
+
 * Future work
 :PROPERTIES:
 :CUSTOM_ID: future-work
