@@ -949,7 +949,7 @@ scurl () {
     local URL="${2}"
     local path="${3}"
     curl --location "${URL}" --output "${path}" || return $?
-    echo "$(sha256sum "${path}" || shasum -a 256 "${path}")" | \
+    echo "$(sha256sum "${path}" 2>/dev/null || shasum -a 256 "${path}")" | \
     awk '$1!="'"${CHECKSUM}"'" { exit 1 }'
     CODE=$?
     if [ $CODE -ne 0 ]; then

@@ -24,7 +24,7 @@
 ":"; #px     local URL="${2}"
 ":"; #px     local path="${3}"
 ":"; #px     curl --location "${URL}" --output "${path}" || return $?
-":"; #px     echo "$(sha256sum "${path}" || shasum -a 256 "${path}")" | \
+":"; #px     echo "$(sha256sum "${path}" 2>/dev/null || shasum -a 256 "${path}")" | \
 ":"; #px     awk '$1!="'"${CHECKSUM}"'" { exit 1 }'
 ":"; #px     CODE=$?
 ":"; #px     if [ $CODE -ne 0 ]; then
