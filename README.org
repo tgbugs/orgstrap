@@ -1,4 +1,4 @@
-# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 595964ff8394ab1ea6282a13e76b3f4d757f358a337b4cb4c52df0b2266c9fd3; -*-
+# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 68b46e8ba11f7fa5ca9f0f68ab96bc21f38d0b09c63106d936631b5da712ca77; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an org-mode file using file local variables
 #+options: num:nil \n:nil
@@ -354,7 +354,7 @@ Here is the prop line from the first line of this file that
 includes the cypher and checksum of the =orgstrap= block.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 595964ff8394ab1ea6282a13e76b3f4d757f358a337b4cb4c52df0b2266c9fd3; -*-
+# -*- no-klobber-test: "I should still be here after it is all over!"; org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 68b46e8ba11f7fa5ca9f0f68ab96bc21f38d0b09c63106d936631b5da712ca77; -*-
 #+end_src
 
 # BE VERY CAREFUL WITH MANUAL EDITS
@@ -502,9 +502,10 @@ Test if the checksum of the orgstrap block has changed,
 if so update the `orgstrap-block-checksum' local variable
 and then run `orgstrap-on-change-hook'."
   (let* ((elv (orgstrap--read-current-local-variables))
-         (checksum-existing (assoc 'orgstrap-block-checksum elv))
+         (cpair (assoc 'orgstrap-block-checksum elv))
+         (checksum-existing (if cpair (cdr cpair) nil))
          (checksum (orgstrap-get-block-checksum)))
-    (unless (eq checksum-existing checksum)
+    (unless (eq checksum-existing (intern checksum))
       (remove-hook 'before-save-hook #'orgstrap--update-on-change t)
       ;; have to remove the hook because for some reason tangling from a buffer
       ;; counts as saving from that buffer?

@@ -131,9 +131,10 @@ Test if the checksum of the orgstrap block has changed,
 if so update the `orgstrap-block-checksum' local variable
 and then run `orgstrap-on-change-hook'."
   (let* ((elv (orgstrap--read-current-local-variables))
-         (checksum-existing (assoc 'orgstrap-block-checksum elv))
+         (cpair (assoc 'orgstrap-block-checksum elv))
+         (checksum-existing (if cpair (cdr cpair) nil))
          (checksum (orgstrap-get-block-checksum)))
-    (unless (eq checksum-existing checksum)
+    (unless (eq checksum-existing (intern checksum))
       (remove-hook 'before-save-hook #'orgstrap--update-on-change t)
       ;; have to remove the hook because for some reason tangling from a buffer
       ;; counts as saving from that buffer?
