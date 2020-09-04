@@ -1168,6 +1168,16 @@ within a tree somewhere.
 This is a general issue any time a file local variable is set on a buffer that is
 not backed by a file. In this case the fix is to disable and then enable =orgstrap-mode=,
 however it would be nice if we could detect those cases automatically.
+** Batch mode
+There are a number of use cases for being able to process orgstrapped files in batch mode.
+For example being able to load a file and have it automatically tangle itself vastly simplifies
+a number of different workflows. =emacs -q --batch -l orgstrap-known-safe.el my-file.org= seems
+like a reasonable approach. Essentially =orgstrap-known-safe.el= needs to contain the safe eval
+blocks and the audited hashes so that local variable prompts will not be triggered since they
+always return no when in batch mode. One additional feature is be to able to pass the checksum
+on the command line. The eval variables would still have to be loaded in some way, but avoiding
+the need to open and edit =orgstrap-known-safe.el= for each new file, and possibly edit it again
+to remove the approval in the future.
 ** Run once
 In principle the simplest way to do this is to use the =:cache yes= header on a block.
 However, unless the state is persisted into a users =init.el= file or equivalent, then
