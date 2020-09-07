@@ -56,7 +56,7 @@ Only runs when the contents of the orgstrap block have changed."
   "Set whether minimal, smaller but less portable variables are used.
 If nil then backward compatible local variables are used instead.
 If the value is customized to be non-nil then compact local variables
-are used and `orgstrap-min-org-version' is set accordingly. If the
+are used and `orgstrap-min-org-version' is set accordingly.  If the
 current version of org mode does not support the features required to
 use the minimal variables then the portable variables are used instead."
   :type 'boolean
@@ -70,6 +70,9 @@ The value is `orgstrap-cypher' if it is bound otherwise
   (if (boundp 'orgstrap-cypher) orgstrap-cypher orgstrap-default-cypher))
 
 (defun orgstrap-org-src-coderef-regexp (fmt &optional label)
+  "Backport `org-src-coderef-regexp' for 24 and 25.
+See the upstream docstring for info on LABEL.
+FMT has the wrong meaning in 24 and 25."
   (let ((fmt org-coderef-label-format))
     (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$"
             (replace-regexp-in-string
@@ -79,7 +82,7 @@ The value is `orgstrap-cypher' if it is bound otherwise
                "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)")
              (regexp-quote fmt)
              nil t))))
-(unless (fboundp 'org-src-coderef-regexp)
+(unless (fboundp #'org-src-coderef-regexp)
   (defalias 'org-src-coderef-regexp 'orgstrap-org-src-coderef-regexp))
 (defun orgstrap--expand-body (info)
   "Expand noweb references in INFO body and remove any coderefs."
@@ -116,7 +119,7 @@ The value is `orgstrap-cypher' if it is bound otherwise
 ;; orgstrap normalization functions
 
 (defun orgstrap-norm-func--prp-1.0 (body)
-  "Normalize BODY using prp-1.0"
+  "Normalize BODY using prp-1.0."
   (let ((print-quoted nil))
     (prin1-to-string (read (concat "(progn\n" body "\n)")))))
 
@@ -142,12 +145,6 @@ The macro provides local bindings for four names:
                 (body (orgstrap--expand-body info)))
            ,@macro-body)
        (org-mark-ring-goto))))
-
-(defun orgstrap--update-file-local-variables ()
-  ;; only update if we are using minimal variables
-  (unless (or (fboundp #'org-babel--expand-body)
-              (not (using-noweb block)))
-    (use minimal block)))
 
 (defun orgstrap--update-on-change ()
   "Run via the `before-save-hook' local variable.
@@ -229,7 +226,8 @@ directly if it has been calculated before and only needs to be set."
 ;; local variable generation functions
 
 (defun orgstrap--get-min-org-version (info minimal)
-  "Get the minimum org-version required to run the orgstrap block for this file."
+  "Get minimum org mode version needed by the orgstrap block for this file.
+INFO is the source block info.  MINIMAL sets whether to use minimal local vars."
   (if minimal
       (let ((coderef (nth 6 info))
             (noweb (org-babel-noweb-p (nth 2 info) :eval)))
@@ -249,13 +247,14 @@ directly if it has been calculated before and only needs to be set."
         "8.2.10")))
 
 (defun orgstrap--have-min-org-version (info minimal)
-  "Test if the current version of org meets minimum requirements
-to use minimal local variables for the current block."
+  "See if current version of org meets minimum requirements for orgstrap block.
+INFO is the source block info.
+MINIMAL is passed to `orgstrap--get-min-org-version'."
   (let ((actual (org-version))
         (need (orgstrap--get-min-org-version info minimal)))
     (or (not need)
-        (string> actual need)
-        (string= actual need))))
+        (string< need actual)
+        (string= need actual))))
 
 (defun orgstrap--dedoc (sexp)
   "Remove docstrings from SEXP."
@@ -267,7 +266,7 @@ to use minimal local variables for the current block."
                    (elt sexp 4)))
           (append (cl-subseq sexp 0 3) (cl-subseq sexp 4))
         sexp)
-    (mapcar #'orgstrap-dedoc sexp)))
+    (mapcar #'orgstrap--dedoc sexp)))
 
 (defun orgstrap--local-variables--check-version (info &optional minimal)
   "Return the version check local variables given INFO and MINIMAL."
@@ -279,25 +278,25 @@ to use minimal local variables for the current block."
           (not need)
           (string< need actual)
           (string= need actual)
-          (error "your org is too old! %s < %s" actual need)))))
+          (error "Your Org is too old! %s < %s" actual need)))))
 
 (defun orgstrap--local-variables--norm (&optional norm-func-name)
   "Return the normalization function for local variables given NORM-FUNC-NAME."
   (let ((norm-func-name (or norm-func-name orgstrap-norm-func)))
-    (pcase norm-func-name
-      ('orgstrap-norm-func--prp-1.0
+    (cl-case norm-func-name
+      (orgstrap-norm-func--prp-1.0
        '(
          (defun orgstrap-norm-func--prp-1.0 (body)
-           "Normalize BODY using prp-1.0"
+           "Normalize BODY using prp-1.0."
            (let ((print-quoted nil))
              (prin1-to-string (read (concat "(progn\n" body "\n)")))))))
-      (_ (error "Don't know that normalization function %s" norm-func-name)))))
+      (otherwise (error "Don't know that normalization function %s" norm-func-name)))))
 
 (defun orgstrap--local-variables--norm-common ()
   "Return the common normalization functions for local variables."
   '(
     (unless (boundp 'orgstrap-norm-func)
-      (defvar orgstrap-norm-func nil))
+      (defvar orgstrap-norm-func orgstrap-norm-func-name))
     
     (defun orgstrap-norm-embd (body)
       "Normalize BODY."
@@ -328,6 +327,9 @@ to use minimal local variables for the current block."
             (defalias 'orgstrap--confirm-eval 'orgstrap--confirm-eval-minimal)))
       '(
         (defun orgstrap-org-src-coderef-regexp (fmt &optional label)
+          "Backport `org-src-coderef-regexp' for 24 and 25.
+        See the upstream docstring for info on LABEL.
+        FMT has the wrong meaning in 24 and 25."
           (let ((fmt org-coderef-label-format))
             (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$"
                     (replace-regexp-in-string
@@ -337,7 +339,7 @@ to use minimal local variables for the current block."
                        "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)")
                      (regexp-quote fmt)
                      nil t))))
-        (unless (fboundp 'org-src-coderef-regexp)
+        (unless (fboundp #'org-src-coderef-regexp)
           (defalias 'org-src-coderef-regexp 'orgstrap-org-src-coderef-regexp))
         (defun orgstrap--expand-body (info)
           "Expand noweb references in INFO body and remove any coderefs."
@@ -352,6 +354,7 @@ to use minimal local variables for the current block."
               (replace-regexp-in-string
                (org-src-coderef-regexp coderef) "" expand nil nil 1))))
 
+        ;;;###autoload
         (defun orgstrap--confirm-eval-portable (lang body)
           ;; `org-confirm-babel-evaluate' will prompt the user when the value
           ;; that is returned is non-nil, therefore we negate positive matchs
@@ -367,6 +370,7 @@ to use minimal local variables for the current block."
                       ;;(message "%s" body-normalized)
                       (eq orgstrap-block-checksum content-checksum)))))
         ;; portable eval is used as the default implementation in orgstrap.el
+        ;;;###autoload
         (defalias 'orgstrap--confirm-eval 'orgstrap--confirm-eval-portable)))))
 
 (defun orgstrap--local-variables--eval-common ()
@@ -465,11 +469,12 @@ If a block with that name already exists raise an error."
 
 (defun orgstrap--add-file-local-variables (&optional minimal norm-func-name)
   "Add the file local variables needed to make orgstrap work.
-MINIMAL is currently used to control whether portable or minimal
-is used. Version should be orthognal to whether the block supports noweb
-and old versions of `org-mode' and the selection for noweb should
-be detected automatically, similarly we could automatically include
-a version test and fail if the version is unsupported."
+MINIMAL is used to control whether the portable or minimal block is used.
+If MINIMAL is set but the orgstrap block uses features like noweb and
+uncommented coderefs and function `org-version' is too old, then the portable
+block will be used.  NORM-FUNC-NAME is an optional argument that can be provided
+to determine which normalization function is used independent of the current
+buffer or global setting for `orgstrap-norm-func'."
   ;; switching comments probably wont work ? we can try
   ;; Use a prefix argument (i.e. C-u) to add file local variables comments instead of in a :noexport:
   (interactive)
@@ -503,8 +508,10 @@ a version test and fail if the version is unsupported."
 
 ;; init user facing functions
 ;;;###autoload
-(defun orgstrap-init (&optional arg)
-  "Initialize orgstrap in the current buffer and enable command `orgstrap-mode'."
+(defun orgstrap-init (&optional prefix-argument)
+  "Initialize orgstrap in the current buffer and enable command `orgstrap-mode'.
+PREFIX-ARGUMENT is essentially minimal from other functions, when non-nil
+the minimal local variables will be used if possible."
   (interactive "P")
   (unless (eq major-mode 'org-mode)
     (error "Cannot orgstrap, buffer not in `org-mode' it is in %s!" major-mode))
@@ -515,7 +522,7 @@ a version test and fail if the version is unsupported."
     (orgstrap-add-block-checksum)
     (orgstrap--add-link-to-orgstrap-block)
     ;; FIXME sometimes local variables don't populate due to an out of range error
-    (orgstrap--add-file-local-variables (or arg orgstrap-use-minimal-local-variables))
+    (orgstrap--add-file-local-variables (or prefix-argument orgstrap-use-minimal-local-variables))
     (orgstrap-mode)))
 
 ;;; extra helpers
@@ -539,7 +546,7 @@ XXX NOTE THAT THIS CANNOT BE USED WITH #+BEGIN_EXAMPLE BLOCKS."
          (body-unexpanded (nth 1 info))
          (body (orgstrap--expand-body info))
          (body-normalized
-          (orgstrap-norm body #'orgstrap-norm-func))
+          (orgstrap-norm body))
          (cypher (or cypher (orgstrap--current-buffer-cypher))))
     (ignore params body-unexpanded)
     (secure-hash cypher body-normalized)))
@@ -551,7 +558,7 @@ XXX NOTE THAT THIS CANNOT BE USED WITH #+BEGIN_EXAMPLE BLOCKS."
     (ignore params body-unexpanded)
     (let ((cypher (or cypher (orgstrap--current-buffer-cypher)))
           (body-normalized
-           (orgstrap-norm body #'orgstrap-norm-func)))
+           (orgstrap-norm body)))
       (secure-hash cypher body-normalized))))
 
 (defun orgstrap-run-additional-blocks (&rest name-checksum) ;(ref:oab)
