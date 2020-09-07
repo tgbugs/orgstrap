@@ -1,4 +1,4 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: c0c25066edb3aafde08a86f828decae8151022d922763060b04cc20efd4792ba; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: ee9066e494061f0424505060e1f51926c1ea79ee50a1df6869037bfb6136ddaf; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an org-mode file using file local variables
 #+options: num:nil \n:nil
@@ -431,7 +431,7 @@ Here is the prop line from the first line of this file that
 includes the cypher and checksum of the =orgstrap= block.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: c0c25066edb3aafde08a86f828decae8151022d922763060b04cc20efd4792ba; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: ee9066e494061f0424505060e1f51926c1ea79ee50a1df6869037bfb6136ddaf; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
 #+end_src
 
 # BE VERY CAREFUL WITH MANUAL EDITS
@@ -476,10 +476,10 @@ that anyone anywhere is running one of those versions is approximately zero.
 
 #+name: orgstrap-expand-body
 #+begin_src elisp :eval never
-(defun orgstrap-org-src-coderef-regexp (fmt &optional label)
+(defun orgstrap-org-src-coderef-regexp (_fmt &optional label)
   "Backport `org-src-coderef-regexp' for 24 and 25.
 See the upstream docstring for info on LABEL.
-FMT has the wrong meaning in 24 and 25."
+_FMT has the wrong meaning in 24 and 25."
   (let ((fmt org-coderef-label-format))
     (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$"
             (replace-regexp-in-string

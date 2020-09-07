@@ -69,10 +69,10 @@ The value is `orgstrap-cypher' if it is bound otherwise
 `orgstrap-default-cypher' is returned."
   (if (boundp 'orgstrap-cypher) orgstrap-cypher orgstrap-default-cypher))
 
-(defun orgstrap-org-src-coderef-regexp (fmt &optional label)
+(defun orgstrap-org-src-coderef-regexp (_fmt &optional label)
   "Backport `org-src-coderef-regexp' for 24 and 25.
 See the upstream docstring for info on LABEL.
-FMT has the wrong meaning in 24 and 25."
+_FMT has the wrong meaning in 24 and 25."
   (let ((fmt org-coderef-label-format))
     (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$"
             (replace-regexp-in-string
@@ -326,10 +326,10 @@ MINIMAL is passed to `orgstrap--get-min-org-version'."
             ;; to produce different hashes
             (defalias 'orgstrap--confirm-eval 'orgstrap--confirm-eval-minimal)))
       '(
-        (defun orgstrap-org-src-coderef-regexp (fmt &optional label)
+        (defun orgstrap-org-src-coderef-regexp (_fmt &optional label)
           "Backport `org-src-coderef-regexp' for 24 and 25.
         See the upstream docstring for info on LABEL.
-        FMT has the wrong meaning in 24 and 25."
+        _FMT has the wrong meaning in 24 and 25."
           (let ((fmt org-coderef-label-format))
             (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$"
                     (replace-regexp-in-string
