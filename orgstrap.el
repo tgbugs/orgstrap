@@ -223,6 +223,9 @@ directly if it has been calculated before and only needs to be set."
 (defvar orgstrap-link-message "jump to the orgstrap block for this file"
   "Default message for file internal links.")
 
+(defvar orgstrap--local-variables nil
+  "Variable to capture local variables from `hack-local-variables'.")
+
 ;; local variable generation functions
 
 (defun orgstrap--get-min-org-version (info minimal)
