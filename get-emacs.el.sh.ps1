@@ -23,6 +23,9 @@
 ":"; #px     local CHECKSUM="${1}"
 ":"; #px     local URL="${2}"
 ":"; #px     local path="${3}"
+":"; #px     cmd="$(command -v sha256sum || (shasum -a 256))"
+":"; #px     mktemp  # FIXME always download or stream to a tempfile first, hash, and ONLY THEN move to the path
+":"; #px     curl --location "${URL}" | tee "${path}" | sha256sum
 ":"; #px     curl --location "${URL}" --output "${path}" || return $?
 ":"; #px     echo "$(sha256sum "${path}" 2>/dev/null || shasum -a 256 "${path}")" | \
 ":"; #px     awk '$1!="'"${CHECKSUM}"'" { exit 1 }'
@@ -72,7 +75,7 @@
 ":"; #px     fi
 ":"; #px }
 ":"; #px # FIXME sort out the argument passing
-":"; #px ( echo "${EMACS}" | grep -q "term" ) && EMACS=emacs || EMACS=${EMACS:-emacs} 
+":"; #px ( echo "${EMACS}" | grep -q "term" ) && EMACS=emacs || EMACS=${EMACS:-emacs}
 ":"; #px command -v $EMACS >/dev/null || missing_emacs &&
 ":"; #px $EMACS --no-site-file --script "$0" -- "$@"
 ":"; #px CODE=$?

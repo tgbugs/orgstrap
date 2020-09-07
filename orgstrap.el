@@ -4,13 +4,12 @@
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
 ;; Version: 1.0
-;; URL: https://github.com/purcell/flycheck-package
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
 
 ;; License:
-;; GPLv3
+;; https://spdx.org/licenses/GPL-3.0-or-later
 
 ;;; Commentary:
 
@@ -29,6 +28,8 @@
 
 ;;; Code:
 
+(require 'org)
+
 ;;; edit helpers
 (defvar orgstrap-orgstrap-block-name "orgstrap"
   "Set the default blockname to orgstrap by convention.
@@ -38,33 +39,51 @@ an orgstrapped file and wants to know what is going on.")
 (defvar orgstrap-default-cypher 'sha256
   "The default cypher passed to `secure-hash' when hashing blocks.")
 
+(defvar orgstrap-norm-func #'orgstrap-norm-func--prp-1.0
+  "Dynamic variable to simplify calling normalizaiton functions.
+Defaults to `orgstrap-norm-func--prp-1.0'.")
+
+(defvar orgstrap--debug nil
+  "If non-nil run `orgstrap-norm' in debug mode.")
+
 (defcustom orgstrap-on-change-hook nil
   "Hook run via `before-save-hook' when command `orgstrap-mode' is enabled.
 Only runs when the contents of the orgstrap block have changed."
   :type 'hook
   :group 'orgstrap)
 
+(defcustom orgstrap-use-minimal-local-variables nil
+  "Set whether minimal, smaller but less portable variables are used.
+If nil then backward compatible local variables are used instead.
+If the value is customized to be non-nil then compact local variables
+are used and `orgstrap-min-org-version' is set accordingly. If the
+current version of org mode does not support the features required to
+use the minimal variables then the portable variables are used instead."
+  :type 'boolean
+  :group 'orgstrap)
+
 ;; edit utility functions
 (defun orgstrap--current-buffer-cypher ()
   "Return the cypher used for the current buffer.
-The value returned is `orgstrap-cypher' or if there is not buffer local cypher
-then `orgstrap-default-cypher' is returned."
+The value is `orgstrap-cypher' if it is bound otherwise
+`orgstrap-default-cypher' is returned."
   (if (boundp 'orgstrap-cypher) orgstrap-cypher orgstrap-default-cypher))
 
-(when (not (fboundp 'org-src-coderef-regexp))
-  (defun org-src-coderef-regexp (fmt &optional label)
-    (let ((fmt org-coderef-label-format))
-      (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$"
-              (replace-regexp-in-string
-               "%s"
-               (if label
-                   (regexp-quote label)
-                 "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)")
-               (regexp-quote fmt)
-               nil t)))))
-
+(defun orgstrap-org-src-coderef-regexp (fmt &optional label)
+  (let ((fmt org-coderef-label-format))
+    (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$"
+            (replace-regexp-in-string
+             "%s"
+             (if label
+                 (regexp-quote label)
+               "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)")
+             (regexp-quote fmt)
+             nil t))))
+(unless (fboundp 'org-src-coderef-regexp)
+  (defalias 'org-src-coderef-regexp 'orgstrap-org-src-coderef-regexp))
 (defun orgstrap--expand-body (info)
-  "Expand references in INFO body if :noweb header is set."
+  "Expand noweb references in INFO body and remove any coderefs."
+  ;; this is a backport of `org-babel--expand-body'
   (let ((coderef (nth 6 info))
         (expand
          (if (org-babel-noweb-p (nth 2 info) :eval)
@@ -74,6 +93,32 @@ then `orgstrap-default-cypher' is returned."
         expand
       (replace-regexp-in-string
        (org-src-coderef-regexp coderef) "" expand nil nil 1))))
+
+(defun orgstrap-norm (body)
+  "Normalize BODY."
+  (if orgstrap--debug
+      (orgstrap-norm-debug body)
+    (funcall orgstrap-norm-func body)))
+
+(defun orgstrap-norm-debug (body)
+  "Insert BODY normalized with NORM-FUNC into a buffer for easier debug."
+  (let* ((print-quoted nil)
+         (bname (format "body-norm-%s" emacs-major-version))
+         (buffer (let ((existing (get-buffer bname)))
+                   (if existing existing
+                     (create-file-buffer bname))))
+         (body-normalized (funcall orgstrap-norm-func body)))
+    (with-current-buffer buffer
+      (erase-buffer)
+      (insert body-normalized))
+    body-normalized))
+
+;; orgstrap normalization functions
+
+(defun orgstrap-norm-func--prp-1.0 (body)
+  "Normalize BODY using prp-1.0"
+  (let ((print-quoted nil))
+    (prin1-to-string (read (concat "(progn\n" body "\n)")))))
 
 (defmacro orgstrap--with-block (blockname &rest macro-body)
   "Go to the source block named BLOCKNAME and execute MACRO-BODY.
@@ -98,32 +143,11 @@ The macro provides local bindings for four names:
            ,@macro-body)
        (org-mark-ring-goto))))
 
-;; edit user facing functions
-(defun orgstrap-get-block-checksum (&optional cypher)
-  "Calculate the `orgstrap-block-checksum' for the current buffer using CYPHER."
-  (interactive)
-  (orgstrap--with-block orgstrap-orgstrap-block-name
-    (ignore params body-unexpanded)
-    (let ((cypher (or cypher (orgstrap--current-buffer-cypher)))
-          (body-normalized
-           (let ((print-quoted nil))
-             (prin1-to-string (read (concat "(progn\n" body "\n)"))))))
-      (secure-hash cypher body-normalized))))
-
-(defun orgstrap-add-block-checksum (&optional cypher checksum)
-  "Add `orgstrap-block-checksum' to file local variables of `current-buffer'.
-The optional CYPHER argument should almost never be used,
-instead change the value of `orgstrap-default-cypher' or manually
-change the file property line variable.  CHECKSUM can be passed
-directly if it has been calculated before and only needs to be set."
-  (interactive)
-  (let* ((cypher (or cypher (orgstrap--current-buffer-cypher)))
-         (orgstrap-block-checksum (or checksum (orgstrap-get-block-checksum cypher))))
-    (when orgstrap-block-checksum
-      (save-excursion
-        (add-file-local-variable-prop-line 'orgstrap-cypher cypher)
-        (add-file-local-variable-prop-line 'orgstrap-block-checksum (intern orgstrap-block-checksum))))
-    orgstrap-block-checksum))
+(defun orgstrap--update-file-local-variables ()
+  ;; only update if we are using minimal variables
+  (unless (or (fboundp #'org-babel--expand-body)
+              (not (using-noweb block)))
+    (use minimal block)))
 
 (defun orgstrap--update-on-change ()
   "Run via the `before-save-hook' local variable.
@@ -148,6 +172,40 @@ and then run `orgstrap-on-change-hook'."
         (run-hooks 'orgstrap-on-change-hook))
       (add-hook 'before-save-hook #'orgstrap--update-on-change 0 t))))
 
+;; edit user facing functions
+(defun orgstrap-get-block-checksum (&optional cypher)
+  "Calculate the `orgstrap-block-checksum' for the current buffer using CYPHER."
+  (interactive)
+  (orgstrap--with-block orgstrap-orgstrap-block-name
+    (ignore params body-unexpanded)
+    (let ((cypher (or cypher (orgstrap--current-buffer-cypher)))
+          (body-normalized (orgstrap-norm body)))
+      (secure-hash cypher body-normalized))))
+
+(defun orgstrap-add-block-checksum (&optional cypher checksum)
+  "Add `orgstrap-block-checksum' to file local variables of `current-buffer'.
+The optional CYPHER argument should almost never be used,
+instead change the value of `orgstrap-default-cypher' or manually
+change the file property line variable.  CHECKSUM can be passed
+directly if it has been calculated before and only needs to be set."
+  (interactive)
+  (let* ((cypher (or cypher (orgstrap--current-buffer-cypher)))
+         (orgstrap-block-checksum (or checksum (orgstrap-get-block-checksum cypher))))
+    (when orgstrap-block-checksum
+      (save-excursion
+        (add-file-local-variable-prop-line 'orgstrap-cypher         cypher)
+        (add-file-local-variable-prop-line 'orgstrap-norm-func-name orgstrap-norm-func)
+        (add-file-local-variable-prop-line 'orgstrap-block-checksum (intern orgstrap-block-checksum))))
+    orgstrap-block-checksum))
+
+(defun orgstrap-run-block ()
+  "Evaluate the orgstrap block for the current buffer."
+  ;; bind to :orb or something like that
+  (interactive)
+  (save-excursion
+    (org-babel-goto-named-src-block orgstrap-orgstrap-block-name)
+    (org-babel-execute-src-block)))
+
 ;;;###autoload
 (define-minor-mode orgstrap-mode
   "Minor mode for working with orgstrapped files."
@@ -168,89 +226,160 @@ and then run `orgstrap-on-change-hook'."
 (defvar orgstrap-link-message "jump to the orgstrap block for this file"
   "Default message for file internal links.")
 
-(defconst orgstrap--default-local-variables-block-version "0.1"
-  "End of file local variables verion number.
-Used to set visible version number in the
-file local variables in `orgstrap--add-file-local-variables'")
+;; local variable generation functions
 
-(defconst orgstrap--local-variable-eval-commands-0.1
-  '(
-    (when (not (fboundp 'org-src-coderef-regexp))
-      (defun org-src-coderef-regexp (fmt &optional label)
-        (let ((fmt org-coderef-label-format))
-          (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$"
-                  (replace-regexp-in-string
-                   "%s"
-                   (if label
-                       (regexp-quote label)
-                     "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)")
-                   (regexp-quote fmt)
-                   nil t)))))
-    
-    (defun orgstrap--expand-body (info)
-      "Expand references in INFO body if :noweb header is set."
+(defun orgstrap--get-min-org-version (info minimal)
+  "Get the minimum org-version required to run the orgstrap block for this file."
+  (if minimal
       (let ((coderef (nth 6 info))
-            (expand
-             (if (org-babel-noweb-p (nth 2 info) :eval)
-                 (org-babel-expand-noweb-references info)
-               (nth 1 info))))
-        (if (not coderef)
-            expand
-          (replace-regexp-in-string
-           (org-src-coderef-regexp coderef) "" expand nil nil 1))))
-    
-    (defun orgstrap--confirm-eval (lang body)
-      ;; `org-confirm-babel-evaluate' will prompt the user when the value
-      ;; that is returned is non-nil, therefore we negate positive matchs
-      (not (and (member lang '("elisp" "emacs-lisp"))
-                (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info)))
-                       (body-normalized
-                        (let ((print-quoted nil))
-                          (prin1-to-string (read (concat "(progn\n" body "\n)")))))
-                       (content-checksum
-                        (intern
-                         (secure-hash
-                          orgstrap-cypher
-                          body-normalized))))
-                  ;;(message "%s %s" orgstrap-block-checksum content-checksum)
-                  ;;(message "%s" body-normalized)
-                  (eq orgstrap-block-checksum content-checksum)))))
-    
-    (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
-    
-    (unwind-protect
-        (save-excursion
-          (org-babel-goto-named-src-block "orgstrap")
-          (org-babel-execute-src-block))
-      (setq-local org-confirm-babel-evaluate t)
-      (fmakunbound #'orgstrap--confirm-eval))))
+            (noweb (org-babel-noweb-p (nth 2 info) :eval)))
+        (if noweb
+            "9.4"
+          (let* ((body (nth 1 info))
+                 (crrx (org-src-coderef-regexp coderef))
+                 (pos (string-match crrx body))
+                 (commented
+                  (and pos (string-match
+                            (concat (rx ";" (zero-or-more whitespace)) crrx) body))))
+            ;; FIXME the right way to do this is similar to what is done in
+            ;; `org-export-resolve-coderef' but for now we know we are in elisp
+            (if (or (not pos) commented)
+                "8.2.10"
+              "9.4")))
+        "8.2.10")))
 
-(defconst orgstrap--local-variable-eval-commands-0.2
+(defun orgstrap--have-min-org-version (info minimal)
+  "Test if the current version of org meets minimum requirements
+to use minimal local variables for the current block."
+  (let ((actual (org-version))
+        (need (orgstrap--get-min-org-version info minimal)))
+    (or (not need)
+        (string> actual need)
+        (string= actual need))))
+
+(defun orgstrap--dedoc (sexp)
+  "Remove docstrings from SEXP."
+  ;; defun 3 defmacro 3 defvar 3
+  (if (symbolp (elt sexp 0))
+      (if (and (memq (elt sexp 0) '(defun defmacro defvar))
+               (stringp (elt sexp 3))
+               (or (eq (elt sexp 0) 'defvar)
+                   (elt sexp 4)))
+          (append (cl-subseq sexp 0 3) (cl-subseq sexp 4))
+        sexp)
+    (mapcar #'orgstrap-dedoc sexp)))
+
+(defun orgstrap--local-variables--check-version (info &optional minimal)
+  "Return the version check local variables given INFO and MINIMAL."
+  `(
+    (setq-local orgstrap-min-org-version ,(orgstrap--get-min-org-version info minimal))
+    (let ((actual (org-version))
+          (need orgstrap-min-org-version))
+      (or (fboundp #'orgstrap--confirm-eval) ; orgstrap with portable is already present on the system
+          (not need)
+          (string< need actual)
+          (string= need actual)
+          (error "your org is too old! %s < %s" actual need)))))
+
+(defun orgstrap--local-variables--norm (&optional norm-func-name)
+  "Return the normalization function for local variables given NORM-FUNC-NAME."
+  (let ((norm-func-name (or norm-func-name orgstrap-norm-func)))
+    (pcase norm-func-name
+      ('orgstrap-norm-func--prp-1.0
+       '(
+         (defun orgstrap-norm-func--prp-1.0 (body)
+           "Normalize BODY using prp-1.0"
+           (let ((print-quoted nil))
+             (prin1-to-string (read (concat "(progn\n" body "\n)")))))))
+      (_ (error "Don't know that normalization function %s" norm-func-name)))))
+
+(defun orgstrap--local-variables--norm-common ()
+  "Return the common normalization functions for local variables."
   '(
-    (defun orgstrap--confirm-eval (lang body)
-      (not (and (member lang '("elisp" "emacs-lisp"))
-                (eq orgstrap-block-checksum
-                    (intern
-                     (secure-hash
-                      orgstrap-cypher
-                      (let ((print-quoted nil))
-                        (prin1-to-string (read (concat "(progn\n" body "\n)"))))))))))
+    (unless (boundp 'orgstrap-norm-func)
+      (defvar orgstrap-norm-func nil))
     
-    (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
+    (defun orgstrap-norm-embd (body)
+      "Normalize BODY."
+      (funcall orgstrap-norm-func body))
     
-    (unwind-protect
-        (save-excursion
-          (org-babel-goto-named-src-block "orgstrap")
-          (org-babel-execute-src-block))
-      (setq-local org-confirm-babel-evaluate t)
-      (fmakunbound #'orgstrap--confirm-eval))))
+    (unless (fboundp #'orgstrap-norm)
+      (defalias 'orgstrap-norm 'orgstrap-norm-embd))))
 
-(defun orgstrap--local-variable-eval-commands (&optional version)
-  "Return the set of eval local variable commands for VERSION."
-  (let ((version (or version orgstrap--default-local-variables-block-version)))
-    (pcase version
-      ("0.1" orgstrap--local-variable-eval-commands-0.1)
-      ("0.2" orgstrap--local-variable-eval-commands-0.2))))
+(defun orgstrap--local-variables--eval (info &optional minimal)
+  "Return the portable or MINIMAL eval local variables given INFO."
+  (let* ((minimal (or minimal orgstrap-use-minimal-local-variables))
+         (minimal (and minimal (orgstrap--have-min-org-version info minimal))))
+    (if minimal
+        '(
+          (defun orgstrap--confirm-eval-minimal (lang body)
+            (not (and (member lang '("elisp" "emacs-lisp"))
+                      (eq orgstrap-block-checksum
+                          (intern
+                           (secure-hash
+                            orgstrap-cypher
+                            (orgstrap-norm body)))))))
+          (unless (fboundp 'orgstrap--confirm-eval)
+            ;; if `orgstrap--confirm-eval' is bound use it since it is
+            ;; is the portable version XXX NOTE the minimal version will
+            ;; not be installed as local variables if it detects that there
+            ;; are unescaped coderefs since those will cause portable and minimal
+            ;; to produce different hashes
+            (defalias 'orgstrap--confirm-eval 'orgstrap--confirm-eval-minimal)))
+      '(
+        (defun orgstrap-org-src-coderef-regexp (fmt &optional label)
+          (let ((fmt org-coderef-label-format))
+            (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$"
+                    (replace-regexp-in-string
+                     "%s"
+                     (if label
+                         (regexp-quote label)
+                       "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)")
+                     (regexp-quote fmt)
+                     nil t))))
+        (unless (fboundp 'org-src-coderef-regexp)
+          (defalias 'org-src-coderef-regexp 'orgstrap-org-src-coderef-regexp))
+        (defun orgstrap--expand-body (info)
+          "Expand noweb references in INFO body and remove any coderefs."
+          ;; this is a backport of `org-babel--expand-body'
+          (let ((coderef (nth 6 info))
+                (expand
+                 (if (org-babel-noweb-p (nth 2 info) :eval)
+                     (org-babel-expand-noweb-references info)
+                   (nth 1 info))))
+            (if (not coderef)
+                expand
+              (replace-regexp-in-string
+               (org-src-coderef-regexp coderef) "" expand nil nil 1))))
+
+        (defun orgstrap--confirm-eval-portable (lang body)
+          ;; `org-confirm-babel-evaluate' will prompt the user when the value
+          ;; that is returned is non-nil, therefore we negate positive matchs
+          (not (and (member lang '("elisp" "emacs-lisp"))
+                    (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info)))
+                           (body-normalized (orgstrap-norm body))
+                           (content-checksum
+                            (intern
+                             (secure-hash
+                              orgstrap-cypher
+                              body-normalized))))
+                      ;;(message "%s %s" orgstrap-block-checksum content-checksum)
+                      ;;(message "%s" body-normalized)
+                      (eq orgstrap-block-checksum content-checksum)))))
+        ;; portable eval is used as the default implementation in orgstrap.el
+        (defalias 'orgstrap--confirm-eval 'orgstrap--confirm-eval-portable)))))
+
+(defun orgstrap--local-variables--eval-common ()
+  "Return the common eval check functions for local variables."
+  `( ; quasiquote to fill in `orgstrap-orgstrap-block-name'
+    (let ((ocbe org-confirm-babel-evaluate))
+      (setq-local orgstrap-norm-func orgstrap-norm-func-name)
+      (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
+      (unwind-protect
+          (save-excursion
+            (org-babel-goto-named-src-block ,orgstrap-orgstrap-block-name) ; quasiquoted when nowebbed
+            (org-babel-execute-src-block))
+        (setq-local org-confirm-babel-evaluate ocbe)))))
 
 ;; init utility functions
 
@@ -334,38 +463,50 @@ If a block with that name already exists raise an error."
         ;;(error "TODO insert some minimal message or something")
         nil))))
 
-(defun orgstrap--add-file-local-variables (&optional version)
+(defun orgstrap--add-file-local-variables (&optional minimal norm-func-name)
   "Add the file local variables needed to make orgstrap work.
-VERSION is currently used to control whether 0.1 or 0.2 is used.
-Version should be orthognal to whether the block supports noweb
+MINIMAL is currently used to control whether portable or minimal
+is used. Version should be orthognal to whether the block supports noweb
 and old versions of `org-mode' and the selection for noweb should
 be detected automatically, similarly we could automatically include
 a version test and fail if the version is unsupported."
   ;; switching comments probably wont work ? we can try
   ;; Use a prefix argument (i.e. C-u) to add file local variables comments instead of in a :noexport:
   (interactive)
-  (let* ((version (or version orgstrap--default-local-variables-block-version))
-         (lv-commands (orgstrap--local-variable-eval-commands version))
-         (elv (orgstrap--read-current-local-variables))
-         (commands-existing (mapcar #'cdr (cl-remove-if-not (lambda (l) (eq (car l) 'eval)) elv)))) ;(ref:clrin)
-    ;; good enough to start
-    (cond ((equal commands-existing lv-commands) nil)
-          ((not commands-existing)
-           (let ((print-escape-newlines t))  ; needed to preserve the escaped newlines
-             (add-file-local-variable 'orgstrap-local-variables-block-version
-                                      version)
-             (mapcar (lambda (sexp) (add-file-local-variable 'eval sexp))
-                     lv-commands)))
-          ;; we could try to do something fancy here, but it is much simpler
-          ;; to just alert the user and have them fix it
-          (t (error "Existing eval commands that do not match the commands to be installed have been detected.  Please remove those commands and run `orgsrap-add-file-local-variables' again or manually add the orgstrap file local variables.  The existing commands are as follows.\n%s" commands-existing)))))
+  (let ((info (save-excursion
+                (org-babel-goto-named-src-block orgstrap-orgstrap-block-name)
+                (org-babel-get-src-block-info)))
+        (elv (orgstrap--read-current-local-variables)))
+    (let ((lv-cver (orgstrap--local-variables--check-version
+                    info
+                    minimal))
+          (lv-norm (orgstrap--local-variables--norm
+                    norm-func-name))
+          (lv-ncom (orgstrap--local-variables--norm-common))
+          (lv-eval (orgstrap--local-variables--eval
+                    info
+                    minimal))
+          (lv-ecom (orgstrap--local-variables--eval-common)))
+      (let ((lv-commands (orgstrap--dedoc (append lv-cver lv-norm lv-ncom lv-eval lv-ecom)))
+            (commands-existing (mapcar #'cdr (cl-remove-if-not (lambda (l) (eq (car l) 'eval)) elv)))) ;(ref:clrin)
+        (cond ((equal commands-existing lv-commands) nil)
+              ((not commands-existing)
+               (let ((print-escape-newlines t))  ; needed to preserve the escaped newlines
+                 ' ; one sexp per eval line, too hard to manage switching it out
+                 (mapcar (lambda (sexp) (add-file-local-variable 'eval sexp)) lv-commands)
+                 ;; easier to put it all in a single progn that we can id and swap
+                 ;; yes it is harder to read, but that is why we have all the docs
+                 (add-file-local-variable 'eval (cons 'progn lv-commands))))
+              ;; we could try to do something fancy here, but it is much simpler
+              ;; to just alert the user and have them fix it than trying to guess
+              (t (error "Existing eval commands that do not match the commands to be installed have been detected.  Please remove those commands and run `orgsrap-add-file-local-variables' again or manually add the orgstrap file local variables.  The existing commands are as follows.\n%s" commands-existing)))))))
 
 ;; init user facing functions
 ;;;###autoload
-(defun orgstrap-init ()
+(defun orgstrap-init (&optional arg)
   "Initialize orgstrap in the current buffer and enable command `orgstrap-mode'."
-  (interactive)
-  (when (not (eq major-mode 'org-mode))
+  (interactive "P")
+  (unless (eq major-mode 'org-mode)
     (error "Cannot orgstrap, buffer not in `org-mode' it is in %s!" major-mode))
   ;; TODO option for no link?
   ;; TODO option for local variables in comments vs noexport
@@ -374,50 +515,13 @@ a version test and fail if the version is unsupported."
     (orgstrap-add-block-checksum)
     (orgstrap--add-link-to-orgstrap-block)
     ;; FIXME sometimes local variables don't populate due to an out of range error
-    (orgstrap--add-file-local-variables)
+    (orgstrap--add-file-local-variables (or arg orgstrap-use-minimal-local-variables))
     (orgstrap-mode)))
-
-;; install helpers
-(defvar orgstrap-helper-block-name "orgstrap-helper"
-  "Name for the embedded helper block.")
-(defun orgstrap-install-orgstrap ()
-  "Install orgstrap.el directly from this file."
-  (error "TODO"))
-(defun orgstrap--add-install-block ()
-  "Install this block in an `org-mode' file." ; really? or was this meant to do something else?
-  (error "TODO"))
-(defun orgstrap--add-helper-block (&optional block-name)
-  "Embed orgstrap helpers block named BLOCK-NAME in the current buffer.
-This makes it so that anyone encountering the file in the future has all
-the tools they need to make changes without requiring any additional steps."
-  ;; TODO minimal vs maximal, edit files vs propagate orgstrap
-  ;; go to start of file
-  ;; look for first heading
-  ;; insert before first heading (so it is visible and users can reorder as needed)
-  ;; insert source block
-  (let ((block-name (or block-name orgstrap-helper-block-name)))
-
-    (orgstrap--new-heading-elisp-block "orgstrap-helpers"
-                                       block-name
-                                       '((results . none)
-                                         (lexical . yes))
-                                       t)
-
-    (orgstrap--with-block block-name
-      (ignore params body-unexpanded body)
-      (error "TODO"))))
-
-;;(defvar orgstrap--helpers nil)
-;;(setq orgstrap--helpers nil)
-;;; TODO
-;; options are link to docs or
-;; embed (defun orgstrap-install-helpers () (interactive) (use-package orgstrap)) or similar or
-;; embed all of this block or orgstrap.el in a block in * orgstrap helpers :noexport:
 
 ;;; extra helpers
 (defun orgstrap-update-src-block (name content)
   "Set the content of source block named NAME to string CONTENT.
-XXX NOTE THAT THIS CANNOT BE USED WITH EXAMPLE BLOCKS."
+XXX NOTE THAT THIS CANNOT BE USED WITH #+BEGIN_EXAMPLE BLOCKS."
   ;; FIXME this seems to fail if the existing block is empty?
   ;; or at least adding file local variables fails?
   (let ((block (org-babel-find-named-block name)))
@@ -435,8 +539,7 @@ XXX NOTE THAT THIS CANNOT BE USED WITH EXAMPLE BLOCKS."
          (body-unexpanded (nth 1 info))
          (body (orgstrap--expand-body info))
          (body-normalized
-          (let ((print-quoted nil))
-            (prin1-to-string (read (concat "(progn\n" body "\n)")))))
+          (orgstrap-norm body #'orgstrap-norm-func))
          (cypher (or cypher (orgstrap--current-buffer-cypher))))
     (ignore params body-unexpanded)
     (secure-hash cypher body-normalized)))
@@ -448,8 +551,7 @@ XXX NOTE THAT THIS CANNOT BE USED WITH EXAMPLE BLOCKS."
     (ignore params body-unexpanded)
     (let ((cypher (or cypher (orgstrap--current-buffer-cypher)))
           (body-normalized
-           (let ((print-quoted nil))
-             (prin1-to-string (read (concat "(progn\n" body "\n)"))))))
+           (orgstrap-norm body #'orgstrap-norm-func)))
       (secure-hash cypher body-normalized))))
 
 (defun orgstrap-run-additional-blocks (&rest name-checksum) ;(ref:oab)
