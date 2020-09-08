@@ -1,4 +1,4 @@
-;;; orgstrap.el --- Bootstrap an org-mode file using file local variables -*- lexical-binding: t -*-
+;;; orgstrap.el --- Bootstrap an Org file using file local variables -*- lexical-binding: t -*-
 
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
@@ -518,6 +518,7 @@ buffer or global setting for `orgstrap-norm-func'."
                  (mapcar (lambda (sexp) (add-file-local-variable 'eval sexp)) lv-commands)
                  ;; easier to put it all in a single progn that we can id and swap
                  ;; yes it is harder to read, but that is why we have all the docs
+                 ;; FIXME detect if orgstrap-global-mode is enabled and do nothing
                  (add-file-local-variable 'eval (cons 'progn lv-commands))))
               ;; we could try to do something fancy here, but it is much simpler
               ;; to just alert the user and have them fix it than trying to guess
