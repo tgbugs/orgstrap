@@ -14,7 +14,7 @@
 # If you wan't to grow up to be a unicorn you're going to have to
 # pull yourself up by your own bootstraps!
 
-=orgstrap= is a specification and tooling for bootstrapping Org files.
+=orgstrap= is a [[#specification][specification]] and tooling for bootstrapping Org files.
 
 It allows Org files to describe their own requirements, and
 define their own functionality, making them self-contained,
@@ -210,6 +210,9 @@ the org-babel functions are missing, and then you will discover that
 emacs-23 doesn't support lexical binding. Therefore, we don't support
 emacs-23 and older versions.
 * Specification
+:PROPERTIES:
+:CUSTOM_ID: specification
+:END:
 The specification for orgstrap makes extensive use of terminology
 derived from the Emacs manual section on
 [[info:emacs#Specifying File Variables][Specifying File Variables]]
