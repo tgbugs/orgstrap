@@ -18,7 +18,7 @@
 
 It allows Org files to describe their own requirements, and
 define their own functionality, making them self-contained,
-standalone computational artifacts, dependent only on Emacs,
+standalone computational artifacts, dependent only on Emacs
 or other implementations of the Org-babel protocol in the future.
 
 This file bootstraps itself to provide the functionality needed to use
