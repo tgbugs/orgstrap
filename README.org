@@ -29,30 +29,32 @@ This file bootstraps itself to provide the functionality needed to use
 * Getting started
 Using =orgstrap= is easy.
 
+If you already have =orgstrap= installed you can enable it for any
+Org file by running =M-x= =orgstrap-init= which will add the basic
+=orgstrap= machinery to the current buffer.
+
+If you don't have =orgstrap=, you can get it using itself.
 1. Obtain the org mode source for this file. (e.g.
    [[https://raw.githubusercontent.com/tgbugs/orgstrap/master/orgstrap.org][from GitHub]]).
-2. Open the source in emacs[fn::This is usually the most difficult step. See
-   [[file:::#future-work][Future work]] for ideas about how to get from zero to emacs.]
-   (e.g. =M-x= =url-handler-mode= then =C-x C-f= @@latex: \\@@
-   =https://raw.githubusercontent.com/tgbugs/orgstrap/master/orgstrap.org=).
+2. Open the source in Emacs[[#boot-to-emacs-boot-to-org][*]].
+   (e.g. =M-x= =url-handler-mode= then =C-x C-f=
+   # @@latex: \\@@
+   =https://raw.githubusercontent.com/tgbugs/orgstrap/master/README.org=).
 3. Decline the file local variables.
 4. Inspect the [[#details][orgstrap block]] and file local variables.
 5. Reload the file and accept the file local variables.
+6. Congratulations you can now use =orgstrap= with your own files!
 
-Congratulations you can now use =orgstrap= with your own files!
-
-Use =M-x= =orgstrap-init= to add the basic =orgstrap=
-machinery to the file in the current buffer.
+For a somewhat more sane and persistent installation experience
+=orgstrap= is also available on [[https://melpa.org/#/orgstrap][melpa]].
 
 A minor mode for editing orgstrapped files is included as =orgstrap-mode=.
-It is also activated by =orgstrap-init= and when enabled it automatically
-updates the =orgstrap-block-checksum= local variable whenever the =orgstrap=
-block changes.
+It is activated by =orgstrap-init=. When enabled it automatically updates
+the =orgstrap-block-checksum= prop line local variable whenever the
+=orgstrap= block changes.
 
 If you do not use =orgstrap-mode= then the easiest way to add the orgstrap
 checksum to a file is to invoke =M-x= =orgstrap-add-block-checksum=.
-
-For a somewhat more sane installation experience =orgstrap= is also available on melpa.
 
 The rest of this file is an overview of the use cases for =orgstrap= and
 the implementation of =orgstrap= along with discussion and commentary.
@@ -1493,6 +1495,15 @@ Powershell
 :PROPERTIES:
 :CUSTOM_ID: future-work
 :END:
+** orgstrap-mode-global
+If orgstrap is installed, then having a global-orgstrap-mode which could add itself to
+org-mode-hook when enabled would supersede the local variables list implementation, or
+possibly just do it when the local variables version was absent. Disabling the local
+variables when global-orgstrap-mode is detect to be on might be possible, but without
+it the user would have to explicitly decline the variables or risk having the orgstrap
+block run twice. Going to have to get this resolved before doing any announcements since
+it could leave users with quite a bit of pain if we don't get that check in before people
+start using it.
 ** Spec extension to support arbitrary orgstrap block names.
 Since all the conventions for how this is done are defined locally by each file, you could
 in principle rename the special block as you see fit, perhaps from =orgstrap= to =main= if
