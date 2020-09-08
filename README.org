@@ -99,10 +99,7 @@ Thus, it can be used for nearly everything[fn::Now, whether it *should* be....].
 While many (including the author) might find this to be totally radically awesome,
 there are much better, saner, and safer ways to execute arbitrary code than to hash
 some elisp blocks and use Emacs file local variables to automatically eval a specially
-named source block only when it matches the hash[fn::Since all the conventions for how
-this is done are defined locally by each file you can rename the special block however
-you see fit, perhaps from =orgstrap= to =main= if you need to pretend that the file is
-actually c source code with some special syntax.].
+named source block only when it matches the hash.
 
 #+caption: Things you can do with arbitrary code execution and checksums.
 #+name: table-use-cases
@@ -286,8 +283,8 @@ uses an =eval:= local variable in Emacs =local variables list=. This is a maxima
 implementation that is only dependent on the core Emacs implementation. One could
 imagine a minimal implementation which checks whether orgstrap is present on the
 current system and calls =(orgstrap-current-buffer)= if so, and otherwise raises
-an error asking the user to install orgstrap or upgrade their version of org or
-emacs. In fact one could imagine a case where only the prop line local variables
+an error asking the user to install orgstrap or upgrade their version of Org or
+Emacs. In fact one could imagine a case where only the prop line local variables
 are needed. There is a fine balance between portability and compactness since
 a minimal implementation has to make more assumptions about the systems it will
 run on. Multi-stage orgstrap, or other means of bootstrapping a working runtime
@@ -295,12 +292,12 @@ for an Org file such as the process implemented in the
 [[#boot-to-emacs-boot-to-org][Bootstrapping to Emacs, bootstrapping to Org.]]
 section of this readme are ongoing areas of exploration.].
 
-#+begin_verse
+#+begin_quote
 One implementation detail is that conforming implementations
 must implement noweb expansion and coderef removal prior to
 passing the contents of the =orgstrap block= to a normalization
 function.
-#+end_verse
+#+end_quote
 
 Normalization functions that produce different output given the same
 input for at least one input must have different names. One way this
@@ -315,13 +312,13 @@ all inputs it produces output that is byte-identical to the output
 of all other previous implementations of the function bearing that
 name.
 
-#+begin_verse
+#+begin_quote
 A key point about =orgstrap-norm-func-name= is that the implementation
 of these functions must be agreed upon by various implementations, if a user
 inserts a fake hash, implementations should deal with it by running the
 normalization and hashing process again using a known-conforming implementation
 on a system that they control.
-#+end_verse
+#+end_quote
 * Local Variables
 ** Overview
 Local variables must go at the end of a file.
@@ -365,9 +362,9 @@ anyway so don't bother.
       (error "Your Org is too old! %s < %s" actual need)))
 #+end_src
 #+caption: Portability note.
-#+begin_verse
+#+begin_quote
 =string<= must be used in order to support emacs-24
-#+end_verse
+#+end_quote
 ** Normalization
 *** Shared normalization machinery
 #+caption: Shared normalization code embedded as eval local variables.
@@ -412,7 +409,7 @@ anyway so don't bother.
 #+end_src
 
 #+caption: XXX portability note
-#+begin_verse
+#+begin_quote
 For emacs < 26 (org < 9) either lowercase =#+caption:= must be placed _BEFORE_ =#+name:=
 OR =#+CAPTION:= must be uppercase and can come after =#+name:=,
 otherwise =#+name:= will not be associated with the block.
@@ -421,7 +418,7 @@ What a fun bug.
 Addendum. Apparently in the older version of Org =:noweb= is always yes.
 Therefore if you forget to set =:noweb= on a block, testing against emacs
 24 or 25 will alert you to this.
-#+end_verse
+#+end_quote
 *** Normalization functions
 :PROPERTIES:
 :CUSTOM_ID: normalization-functions
@@ -1496,6 +1493,34 @@ Powershell
 :PROPERTIES:
 :CUSTOM_ID: future-work
 :END:
+** Spec extension to support arbitrary orgstrap block names.
+Since all the conventions for how this is done are defined locally by each file, you could
+in principle rename the special block as you see fit, perhaps from =orgstrap= to =main= if
+you need to pretend that the file is actually c source code with some special syntax.
+However, this is not advisable if you care about portability since it depends on an
+implementation detail of orgstrap.el which is not required by the specification. Namely
+that =orgstrap-orgstrap-block-name= is not required as one of the prop line local
+variables. Given the desire for the orgstrap machinery to be as unobtrusive as possible,
+it is unlikely that support for an arbitrary name for the block will be added to the spec.
+
+That said, it is worth considering how and whether to update the spec so that a conforming
+implementation could do this if it wanted to. All the change does is move a convention to
+an optional variable. Maybe a compact variable such as orgstrap-bn could be specified as
+an optional prop line variable, and if absent the orgstrap block name defaults to
+orgstrap, otherwise the block name searched is the value of the variable.
+
+Still not 100% sure about this. It would increase the complexity of the implementation for
+sure.  It will require updating how and when we populate the link to orgstrap block, and
+makes auditing more difficult. It also opens up a way to trick the user, namely by having
+a link to an innocent looking orgstrap block, and no convention set in the prop line, or
+maybe even having it in the prop line (people are habitual and assume things are not
+present when they are), and then using setq-local, or some other means to change the block
+name to a malicious block elsewhere in the file. Implementations would have to know to
+check for this and fail if it was detected. Basically we would have to specify that if a
+block named orgstrap is present in a file when orgstrap-bn is present and not set to
+orgstrap, then it is a fatal error and orgstrap will not continue. Sticking this in the
+900 or so chars we have left for further features seems like it would be a stretch, but
+might be possible.
 ** Security considerations
 =orgstrap= currently does not check all the headers or vars properties that materialized
 onto a source block we probably need to do this. For the time being users need to check
