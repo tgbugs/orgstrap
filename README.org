@@ -213,6 +213,7 @@ emacs-23 and older versions.
 :PROPERTIES:
 :CUSTOM_ID: specification
 :END:
+# Except for this comment, comments in the spec are not official parts of the spec.
 The specification for orgstrap makes extensive use of terminology
 derived from the Emacs manual section on
 [[info:emacs#Specifying File Variables][Specifying File Variables]]
@@ -243,10 +244,10 @@ whitespace following the =p= until a newline. Newline and whitespace are as
 defined by [[https://orgmode.org/worg/dev/org-syntax.html][Org mode syntax]].
 This =source code block= is henceforth referred to as the =orgstrap block=.
 If there is more than one =source code block= with the =<name>= =orgstrap=
-then the =source code block= that starts closes to the beginning of the file
+then the =source code block= that starts closest to the beginning of the file
 is the =orgstrap block=.
 
-The =<language>= for the =orgstrap block= must be =elisp= or =emacs-lisp=[fn::
+The =<language>= for the =orgstrap block= must be =elisp= or =emacs-lisp=. [fn::
 It is possible that other languages might be supported in the future. However,
 that is somewhat challenging given that Org and Orb-babel only implicitly
 specify that a conforming implementation that can execute =source code blocks=
@@ -262,10 +263,19 @@ is needed, because it is possible to specify a small orgstrap block that can
 ensure that the required Org-babel language implementations are installed and
 then securely run those blocks. This block can probably be stripped down
 sufficiently to make it possible to implement only the subset of elisp
-required to run that block.].
+required to run that block.]
 
 Everything else about the =orgstrap block= is delegated to Org mode, including
 header arguments, and noweb expansion.
+
+# TODO With the possible exception being that a header of the form
+# :var orgstrap-enable-optional=(identity nil) might be added to
+# make it possible for the user to toggle optional dependencies
+# obviously authors can do whatever they want with the block and
+# set as many :vars to t or nil as they want to give users as much
+# or as little control over what is run as they desire, this should
+# probably just go in as an example, with note that this is one of the
+# reasons why we don't hash :vars but also why users need to check those
 
 # I'm 99% certain that embedding orgstrap-norm-func in the local variables list
 # should NOT be required as part of the specification. I do that in the current
@@ -286,7 +296,7 @@ contained in the rest of the file explicitly excluding the contents of
 the =orgstrap-cypher= =prop line local varaible=. The most obvious
 additional information required being the contents of the =orgstrap block= [fn::
 The reference implementation provided in the readme containing this specification
-uses an =eval:= local variable in Emacs =local variables list=. This is a maximal
+uses an Emacs =eval:= local variable in the =local variables list=. This is a maximal
 implementation that is only dependent on the core Emacs implementation. One could
 imagine a minimal implementation which checks whether orgstrap is present on the
 current system and calls =(orgstrap-current-buffer)= if so, and otherwise raises
@@ -987,6 +997,7 @@ buffer or global setting for `orgstrap-norm-func'."
                  (mapcar (lambda (sexp) (add-file-local-variable 'eval sexp)) lv-commands)
                  ;; easier to put it all in a single progn that we can id and swap
                  ;; yes it is harder to read, but that is why we have all the docs
+                 ;; FIXME detect if orgstrap-global-mode is enabled and do nothing
                  (add-file-local-variable 'eval (cons 'progn lv-commands))))
               ;; we could try to do something fancy here, but it is much simpler
               ;; to just alert the user and have them fix it than trying to guess
