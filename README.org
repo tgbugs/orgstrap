@@ -220,10 +220,10 @@ What the Emacs manual calls the first line or prop-line is referred
 to in this document as the =prop line= and the variables specified in
 it are referred to as =prop line local variables=. What the Emacs
 manual explicitly calls the =local variables list= we refer to in the
-same way[fn::In other sections of the readme that contains
-this specification the nomeclature is inconsistent, and refers to these
-variously as end local variables or simply as local variables or file local
-variables.].
+same way[fn::In other sections of the readme that contains this
+specification the nomenclature is inconsistent, and refers to these
+variously as end local variables or simply as local variables or file
+local variables.].
 
 What the Org manual refers to as a =source code block= we refer to in the
 same way.
@@ -235,13 +235,13 @@ The =prop line= of the Org file must include three local variables:
 =orgstrap-cypher=, =orgstrap-norm-func-name=, and =orgstrap-block-checksum=.
 
 Anywhere in the rest of the file there must be an Org =source code block=
-that has the =<name>= =orgstrap= with whitespace preceding the =o= and
-only whitespace following the =p= until a newline. Newline and whitespace
-are as defined by [[https://orgmode.org/worg/dev/org-syntax.html][Org mode syntax]].
+that has the =<name>= =orgstrap= with whitespace preceding the =o= and only
+whitespace following the =p= until a newline. Newline and whitespace are as
+defined by [[https://orgmode.org/worg/dev/org-syntax.html][Org mode syntax]].
 This =source code block= is henceforth referred to as the =orgstrap block=.
 If there is more than one =source code block= with the =<name>= =orgstrap=
-then the =source code block= that starts closes to the beginning of the
-file is the =orgstrap block=.
+then the =source code block= that starts closes to the beginning of the file
+is the =orgstrap block=.
 
 The =<language>= for the =orgstrap block= must be =elisp= or =emacs-lisp=[fn::
 It is possible that other languages might be supported in the future. However,
@@ -1017,22 +1017,6 @@ the minimal local variables will be used if possible."
 # (orgstrap--dedoc '(defmacro lol (arg) "there"))
 # (orgstrap--dedoc '(defmacro lol (arg) "there" arg))
 # (orgstrap--dedoc '((defmacro lol (arg) "there" arg) (defvar lol 'hello "there")))
-
-*** +Install+
-With orgstrap going into melpa I'm going to rule that, while a fun idea,
-is simply not the best approach to providing the functionality contained
-in this file. The best approach is to include the following in your orgstrap
-block.
-
-# TODO quelpa/straight/etc.
-#+name: install-orgstrap
-#+begin_src elisp
-;; install `orgstrap'
-(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
-(if (fboundp #'use-package)
-    (use-package orgstrap)
-  (package-install 'orgstrap))
-#+end_src
 *** Extras
 #+caption: extra helpers
 #+name: orgstrap-extra-helper-defuns
@@ -1492,6 +1476,26 @@ Powershell
 #+name: bootstrap-from-shell-powershell
 #+begin_src powershell :noweb no-export :results output :exports none
 <<bootstrap-from-shell>>
+#+end_src
+* Examples
+** Installing a package
+With orgstrap in melpa I'm going to rule that, while a fun idea, the though
+of using the orgstrap block for this file to stick the machinery in a users
+init.el somehow is not the best approach (to say the least) to providing the
+functionality contained in this file. The best approach is to include the
+following in your orgstrap block so that it is clear what the user is in for.
+I'm not entirely sure how to make it possible to make handling optional
+dependencies possible ... probably using a =:var= header option that doesn't
+get hashed?
+
+#+name: install-orgstrap
+#+begin_src elisp
+;; install `orgstrap'
+(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+(if (fboundp #'use-package)
+    (use-package orgstrap)
+  (package-install 'orgstrap))
+;; TODO detect the use of quelpa/straight/borg/etc.
 #+end_src
 * Future work
 :PROPERTIES:
