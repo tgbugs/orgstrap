@@ -455,6 +455,9 @@ Therefore if you forget to set =:noweb= on a block, testing against emacs
   "Normalize BODY using prp-1.0."
   <<orgstrap-code-normalization--prin1-read-progn-1.0>>)
 #+end_src
+Normalize BODY by wrapping in =progn=, calling =read=, and then =prin1-to-string=.
+There are still unresolved issues if tabs are present in the orgstrap block which
+is why 1.0 is included. =print-quoted= is critical for consistent hashing.
 
 =prin1-to-string= is used to normalize the code in the orgstrap block,
 removing any comments and formatting irregularities. This is important
@@ -472,10 +475,6 @@ meaningful code itself has not changed.
 =(print-quoted nil)= is needed for backward compatibility due to a change
 to the default from =nil= to =t= in emacs-27 (sigh). See
 [[orgit-rev:~/git/NOFORK/emacs::72ee93d68daea00e2ee69417afd4e31b3145a9fa][emacs commit 72ee93d68daea00e2ee69417afd4e31b3145a9fa]].
-
-Normalize BODY by wrapping in =progn=, calling =read=, and then =prin1-to-string=.
-There are still unresolved issues if tabs are present in the orgstrap block which
-is why 1.0 is included. =print-quoted= is critical for consistent hashing.
 ** Definitions
 :PROPERTIES:
 :CUSTOM_ID: definitions
