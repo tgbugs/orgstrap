@@ -1215,9 +1215,11 @@ If you are dealing with a system that does not have a working
 version of Emacs then all these fancy =orgstrap= tricks don't
 do us very much good.
 
-The following section tangles a nearly unreadable file that can
-be used to bootstrap an Emacs onto on a variety of systems. The
-blocks below break it up into readable chunks.
+The following section tangles a nearly unreadable [[file:get-emacs.el.sh.ps1][file]]
+that can be used to bootstrap Emacs onto on a variety of systems.
+The blocks below break it up into readable chunks.
+
+# TODO post the checksums for it when ready
 
 I'm not sure that anyone should use it, but it seems easier than
 other approaches I have taken for trying to get Emacs installed
