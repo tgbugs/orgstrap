@@ -17,9 +17,9 @@
 =orgstrap= is a specification and tooling for bootstrapping Org files.
 
 It allows Org files to describe their own requirements, and
-define their own functionality, making them self-contained, standalone
-computational artifacts, dependent only on Emacs, or in the future
-hopefully on other implementations of the =org-babel= protocol as well.
+define their own functionality, making them self-contained,
+standalone computational artifacts, dependent only on Emacs,
+or other implementations of the Org-babel protocol in the future.
 
 This file bootstraps itself to provide the functionality needed to use
 =orgstrap= in any Org file.
@@ -202,8 +202,120 @@ large to be overcome without significant additional code. First, all
 uses of =(setq-local var "value")= have to be changed to
 =(set (make-local-variable 'var) "value")= so that the local variable
 eval code can run. However once that is done, you discover that all of
-the org-babel functions are missing. Therefore, we don't support emacs-23
-and older versions.
+the org-babel functions are missing, and then you will discover that
+emacs-23 doesn't support lexical binding. Therefore, we don't support
+emacs-23 and older versions.
+* Specification
+The specification for orgstrap makes extensive use of terminology
+derived from the Emacs manual section on
+[[info:emacs#Specifying File Variables][Specifying File Variables]]
+and the Org manual section on the
+[[info:org#Structure of Code Blocks][Structure of Code Blocks]].
+
+What the Emacs manual calls the first line or prop-line is referred
+to in this document as the =prop line= and the variables specified in
+it are referred to as =prop line local variables=. What the Emacs
+manual explicitly calls the =local variables list= we refer to in the
+same way[fn::In other sections of the readme that contains
+this specification the nomeclature is inconsistent, and refers to these
+variously as end local variables or simply as local variables or file local
+variables.].
+
+What the Org manual refers to as a =source code block= we refer to in the
+same way.
+
+In order for an Org mode file to support the use of =orgstrap= it must
+contain the following.
+
+The =prop line= of the Org file must include three local variables:
+=orgstrap-cypher=, =orgstrap-norm-func-name=, and =orgstrap-block-checksum=.
+
+Anywhere in the rest of the file there must be an Org =source code block=
+that has the =<name>= =orgstrap= with whitespace preceding the =o= and
+only whitespace following the =p= until a newline. Newline and whitespace
+are as defined by [[https://orgmode.org/worg/dev/org-syntax.html][Org mode syntax]].
+This =source code block= is henceforth referred to as the =orgstrap block=.
+
+The =<language>= for the =orgstrap block= must be =elisp= or =emacs-lisp=[fn::
+It is possible that other languages might be supported in the future. However,
+that is somewhat challenging given that Org and Orb-babel only implicitly
+specify that a conforming implementation that can execute =source code blocks=
+must support Emacs lisp =source code blocks= and the use of Emacs lisp in
+header arguments. There is an infinitesimal possibility that Org-babel will
+support the use of other languages for inline header arguments since it
+already supports them via blocks and it is not trivial to allow additional
+languages to be used inline without some additional way to indicate the language
+in use for a particular block. On the other hand, there is a small possibility
+that other languages could be supported in the =orgstrap block= by specifying
+them as part of the =local variables list=. However it is not clear that this
+is needed, because it is possible to specify a small orgstrap block that can
+ensure that the required Org-babel language implementations are installed and
+then securely run those blocks. This block can probably be stripped down
+sufficiently to make it possible to implement only the subset of elisp
+required to run that block.].
+
+Everything else about the =orgstrap block= is delegated to Org mode, including
+header arguments, and noweb expansion.
+
+# I'm 99% certain that embedding orgstrap-norm-func in the local variables list
+# should NOT be required as part of the specification. I do that in the current
+# implementation, but the 3000 char limit for the local variables list is going
+# to pose quite the challenge for the portable implementation, and thus I think
+# all the spec needs to say is that an implementation must be able to reproduce
+# the orgstrap block hash when the whole file hash is the same.
+
+When provided with the same file whose =orgstrap block= was originally hashed
+(where "the same file" means a file with the same checksum when hashed using
+the algorithm specified by the =orgstrap-cypher= variable), a conforming
+implementation must be able to do the following.
+
+A conforming implementation must be able to reproduce the =orgstrap-block-checksum=
+using only the information contained in the =orgstrap-cypher= and
+=orgstrap-norm-func-name= =prop line local varaibles=, and information
+contained in the rest of the file explicitly excluding the contents of
+the =orgstrap-cypher= =prop line local varaible=. The most obvious
+additional information required being the contents of the =orgstrap block= [fn::
+The reference implementation provided in the readme containing this specification
+uses an =eval:= local variable in Emacs =local variables list=. This is a maximal
+implementation that is only dependent on the core Emacs implementation. One could
+imagine a minimal implementation which checks whether orgstrap is present on the
+current system and calls =(orgstrap-current-buffer)= if so, and otherwise raises
+an error asking the user to install orgstrap or upgrade their version of org or
+emacs. In fact one could imagine a case where only the prop line local variables
+are needed. There is a fine balance between portability and compactness since
+a minimal implementation has to make more assumptions about the systems it will
+run on. Multi-stage orgstrap, or other means of bootstrapping a working runtime
+for an Org file such as the process implemented in the
+[[#boot-to-emacs-boot-to-org][Bootstrapping to Emacs, bootstrapping to Org.]]
+section of this readme are ongoing areas of exploration.].
+
+#+begin_verse
+One implementation detail is that conforming implementations
+must implement noweb expansion and coderef removal prior to
+passing the contents of the =orgstrap block= to a normalization
+function.
+#+end_verse
+
+Normalization functions that produce different output given the same
+input for at least one input must have different names. One way this
+can be achieved by suffixing a name with a version number.
+
+In order for a orgstrap normalization function name to be considered
+official it must have an implementation bearing that name in the
+[[#normalization-functions][Normalization functions]] section of the
+readme that contains this specification. Once a function has been
+named, no other function shall ever bear the same name unless for
+all inputs it produces output that is byte-identical to the output
+of all other previous implementations of the function bearing that
+name.
+
+#+begin_verse
+A key point about =orgstrap-norm-func-name= is that the implementation
+of these functions must be agreed upon by various implementations, if a user
+inserts a fake hash, implementations should deal with it by running the
+normalization and hashing process again using a known-conforming implementation
+on a system that they control.
+#+end_verse
 * Local Variables
 ** Overview
 Local variables must go at the end of a file.
@@ -305,6 +417,9 @@ Therefore if you forget to set =:noweb= on a block, testing against emacs
 24 or 25 will alert you to this.
 #+end_verse
 *** Normalization functions
+:PROPERTIES:
+:CUSTOM_ID: normalization-functions
+:END:
 **** prp-1.0
 =prin1-to-string= is used to normalize the code in the orgstrap block,
 removing any comments and formatting irregularities. This is important
@@ -439,15 +554,6 @@ Here are the local variables from the end of the file.
 # eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((actual (org-version)) (need orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not need) (string< need actual) (string= need actual) (error "Your Org is too old! %s < %s" actual need))) (defun orgstrap-norm-func--prp-1\.0 (body) (let ((print-quoted nil)) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (unless (boundp 'orgstrap-norm-func) (defvar orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap-org-src-coderef-regexp (_fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))) (unless (fboundp #'org-src-coderef-regexp) (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp)) (defun orgstrap--expand-body (info) (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1)))) (defun orgstrap--confirm-eval-portable (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (orgstrap-norm body)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum))))) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable) (let ((ocbe org-confirm-babel-evaluate)) (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (unwind-protect (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block)) (setq-local org-confirm-babel-evaluate ocbe))))
 # End:
 #+end_src
-** Historical local variables
-:PROPERTIES:
-:visibility: folded
-:END:
-Since historical local variables may live on for an indefinite amount of time
-published versions are retained here. They are also in the git history for
-[[git:c1b28526ef9931654b72dff559da2205feb87f75]] if you can find a copy.
-*** 1.0
-*** 2.0
 * Code
 ** =orgstrap= implementation
 Functions to calculate =orgstrap-block-checksum= and set it as a file local variable.
@@ -1000,18 +1106,31 @@ minimal as possible is critical.
 
 ;;; Commentary:
 
-;; The license for the orgstrap.el code reflects the fact that
-;; `orgstrap-get-block-checksum' reuses code from
-;; `org-babel-check-confirm-evaluate' which is
-;; (at the time of writing) in ob-core.el and licensed
-;; as part of Emacs.
+;; orgstrap is a specification and tooling for bootstrapping Org files.
+
+;; It allows Org files to describe their own requirements, and
+;; define their own functionality, making them self-contained,
+;; standalone computational artifacts, dependent only on Emacs,
+;; or other implementations of the Org-babel protocol in the future.
+
+;; orgstrap.el is an elisp implementation of the orgstrap conventions and
+;; provides `orgstrap-init' and `orgstrap-mode' to simplify authoring of
+;; orgstrapped files. For more details see README.org which is also the
+;; literate source for this orgstrap.el file in the git repo at
+;; https://github.com/tgbugs/orgstrap/blob/master/README.org
+;; or whever you can find git:c1b28526ef9931654b72dff559da2205feb87f75
 
 ;; Code in an orgstrap block is usually meant to be executed directly by its
-;; containing org file.  However, if the code is something that will be reused
-;; over time outside the defining org file then it may be better to tangle and
-;; load the file so that it is easier to debug/xref functions.  This code in
-;; particular is tangled for inclusion in one of the *elpas so as to protect
-;; the orgstrap namespace.
+;; containing Org file.  However, if the code is something that will be reused
+;; over time outside the defining Org file, then it may be better to tangle and
+;; load the file so that it is easier to debug/xref functions.  The code in
+;; this orgstrap.el file in particular is tangled for inclusion in one of the
+;; *elpas so as to protect the orgstrap namespace and to make it eaiser to
+;; use orgstrap in Emacs.
+
+;; The license for the orgstrap.el code reflects the fact that the
+;; code for expanding and hashing blocks reuses code from ob-core.el,
+;; which at the time of writing is licensed as part of Emacs.
 
 ;;; Code:
 
@@ -1079,6 +1198,9 @@ you should be suspicious, even, perhaps especially, if that random place is hous
 within a larger reputable site. If you're not in a hurry, ask for the software to be
 packaged, or package it yourself so that it can go through the process.
 * Bootstrapping to Emacs, bootstrapping to Org.
+:PROPERTIES:
+:CUSTOM_ID: boot-to-emacs-boot-to-org
+:END:
 If you are dealing with a system that does not have a working
 version of Emacs then all these fancy =orgstrap= tricks don't
 do us very much good.
@@ -1373,11 +1495,6 @@ Powershell
 onto a source block we probably need to do this. For the time being users need to check
 for any hidden header properties that might be attached if the source block is buried
 within a tree somewhere.
-** Known issues
-*** Starting orgstrap in =*scratch*= and saving to file loses =before-save-hook=
-This is a general issue any time a file local variable is set on a buffer that is
-not backed by a file. In this case the fix is to disable and then enable =orgstrap-mode=,
-however it would be nice if we could detect those cases automatically.
 ** Batch mode
 There are a number of use cases for being able to process orgstrapped files in batch mode.
 For example being able to load a file and have it automatically tangle itself vastly simplifies
@@ -1453,7 +1570,7 @@ can be verified once and then the documentation around it can change and grow as
 ** Remove defun docstrings from hashing
 One additional source of noise in addition to comments are defun and
 defmacro docstrings. These should be dropped from the tree if they are
-present.
+present. This is now partially implemented via =orgstrap--dedoc=.
 ** Deterministic semantics preserving reordering
 Reorder the expressions used in the orgstrap block alphabetically (or something like that)
 according to a deterministic rule, but not in a way that changes program semantics.
@@ -1478,26 +1595,30 @@ function.
    any later assignment. Then defuns and assignments, finally procedure invocations
    which might also include assignments. I get the sense that this is covered under
    some part of compiler theory but can't quite put my finger on it.
-** DONE Auto update block checksum on save
-Before save hook and/or before commit hook to automatically update the block checksum.
-** determine whether to use 0.1 vs 0.2 based on the :noweb header
-The smaller 0.2 block is portable without noweb, so as long as the noweb header
-is not set on the block (or really, as long as there are no references) then it
-is entirely possible to use the more compact version.
 ** Smart update/upgrade using the version specifier
-At the moment I'm making changes too quickly, but it would be nice to be able
-to automatically swap out sets of known =eval:= local variables when we can
-identify them.
+This is much easier now that I have put all the normalization and hashing
+machinery in a single eval local variable, and it no longer needs to rely
+on the version of the block, just the version of the normalization function,
+which is currently embedded along with everything else.
 ** Figure out how to demo loading the packages used in this file
 #+begin_src elisp
 (use-package org-ref)
 #+end_src
 ** TODO resolve the issue with tabs in < 26                        :noexport:
 ** TODO command to checksum the file local variables               :noexport:
-** TODO use orgstrap to automatically keep example blocks in sync  :noexport:
-** TODO melpa                                                      :noexport:
 ** TODO ruby org so that github can render footnotes correctly     :noexport:
 [[file:~/git/NOFORK/org-ruby]]
+** DONE Auto update block checksum on save
+Before save hook and/or before commit hook to automatically update the block checksum.
+** DONE use orgstrap to automatically keep example blocks in sync  :noexport:
+** DONE melpa                                                      :noexport:
+Woo! https://melpa.org/#/orgstrap
+** DONE Determine whether to use minimal or portable based on the :noweb header
+This is essentially what is implemented via =orgstrap--have-min-org-version=.
+The choice to prefer the minimal local variables is left up to the user and
+is controlled via the =orgstrap-use-minimal-local-variables= custom variable.
+The only time when minimal is not used is if the version of org that is drafting
+the file is too old (i.e. < =9.3.8=).
 * Background, file local variables, and checksums
 As mentioned above, the primary use case for =orgstrap= was that I was sick of having
 to work around the limitation that I had to do one of four things. I either one, had
