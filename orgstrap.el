@@ -9,7 +9,7 @@
 ;;;; License and Commentary
 
 ;; License:
-;; https://spdx.org/licenses/GPL-3.0-or-later
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;;; Commentary:
 
@@ -83,7 +83,7 @@ _FMT has the wrong meaning in 24 and 25."
              (regexp-quote fmt)
              nil t))))
 (unless (fboundp #'org-src-coderef-regexp)
-  (defalias 'org-src-coderef-regexp 'orgstrap-org-src-coderef-regexp))
+  (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp))
 (defun orgstrap--expand-body (info)
   "Expand noweb references in INFO body and remove any coderefs."
   ;; this is a backport of `org-babel--expand-body'
@@ -157,17 +157,18 @@ and then run `orgstrap-on-change-hook'."
          (checksum (orgstrap-get-block-checksum)))
     (unless (eq checksum-existing (intern checksum))
       (remove-hook 'before-save-hook #'orgstrap--update-on-change t)
-      ;; have to remove the hook because for some reason tangling from a buffer
-      ;; counts as saving from that buffer?
-      (save-excursion
-        ;; using save-excusion here is a good for insurance against wierd hook issues
-        ;; however it does not deal with the fact that updating `orgstrap-add-block-checksum'
-        ;; adds an entry to the undo ring, which is bad
-        ;;(undo-boundary)  ; undo-boundary doesn't quite work the way we want
-        ;; related https://emacs.stackexchange.com/q/7558
-        (orgstrap-add-block-checksum nil checksum)
-        (run-hooks 'orgstrap-on-change-hook))
-      (add-hook 'before-save-hook #'orgstrap--update-on-change 0 t))))
+      ;; for some reason tangling from a buffer counts as saving from that buffer
+      ;; so have to remove the hook to avoid infinite loop
+      (unwind-protect
+          (save-excursion
+            ;; using save-excusion here is a good for insurance against wierd hook issues
+            ;; however it does not deal with the fact that updating `orgstrap-add-block-checksum'
+            ;; adds an entry to the undo ring, which is bad
+            ;;(undo-boundary)  ; undo-boundary doesn't quite work the way we want
+            ;; related https://emacs.stackexchange.com/q/7558
+            (orgstrap-add-block-checksum nil checksum)
+            (run-hooks 'orgstrap-on-change-hook))
+        (add-hook 'before-save-hook #'orgstrap--update-on-change nil t)))))
 
 ;; edit user facing functions
 (defun orgstrap-get-block-checksum (&optional cypher)
@@ -213,9 +214,9 @@ directly if it has been calculated before and only needs to be set."
     (user-error "`orgstrap-mode' only works with org-mode buffers"))
 
   (cond (orgstrap-mode
-         (add-hook 'before-save-hook #'orgstrap--update-on-change 0 t))
+         (add-hook 'before-save-hook #'orgstrap--update-on-change nil t))
         (t
-         (remove-hook 'before-save-hook #'orgstrap--update-on-change))))
+         (remove-hook 'before-save-hook #'orgstrap--update-on-change t))))
 
 ;;; init helpers
 (require 'cl-lib)
@@ -235,7 +236,7 @@ INFO is the source block info.  MINIMAL sets whether to use minimal local vars."
       (let ((coderef (nth 6 info))
             (noweb (org-babel-noweb-p (nth 2 info) :eval)))
         (if noweb
-            "9.4"
+            "9.3.8"
           (let* ((body (nth 1 info))
                  (crrx (org-src-coderef-regexp coderef))
                  (pos (string-match crrx body))
@@ -246,8 +247,8 @@ INFO is the source block info.  MINIMAL sets whether to use minimal local vars."
             ;; `org-export-resolve-coderef' but for now we know we are in elisp
             (if (or (not pos) commented)
                 "8.2.10"
-              "9.4")))
-        "8.2.10")))
+              "9.3.8"))))
+    "8.2.10"))
 
 (defun orgstrap--have-min-org-version (info minimal)
   "See if current version of org meets minimum requirements for orgstrap block.
@@ -306,7 +307,7 @@ MINIMAL is passed to `orgstrap--get-min-org-version'."
       (funcall orgstrap-norm-func body))
     
     (unless (fboundp #'orgstrap-norm)
-      (defalias 'orgstrap-norm 'orgstrap-norm-embd))))
+      (defalias 'orgstrap-norm #'orgstrap-norm-embd))))
 
 (defun orgstrap--local-variables--eval (info &optional minimal)
   "Return the portable or MINIMAL eval local variables given INFO."
@@ -327,7 +328,7 @@ MINIMAL is passed to `orgstrap--get-min-org-version'."
             ;; not be installed as local variables if it detects that there
             ;; are unescaped coderefs since those will cause portable and minimal
             ;; to produce different hashes
-            (defalias 'orgstrap--confirm-eval 'orgstrap--confirm-eval-minimal)))
+            (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-minimal)))
       '(
         (defun orgstrap-org-src-coderef-regexp (_fmt &optional label)
           "Backport `org-src-coderef-regexp' for 24 and 25.
@@ -343,7 +344,7 @@ MINIMAL is passed to `orgstrap--get-min-org-version'."
                      (regexp-quote fmt)
                      nil t))))
         (unless (fboundp #'org-src-coderef-regexp)
-          (defalias 'org-src-coderef-regexp 'orgstrap-org-src-coderef-regexp))
+          (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp))
         (defun orgstrap--expand-body (info)
           "Expand noweb references in INFO body and remove any coderefs."
           ;; this is a backport of `org-babel--expand-body'
@@ -374,7 +375,7 @@ MINIMAL is passed to `orgstrap--get-min-org-version'."
                       (eq orgstrap-block-checksum content-checksum)))))
         ;; portable eval is used as the default implementation in orgstrap.el
         ;;;###autoload
-        (defalias 'orgstrap--confirm-eval 'orgstrap--confirm-eval-portable)))))
+        (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable)))))
 
 (defun orgstrap--local-variables--eval-common ()
   "Return the common eval check functions for local variables."

@@ -23,17 +23,37 @@
 ":"; #px     local CHECKSUM="${1}"
 ":"; #px     local URL="${2}"
 ":"; #px     local path="${3}"
-":"; #px     cmd="$(command -v sha256sum || (shasum -a 256))"
-":"; #px     mktemp  # FIXME always download or stream to a tempfile first, hash, and ONLY THEN move to the path
-":"; #px     curl --location "${URL}" | tee "${path}" | sha256sum
-":"; #px     curl --location "${URL}" --output "${path}" || return $?
-":"; #px     echo "$(sha256sum "${path}" 2>/dev/null || shasum -a 256 "${path}")" | \
+":"; #px     local dname="$(dirname "${path}")"
+":"; #px     local fname="$(basename "${path}")"
+":"; #px     if [ -f "${path}" ]; then
+":"; #px         echo "$(sha256sum "${path}" 2>/dev/null || shasum -a 256 "${path}")" | \
+":"; #px         awk '$1!="'"${CHECKSUM}"'" { exit 1 }'
+":"; #px         CODE=$?
+":"; #px         if [ $CODE -ne 0 ]; then
+":"; #px             echo failed with $CODE
+":"; #px             echo "${path}" existing checksum does not match new checksum.
+":"; #px             local efail_path="$(mktemp -p "${dname}" "${fname}"._existing_failure_.XXXXXX)"
+":"; #px             mv "${path}" "${efail_path}"
+":"; #px         else
+":"; #px             return 0
+":"; #px         fi
+":"; #px     fi
+":"; #px     local temp_path="$(mktemp -p "${dname}" "${fname}"._fetching_.XXXXXX)"
+":"; #px     #cmd="$(command -v sha256sum 2>/dev/null || (shasum -a 256))"
+":"; #px     # too many ways a streaming check can go wrong that we can't handle correclty
+":"; #px     # set -o pipefail is not portable
+":"; #px     #curl --location "${URL}" | tee "${temp_path}" | ${cmd} || return $?
+":"; #px     curl --location "${URL}" --output "${temp_path}" || return $?
+":"; #px     echo "$(sha256sum "${temp_path}" 2>/dev/null || shasum -a 256 "${temp_path}")" | \
 ":"; #px     awk '$1!="'"${CHECKSUM}"'" { exit 1 }'
 ":"; #px     CODE=$?
 ":"; #px     if [ $CODE -ne 0 ]; then
 ":"; #px         echo failed with $CODE
-":"; #px         echo "${path}" checksum did not pass! something evil is going on!
-":"; #px         mv "${path}" "${path}_checksum_failure"
+":"; #px         echo "${temp_path}" checksum did not pass! something evil is going on!
+":"; #px         local fail_path="$(mktemp -p "${dname}" "${fname}"._checksum_failure_.XXXXXX)"
+":"; #px         mv "${temp_path}" "${fail_path}"
+":"; #px     else
+":"; #px         mv "${temp_path}" "${path}"
 ":"; #px     fi
 ":"; #px }
 ":"; #px function package_manager {

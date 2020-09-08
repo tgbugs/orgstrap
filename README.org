@@ -1,4 +1,4 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 15b7b31b88997e837e9a315b4eedff970d0e5259e32a6e88ea73b085337f7494; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 4f05ab88ac38e2d5e7237f0c727d8da3c1a24efb3164647a1f2dd305b369c0de; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an org-mode file using file local variables
 #+options: num:nil \n:nil
@@ -171,8 +171,8 @@ than trying to sort out which variables were or were not in the prop line."
     (buffer-string)))
 
 ;; tangle blocks and update examples on change
-(add-hook 'orgstrap-on-change-hook #'org-babel-tangle)
-(add-hook 'orgstrap-on-change-hook #'orgstrap--update-examples)
+(add-hook 'orgstrap-on-change-hook #'org-babel-tangle nil t)
+(add-hook 'orgstrap-on-change-hook #'orgstrap--update-examples nil t)
 ;; enable orgstrap mode locally for this file when this block runs
 (orgstrap-mode)
 
@@ -263,7 +263,7 @@ anyway so don't bother.
   (funcall orgstrap-norm-func body))
 
 (unless (fboundp #'orgstrap-norm)
-  (defalias 'orgstrap-norm 'orgstrap-norm-embd))
+  (defalias 'orgstrap-norm #'orgstrap-norm-embd))
 #+end_src
 
 #+caption: Normalization functions for orgstrap.el.
@@ -370,7 +370,7 @@ that they are trying to load.
               (eq orgstrap-block-checksum content-checksum)))))
 ;; portable eval is used as the default implementation in orgstrap.el
 ;;;###autoload
-(defalias 'orgstrap--confirm-eval 'orgstrap--confirm-eval-portable)
+(defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable)
 #+end_src
 
 #+caption: Minimal confirm eval.
@@ -389,7 +389,7 @@ that they are trying to load.
   ;; not be installed as local variables if it detects that there
   ;; are unescaped coderefs since those will cause portable and minimal
   ;; to produce different hashes
-  (defalias 'orgstrap--confirm-eval 'orgstrap--confirm-eval-minimal))
+  (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-minimal))
 #+end_src
 
 Once =orgstrap-confirm-eval= is defined the rest of the =eval:= local variables are the same.
@@ -411,16 +411,11 @@ Since =orgstrap-norm-func= is a dynamic variable it simplifies the
 potential future case where we don't embed the normalization function,
 still not sure if we really want to do that though
 ** Note on noweb support
-The minimal set of local variables (=0.2.1=) only works if you don't use noweb or if your
-copy of =org-mode= has the fix for =org-babel-check-confirm-evaluate= applied from
-https://code.orgmode.org/bzg/org-mode/commit/df5a83637518ad9aa586d49884a6271f11afc592.
-# orgit-rev:~/git/NOFORK/org-mode::df5a83637518ad9aa586d49884a6271f11afc592
-The fix is available in org version =9.3.7-22=. Coderefs must be in comments
-to get consistent hashing when using this patch.
+The minimal set of local variables only works if you don't use noweb
+or if you are using Org =>== =9.3.8=.
 
-Version =0.1.1= of the =orgstrap= local variables described below is a portable version
-that works with unpatched versions of org-mode as far back as =8.2.10= (the version
-bundled with =emacs-24.5=).
+The portable set of local variables described below works with versions of
+Org as far back as =8.2.10= (the version bundled with =emacs-24.5=).
 ** Note on coderefs
 Older versions of =org-mode= do not know what to do with coderefs.
 The simplest solution is to hide them in comments as =;(ref:coderef)=
@@ -431,7 +426,7 @@ Here is the prop line from the first line of this file that
 includes the cypher and checksum of the =orgstrap= block.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 15b7b31b88997e837e9a315b4eedff970d0e5259e32a6e88ea73b085337f7494; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 4f05ab88ac38e2d5e7237f0c727d8da3c1a24efb3164647a1f2dd305b369c0de; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
 #+end_src
 
 # BE VERY CAREFUL WITH MANUAL EDITS
@@ -441,7 +436,7 @@ Here are the local variables from the end of the file.
 #+begin_src org :eval never
 
 # Local Variables:
-# eval: (progn (setq-local orgstrap-min-org-version nil) (let ((actual (org-version)) (need orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not need) (string< need actual) (string= need actual) (error "Your org is too old! %s < %s" actual need))) (defun orgstrap-norm-func--prp-1\.0 (body) (let ((print-quoted nil)) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (unless (boundp 'orgstrap-norm-func) (defvar orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm 'orgstrap-norm-embd)) (defun orgstrap-org-src-coderef-regexp (fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))) (unless (fboundp #'org-src-coderef-regexp) (defalias 'org-src-coderef-regexp 'orgstrap-org-src-coderef-regexp)) (defun orgstrap--expand-body (info) (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1)))) (defun orgstrap--confirm-eval-portable (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (orgstrap-norm body)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum))))) (defalias 'orgstrap--confirm-eval 'orgstrap--confirm-eval-portable) (let ((ocbe org-confirm-babel-evaluate)) (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (unwind-protect (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block)) (setq-local org-confirm-babel-evaluate ocbe))))
+# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((actual (org-version)) (need orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not need) (string< need actual) (string= need actual) (error "Your Org is too old! %s < %s" actual need))) (defun orgstrap-norm-func--prp-1\.0 (body) (let ((print-quoted nil)) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (unless (boundp 'orgstrap-norm-func) (defvar orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap-org-src-coderef-regexp (_fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))) (unless (fboundp #'org-src-coderef-regexp) (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp)) (defun orgstrap--expand-body (info) (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1)))) (defun orgstrap--confirm-eval-portable (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (orgstrap-norm body)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum))))) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable) (let ((ocbe org-confirm-babel-evaluate)) (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (unwind-protect (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block)) (setq-local org-confirm-babel-evaluate ocbe))))
 # End:
 #+end_src
 ** Historical local variables
@@ -490,7 +485,7 @@ _FMT has the wrong meaning in 24 and 25."
              (regexp-quote fmt)
              nil t))))
 (unless (fboundp #'org-src-coderef-regexp)
-  (defalias 'org-src-coderef-regexp 'orgstrap-org-src-coderef-regexp))
+  (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp))
 (defun orgstrap--expand-body (info)
   "Expand noweb references in INFO body and remove any coderefs."
   ;; this is a backport of `org-babel--expand-body'
@@ -585,17 +580,18 @@ and then run `orgstrap-on-change-hook'."
          (checksum (orgstrap-get-block-checksum)))
     (unless (eq checksum-existing (intern checksum))
       (remove-hook 'before-save-hook #'orgstrap--update-on-change t)
-      ;; have to remove the hook because for some reason tangling from a buffer
-      ;; counts as saving from that buffer?
-      (save-excursion
-        ;; using save-excusion here is a good for insurance against wierd hook issues
-        ;; however it does not deal with the fact that updating `orgstrap-add-block-checksum'
-        ;; adds an entry to the undo ring, which is bad
-        ;;(undo-boundary)  ; undo-boundary doesn't quite work the way we want
-        ;; related https://emacs.stackexchange.com/q/7558
-        (orgstrap-add-block-checksum nil checksum)
-        (run-hooks 'orgstrap-on-change-hook))
-      (add-hook 'before-save-hook #'orgstrap--update-on-change 0 t))))
+      ;; for some reason tangling from a buffer counts as saving from that buffer
+      ;; so have to remove the hook to avoid infinite loop
+      (unwind-protect
+          (save-excursion
+            ;; using save-excusion here is a good for insurance against wierd hook issues
+            ;; however it does not deal with the fact that updating `orgstrap-add-block-checksum'
+            ;; adds an entry to the undo ring, which is bad
+            ;;(undo-boundary)  ; undo-boundary doesn't quite work the way we want
+            ;; related https://emacs.stackexchange.com/q/7558
+            (orgstrap-add-block-checksum nil checksum)
+            (run-hooks 'orgstrap-on-change-hook))
+        (add-hook 'before-save-hook #'orgstrap--update-on-change nil t)))))
 
 ;; edit user facing functions
 (defun orgstrap-get-block-checksum (&optional cypher)
@@ -641,9 +637,9 @@ directly if it has been calculated before and only needs to be set."
     (user-error "`orgstrap-mode' only works with org-mode buffers"))
 
   (cond (orgstrap-mode
-         (add-hook 'before-save-hook #'orgstrap--update-on-change 0 t))
+         (add-hook 'before-save-hook #'orgstrap--update-on-change nil t))
         (t
-         (remove-hook 'before-save-hook #'orgstrap--update-on-change))))
+         (remove-hook 'before-save-hook #'orgstrap--update-on-change t))))
 #+end_src
 # orgstrap-embed-normalization-code
 # is a potential future variable but for sanity
@@ -686,7 +682,7 @@ INFO is the source block info.  MINIMAL sets whether to use minimal local vars."
       (let ((coderef (nth 6 info))
             (noweb (org-babel-noweb-p (nth 2 info) :eval)))
         (if noweb
-            "9.4"
+            "9.3.8"
           (let* ((body (nth 1 info))
                  (crrx (org-src-coderef-regexp coderef))
                  (pos (string-match crrx body))
@@ -697,8 +693,8 @@ INFO is the source block info.  MINIMAL sets whether to use minimal local vars."
             ;; `org-export-resolve-coderef' but for now we know we are in elisp
             (if (or (not pos) commented)
                 "8.2.10"
-              "9.4")))
-        "8.2.10")))
+              "9.3.8"))))
+    "8.2.10"))
 
 (defun orgstrap--have-min-org-version (info minimal)
   "See if current version of org meets minimum requirements for orgstrap block.
@@ -1000,7 +996,7 @@ minimal as possible is critical.
 ;;;; License and Commentary
 
 ;; License:
-;; https://spdx.org/licenses/GPL-3.0-or-later
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;;; Commentary:
 
@@ -1125,6 +1121,12 @@ installed or to figure out how to get it installed without this script.
 
 # shells ... bash dash zsh fish powershell
 We don't use hyphen-minus =-= in function names so that we can support bash running in posix mode.
+
+You would think that it would be easier to securely retrieve a file from
+the internet and check that its checksum matches, but just handling the
+cases for existing files and checksum failures is enough to increase the
+size and we haven't even dealt with supporting different cyphers yet! Some
+deduplication could be achieved by creating another function or two.
 #+name: posix-bootstrap
 #+begin_src sh :noweb yes
 echo "Bootstrapping in posix mode."
@@ -1134,17 +1136,37 @@ scurl () {
     local CHECKSUM="${1}"
     local URL="${2}"
     local path="${3}"
-    cmd="$(command -v sha256sum || (shasum -a 256))"
-    mktemp  # FIXME always download or stream to a tempfile first, hash, and ONLY THEN move to the path
-    curl --location "${URL}" | tee "${path}" | sha256sum
-    curl --location "${URL}" --output "${path}" || return $?
-    echo "$(sha256sum "${path}" 2>/dev/null || shasum -a 256 "${path}")" | \
+    local dname="$(dirname "${path}")"
+    local fname="$(basename "${path}")"
+    if [ -f "${path}" ]; then
+        echo "$(sha256sum "${path}" 2>/dev/null || shasum -a 256 "${path}")" | \
+        awk '$1!="'"${CHECKSUM}"'" { exit 1 }'
+        CODE=$?
+        if [ $CODE -ne 0 ]; then
+            echo failed with $CODE
+            echo "${path}" existing checksum does not match new checksum.
+            local efail_path="$(mktemp -p "${dname}" "${fname}"._existing_failure_.XXXXXX)"
+            mv "${path}" "${efail_path}"
+        else
+            return 0
+        fi
+    fi
+    local temp_path="$(mktemp -p "${dname}" "${fname}"._fetching_.XXXXXX)"
+    #cmd="$(command -v sha256sum 2>/dev/null || (shasum -a 256))"
+    # too many ways a streaming check can go wrong that we can't handle correclty
+    # set -o pipefail is not portable
+    #curl --location "${URL}" | tee "${temp_path}" | ${cmd} || return $?
+    curl --location "${URL}" --output "${temp_path}" || return $?
+    echo "$(sha256sum "${temp_path}" 2>/dev/null || shasum -a 256 "${temp_path}")" | \
     awk '$1!="'"${CHECKSUM}"'" { exit 1 }'
     CODE=$?
     if [ $CODE -ne 0 ]; then
         echo failed with $CODE
-        echo "${path}" checksum did not pass! something evil is going on!
-        mv "${path}" "${path}_checksum_failure"
+        echo "${temp_path}" checksum did not pass! something evil is going on!
+        local fail_path="$(mktemp -p "${dname}" "${fname}"._checksum_failure_.XXXXXX)"
+        mv "${temp_path}" "${fail_path}"
+    else
+        mv "${temp_path}" "${path}"
     fi
 }
 function package_manager {
@@ -1166,7 +1188,7 @@ function posix_bootstrap {
         nix-env) $cmd -i emacs-nox ;;
         guix)    $cmd install emacs-nox ;;
         brew)    $cmd cask install emacs ;;
-        *)       echo No package manager found! Checked <<&var-cmds()>>. ;return 1 ;;
+        ,*)       echo No package manager found! Checked <<&var-cmds()>>. ;return 1 ;;
     esac
     return $?
     # TODO
@@ -1554,5 +1576,5 @@ When running a file.
 * Local Variables Footer :noexport:
 
 # Local Variables:
-# eval: (progn (setq-local orgstrap-min-org-version nil) (let ((actual (org-version)) (need orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not need) (string< need actual) (string= need actual) (error "Your org is too old! %s < %s" actual need))) (defun orgstrap-norm-func--prp-1\.0 (body) (let ((print-quoted nil)) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (unless (boundp 'orgstrap-norm-func) (defvar orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm 'orgstrap-norm-embd)) (defun orgstrap-org-src-coderef-regexp (fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))) (unless (fboundp #'org-src-coderef-regexp) (defalias 'org-src-coderef-regexp 'orgstrap-org-src-coderef-regexp)) (defun orgstrap--expand-body (info) (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1)))) (defun orgstrap--confirm-eval-portable (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (orgstrap-norm body)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum))))) (defalias 'orgstrap--confirm-eval 'orgstrap--confirm-eval-portable) (let ((ocbe org-confirm-babel-evaluate)) (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (unwind-protect (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block)) (setq-local org-confirm-babel-evaluate ocbe))))
+# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((actual (org-version)) (need orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not need) (string< need actual) (string= need actual) (error "Your Org is too old! %s < %s" actual need))) (defun orgstrap-norm-func--prp-1\.0 (body) (let ((print-quoted nil)) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (unless (boundp 'orgstrap-norm-func) (defvar orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap-org-src-coderef-regexp (_fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))) (unless (fboundp #'org-src-coderef-regexp) (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp)) (defun orgstrap--expand-body (info) (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1)))) (defun orgstrap--confirm-eval-portable (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (orgstrap-norm body)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum))))) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable) (let ((ocbe org-confirm-babel-evaluate)) (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (unwind-protect (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block)) (setq-local org-confirm-babel-evaluate ocbe))))
 # End:
