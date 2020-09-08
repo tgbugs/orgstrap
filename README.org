@@ -128,14 +128,16 @@ named source block only when it matches the hash.
 :CUSTOM_ID: details
 :END:
 The first elisp source block named =orgstrap= in an org file is
-automatically run using an =exec:= file local variable. Users can
+automatically run using an =eval:= file local variable. Users can
 review and add the file local variables to their known safe list
 so that the code can be run in the future without the need to bother
 them again.
 
 When opening a file for the first time, users should decline the local
-variables, review the =orgstrap= block directly, and then reload revisit,
-or =M-x= =org-mode= and only then accept the local variables.
+variables, review the =eval:= local variable and the =orgstrap= block
+directly, and then reload, revisit, or =M-x= =org-mode= and only then
+accept the local variables. This only needs to be done once for the
+=eval:= local variables (unless they are updated).
 
 This is the =orgstrap= block that is used for this file.
 
