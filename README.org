@@ -1232,7 +1232,7 @@ solution[fn::Not that anyone should ever want to be inspired to
 create such a monstrosity.  But hey, if software packaging and
 distribution were a solve problem we wouldn't be doing this right
 now and there would be no such thing as cybercrime and we would
-all live in a wild happy techno-utopian futures ...]. The inspiration
+all live in a wild happy techno-utopian future ...]. The inspiration
 for the problem was entirely of my own making and comes from a painful
 experience trying write instructions that were followable[fn::
 [[https://github.com/SciCrunch/sparc-curation/blob/master/docs/setup.org#setup]]]
@@ -1712,7 +1712,7 @@ which of course is exactly what file local variables are for.
 
 The only question then was how to avoid the very real dangers of enabling arbitrary code
 execution of plain text. Actually it was more along the lines of "How can I keep org-babel
-happy without also pwning myself?" Fortunately = org-confirm-babel-evaluate = can be customized
+happy without also pwning myself?" Fortunately =org-confirm-babel-evaluate= can be customized
 to be a function that accepts the body of the code to be evaluated. Therefore we can do the
 following.
 
