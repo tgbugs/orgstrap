@@ -318,9 +318,9 @@ function.
 
 Normalization functions that produce different output given the same
 input for at least one input must have different names. One way this
-can be achieved by suffixing a name with a version number.
+can be achieved is by suffixing a name with a version number.
 
-In order for a orgstrap normalization function name to be considered
+In order for an orgstrap normalization function name to be considered
 official it must have an implementation bearing that name in the
 [[#normalization-functions][Normalization functions]] section of the
 readme that contains this specification. Once a function has been
@@ -345,7 +345,7 @@ as a =safe-local-variable=.  In this context this workaround seems reasonable an
 not malicious because the use of =eval:= should alert users that some arbitrary
 stuff is going on and that they should be on high alert to check it.
 
-Below in [[#local-variable-definitions][Definitions]] there is a more readable
+Below in [[#definitions][Definitions]] there is a more readable
 version of what the compacted local variables code at the end of the file is doing.
 *Always check that the =eval:= local variables in unknown orgstrapped files*
 *match a known set when reviewing and accepting local variables.*
@@ -384,6 +384,7 @@ anyway so don't bother.
 #+end_quote
 ** Normalization
 *** Shared normalization machinery
+Shared normalization code embedded as eval local variables.
 #+caption: Shared normalization code embedded as eval local variables.
 #+name: orgstrap-normalization-common-embed
 #+begin_src elisp
@@ -398,6 +399,7 @@ anyway so don't bother.
   (defalias 'orgstrap-norm #'orgstrap-norm-embd))
 #+end_src
 
+Normalization functions for orgstrap.el.
 #+caption: Normalization functions for orgstrap.el.
 #+name: orgstrap-code-normalization-functions
 #+begin_src elisp :eval never :noweb yes
@@ -441,6 +443,19 @@ Therefore if you forget to set =:noweb= on a block, testing against emacs
 :CUSTOM_ID: normalization-functions
 :END:
 **** prp-1.0
+#+name: orgstrap-code-normalization--prin1-read-progn-1.0
+#+begin_src elisp :eval never
+(let ((print-quoted nil))
+  (prin1-to-string (read (concat "(progn\n" body "\n)"))))
+#+end_src
+
+#+name: block-orgstrap-norm-func--prp-1.0
+#+begin_src elisp :noweb yes :eval never
+(defun orgstrap-norm-func--prp-1.0 (body)
+  "Normalize BODY using prp-1.0."
+  <<orgstrap-code-normalization--prin1-read-progn-1.0>>)
+#+end_src
+
 =prin1-to-string= is used to normalize the code in the orgstrap block,
 removing any comments and formatting irregularities. This is important
 for two reasons.
@@ -461,22 +476,9 @@ to the default from =nil= to =t= in emacs-27 (sigh). See
 Normalize BODY by wrapping in =progn=, calling =read=, and then =prin1-to-string=.
 There are still unresolved issues if tabs are present in the orgstrap block which
 is why 1.0 is included. =print-quoted= is critical for consistent hashing.
-
-#+name: orgstrap-code-normalization--prin1-read-progn-1.0
-#+begin_src elisp :eval never
-(let ((print-quoted nil))
-  (prin1-to-string (read (concat "(progn\n" body "\n)"))))
-#+end_src
-
-#+name: block-orgstrap-norm-func--prp-1.0
-#+begin_src elisp :noweb yes :eval never
-(defun orgstrap-norm-func--prp-1.0 (body)
-  "Normalize BODY using prp-1.0."
-  <<orgstrap-code-normalization--prin1-read-progn-1.0>>)
-#+end_src
 ** Definitions
 :PROPERTIES:
-:CUSTOM_ID:  local-variable-definitions
+:CUSTOM_ID: definitions
 :END:
 These blocks are nowebbed into ref:orgstrap-init-helper-defuns and are
 used directly by =orgstrap-init= to populate file local variables.
@@ -527,7 +529,7 @@ that they are trying to load.
   (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-minimal))
 #+end_src
 
-Once =orgstrap-confirm-eval= is defined the rest of the =eval:= local variables are the same.
+Once =orgstrap--confirm-eval= is defined the rest of the =eval:= local variables are the same.
 
 #+caption: common local variables
 #+name: orgstrap-file-local-variables-common
@@ -576,9 +578,13 @@ Here are the local variables from the end of the file.
 #+end_src
 * Code
 ** =orgstrap= implementation
-Functions to calculate =orgstrap-block-checksum= and set it as a file local variable.
-Add the necessary local variables to the end of the file.
-# [[info:elisp#File Local Variables][info:elisp#File Local Variables]] a useful reference
+This section contains the implementation of functions to calculate
+=orgstrap-block-checksum= and set it as a prop line local variable.
+It also contains functions to embed the bootstrapping code as an
+=eval:= local variable in the local variables list, along with other
+quality of life functionality for the user such as =orgstrap-mode=
+and =orgstrap-init=.
+# [[info:elisp#File Local Variables][info:elisp#File Local Variables]] is a useful reference
 *** Expand
 Testing =org-src-coderef-regexp= with =fboundp= in ref:orgstrap-expand-body
 is needed due to changes in the behavior of =org-babel-get-src-block-info=
