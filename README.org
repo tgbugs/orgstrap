@@ -36,7 +36,7 @@ Org file by running =M-x= =orgstrap-init= which will add the basic
 If you don't have =orgstrap=, you can get it using itself.
 1. Obtain the org mode source for this file. (e.g.
    [[https://raw.githubusercontent.com/tgbugs/orgstrap/master/orgstrap.org][from GitHub]]).
-2. Open the source in Emacs[[#boot-to-emacs-boot-to-org][*]].
+2. Open the source in Emacs[[#bootstrapping-to-emacs-bootstrapping-to-org][*]].
    (e.g. =M-x= =url-handler-mode= then =C-x C-f=
    # @@latex: \\@@
    =https://raw.githubusercontent.com/tgbugs/orgstrap/master/README.org=).
@@ -291,7 +291,7 @@ are needed. There is a fine balance between portability and compactness since
 a minimal implementation has to make more assumptions about the systems it will
 run on. Multi-stage orgstrap, or other means of bootstrapping a working runtime
 for an Org file such as the process implemented in the
-[[#boot-to-emacs-boot-to-org][Bootstrapping to Emacs, bootstrapping to Org.]]
+[[#bootstrapping-to-emacs-bootstrapping-to-org][Bootstrapping to Emacs, bootstrapping to Org.]]
 section of this readme are ongoing areas of exploration.].
 
 #+begin_quote
@@ -1204,7 +1204,7 @@ within a larger reputable site. If you're not in a hurry, ask for the software t
 packaged, or package it yourself so that it can go through the process.
 * Bootstrapping to Emacs, bootstrapping to Org.
 :PROPERTIES:
-:CUSTOM_ID: boot-to-emacs-boot-to-org
+:CUSTOM_ID: bootstrapping-to-emacs-bootstrapping-to-org
 :END:
 If you are dealing with a system that does not have a working
 version of Emacs then all these fancy =orgstrap= tricks don't
