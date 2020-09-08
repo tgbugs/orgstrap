@@ -36,7 +36,7 @@ Using =orgstrap= is easy.
    (e.g. =M-x= =url-handler-mode= then =C-x C-f= @@latex: \\@@
    =https://raw.githubusercontent.com/tgbugs/orgstrap/master/orgstrap.org=).
 3. Decline the file local variables.
-4. Inspect the [[orgstrap][orgstrap block]] and file local variables.
+4. Inspect the [[#details][orgstrap block]] and file local variables.
 5. Reload the file and accept the file local variables.
 
 Congratulations you can now use =orgstrap= with your own files!
@@ -125,6 +125,9 @@ actually c source code with some special syntax.].
 # It only sort of works in this case because we have the rest of the file under
 # version control in another system.
 * Details
+:PROPERTIES:
+:CUSTOM_ID: details
+:END:
 The first elisp source block named =orgstrap= in an org file is
 automatically run using an =exec:= file local variable. Users can
 review and add the file local variables to their known safe list
@@ -235,6 +238,9 @@ that has the =<name>= =orgstrap= with whitespace preceding the =o= and
 only whitespace following the =p= until a newline. Newline and whitespace
 are as defined by [[https://orgmode.org/worg/dev/org-syntax.html][Org mode syntax]].
 This =source code block= is henceforth referred to as the =orgstrap block=.
+If there is more than one =source code block= with the =<name>= =orgstrap=
+then the =source code block= that starts closes to the beginning of the
+file is the =orgstrap block=.
 
 The =<language>= for the =orgstrap block= must be =elisp= or =emacs-lisp=[fn::
 It is possible that other languages might be supported in the future. However,
