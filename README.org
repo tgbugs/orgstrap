@@ -1261,7 +1261,7 @@ emacs-28-vcs -q orgstrap-minimal.org
 ** 1.1
 - Renamed existing =orgstrap-mode= to =orgstrap-edit-mode=.
 
-  This is a BREAKING CHANGE. Better make the change sooner rather than later.
+  This is a *BREAKING CHANGE*. Thus better make it sooner rather than later.
 
 - Added the new =orgstrap-mode= implementation.
 
@@ -1836,6 +1836,10 @@ which is currently embedded along with everything else.
 #+begin_src elisp
 (use-package org-ref)
 #+end_src
+** TODO behavior for activating orgstrap-mode in a buffer
+What to do if we are in a buffer that has an orgstrap block?
+I think the answer is to check for the local variables, and if they
+are present, do nothing, if they are absent run the block?
 ** TODO resolve the issue with tabs in < 26                        :noexport:
 ** TODO command to checksum the file local variables               :noexport:
 ** TODO ruby org so that github can render footnotes correctly     :noexport:
