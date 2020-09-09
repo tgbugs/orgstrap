@@ -1,4 +1,4 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 4f05ab88ac38e2d5e7237f0c727d8da3c1a24efb3164647a1f2dd305b369c0de; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 9723322fe9626da20c5d20ff6909561e8c1c88dd457870b398608495c6615f25; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an Org file using file local variables
 #+options: num:nil \n:nil
@@ -26,6 +26,7 @@ This file bootstraps itself to provide the functionality needed to use
 
 =orgstrap= works with all versions of Emacs since =24.4= and all versions of Org since =8.2.10=.
 
+Please see the [[#change-log][change log]] for the latest updates.
 * Getting started
 Using =orgstrap= is easy.
 
@@ -48,13 +49,18 @@ If you don't have =orgstrap=, you can get it using itself.
 For a somewhat more sane and persistent installation experience
 =orgstrap= is also available on [[https://melpa.org/#/orgstrap][melpa]].
 
-A minor mode for editing orgstrapped files is included as =orgstrap-mode=.
+A minor mode for editing orgstrapped files is included as =orgstrap-edit-mode=.
 It is activated by =orgstrap-init=. When enabled it automatically updates
 the =orgstrap-block-checksum= prop line local variable whenever the
 =orgstrap= block changes.
 
-If you do not use =orgstrap-mode= then the easiest way to add the orgstrap
-checksum to a file is to invoke =M-x= =orgstrap-add-block-checksum=.
+If you do not use =orgstrap-edit-mode= then the easiest way to add the
+orgstrap checksum to a file is to invoke =M-x= =orgstrap-add-block-checksum=.
+
+=orgstrap= also includes =orgstrap-mode=, which is a regional minor mode
+for =org-mode=. When enabled, =orgstrap-mode= detects, checks, and runs
+orgstrap blocks when visiting Org files, superseding any embedded =eval:=
+local variables.
 
 The rest of this file is an overview of the use cases for =orgstrap= and
 the implementation of =orgstrap= along with discussion and commentary.
@@ -149,6 +155,7 @@ This is the =orgstrap= block that is used for this file.
 ;; with the rest of the orgstrap machinery so it is easy to
 ;; use orgstrap to create and update orgstrap blocks
 
+<<orgstrap-run-helper-defuns>>
 <<orgstrap-edit-helper-defuns>>
 <<orgstrap-init-helper-defuns>>
 <<orgstrap-extra-helper-defuns>>
@@ -178,7 +185,7 @@ than trying to sort out which variables were or were not in the prop line."
 (add-hook 'orgstrap-on-change-hook #'org-babel-tangle nil t)
 (add-hook 'orgstrap-on-change-hook #'orgstrap--update-examples nil t)
 ;; enable orgstrap mode locally for this file when this block runs
-(orgstrap-mode)
+(orgstrap-edit-mode)
 
 (message "orgstrap complete!")
 #+end_src
@@ -562,7 +569,7 @@ Here is the prop line from the first line of this file that
 includes the cypher and checksum of the =orgstrap= block.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 4f05ab88ac38e2d5e7237f0c727d8da3c1a24efb3164647a1f2dd305b369c0de; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 9723322fe9626da20c5d20ff6909561e8c1c88dd457870b398608495c6615f25; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
 #+end_src
 
 # BE VERY CAREFUL WITH MANUAL EDITS
@@ -581,8 +588,8 @@ This section contains the implementation of functions to calculate
 =orgstrap-block-checksum= and set it as a prop line local variable.
 It also contains functions to embed the bootstrapping code as an
 =eval:= local variable in the local variables list, along with other
-quality of life functionality for the user such as =orgstrap-mode=
-and =orgstrap-init=.
+quality of life functionality for the user such as =orgstrap-mode=,
+=orgstrap-edit-mode=, and =orgstrap-init=.
 # [[info:elisp#File Local Variables][info:elisp#File Local Variables]] is a useful reference
 *** Expand
 Testing =org-src-coderef-regexp= with =fboundp= in ref:orgstrap-expand-body
@@ -630,6 +637,74 @@ _FMT has the wrong meaning in 24 and 25."
       (replace-regexp-in-string
        (org-src-coderef-regexp coderef) "" expand nil nil 1))))
 #+end_src
+*** Run
+#+caption: run helpers
+#+name: orgstrap-run-helper-defuns
+#+begin_src elisp :noweb yes
+(require 'cl-lib)
+
+(defcustom orgstrap-always-edit nil
+  "If non-nil then command `orgstrap-mode' will activate command `orgstrap-edit-mode'.")
+
+;; orgstrap-mode implementation
+
+(defun orgstrap--org-buffer ()
+  "Only run when in `org-mode' and command `orgstrap-mode' is enabled.
+Sets further hooks."
+  (add-hook 'before-hack-local-variables-hook #'orgstrap--before-hack-lv nil t))
+
+(defun orgstrap--before-hack-lv ()
+  "Cull any orgstrap eval local variables.
+If `orgstrap' is used in the current buffer, add hook to run the orgstrap block."
+  (remove-hook 'before-hack-local-variables-hook #'orgstrap--before-hack-lv t)
+  (add-hook 'hack-local-variables-hook #'orgstrap--hack-lv nil t)
+  (orgstrap--cull-eval-local-variables))
+
+(defun orgstrap--used-in-current-buffer-p ()
+  "Return t if all the required orgstrap prop line local variables are present."
+  (and (boundp 'orgstrap-cypher) orgstrap-cypher
+       (boundp 'orgstrap-block-checksum) orgstrap-block-checksum
+       (boundp 'orgstrap-norm-func-name) orgstrap-norm-func-name))
+
+(defun orgstrap--hack-lv ()
+  "If orgstrap is present, run the orgstrap block for the current buffer."
+  (remove-hook 'hack-local-variables-hook #'orgstrap--hack-lv)
+  (when (orgstrap--used-in-current-buffer-p)
+    <<orgstrap-file-local-variables-common>>
+    (when orgstrap-always-edit
+      (orgstrap-edit-mode))))
+
+(defun orgstrap--match-eval-local-variables (pair)
+  "Return nil if PAIR matchs any eval local variable used by orgstrap.
+Avoid false positives if possible if at all possible."
+  (not (and (eq (car pair) 'eval)
+            (message "%s" (cdr pair))
+            ;; keep the detection simple for now, any eval lv that
+            ;; so much as mentions orgstrap is nuked, and in the future
+            ;; if orgstrap-nb is used we may need to nuke that too
+            (string-match "orgstrap" (prin1-to-string (cdr pair))))))
+
+(defun orgstrap--cull-eval-local-variables ()
+  "When command `orgstrap-mode' is enabled cull orgstrap file local variables."
+  (when (eq major-mode 'org-mode)
+    (remove-hook 'before-hack-local-variables-hook #'orgstrap--cull-eval-local-variables)
+    (let ((clva file-local-variables-alist))
+      (setq-local file-local-variables-alist
+                  (cl-remove-if-not #'orgstrap--match-eval-local-variables clva)))))
+
+;;;###autoload
+(define-minor-mode orgstrap-mode
+  "A regional minor mode for `org-mode' that automatically runs orgstrap blocks.
+When visiting an Org file or activating `org-mode', if orgstrap prop line local
+variables are detect then use the installed orgstrap implementation to run the
+orgstrap block. If orgstrap embedded local variables are present, they will not
+be executed."
+  nil "" nil
+  (cond (orgstrap-mode
+         (add-hook 'org-mode-hook #'orgstrap--org-buffer))
+        (t
+         (remove-hook 'org-mode-hook #'orgstrap--org-buffer))))
+#+end_src
 *** Edit
 #+caption: edit helpers
 #+name: orgstrap-edit-helper-defuns
@@ -651,7 +726,7 @@ Defaults to `orgstrap-norm-func--prp-1.0'.")
   "If non-nil run `orgstrap-norm' in debug mode.")
 
 (defcustom orgstrap-on-change-hook nil
-  "Hook run via `before-save-hook' when command `orgstrap-mode' is enabled.
+  "Hook run via `before-save-hook' when command `orgstrap-edit-mode' is enabled.
 Only runs when the contents of the orgstrap block have changed."
   :type 'hook
   :group 'orgstrap)
@@ -759,15 +834,15 @@ directly if it has been calculated before and only needs to be set."
     (org-babel-execute-src-block)))
 
 ;;;###autoload
-(define-minor-mode orgstrap-mode
-  "Minor mode for working with orgstrapped files."
+(define-minor-mode orgstrap-edit-mode
+  "Minor mode for editing with orgstrapped files."
   nil "" nil
 
   (unless (eq major-mode 'org-mode)
-    (setq orgstrap-mode nil)
-    (user-error "`orgstrap-mode' only works with org-mode buffers"))
+    (setq orgstrap-edit-mode nil)
+    (user-error "`orgstrap-edit-mode' only works with org-mode buffers"))
 
-  (cond (orgstrap-mode
+  (cond (orgstrap-edit-mode
          (add-hook 'before-save-hook #'orgstrap--update-on-change nil t))
         (t
          (remove-hook 'before-save-hook #'orgstrap--update-on-change t))))
@@ -796,8 +871,6 @@ is already in use, =cl-case= is the logical solution for portability.
 #+name: orgstrap-init-helper-defuns
 #+begin_src emacs-lisp :results none :lexical yes :noweb yes
 ;;; init helpers
-(require 'cl-lib)
-
 (defvar orgstrap-link-message "jump to the orgstrap block for this file"
   "Default message for file internal links.")
 
@@ -1011,7 +1084,7 @@ buffer or global setting for `orgstrap-norm-func'."
 ;; init user facing functions
 ;;;###autoload
 (defun orgstrap-init (&optional prefix-argument)
-  "Initialize orgstrap in the current buffer and enable command `orgstrap-mode'.
+  "Initialize orgstrap in a buffer and enable command `orgstrap-edit-mode'.
 PREFIX-ARGUMENT is essentially minimal from other functions, when non-nil
 the minimal local variables will be used if possible."
   (interactive "P")
@@ -1025,7 +1098,7 @@ the minimal local variables will be used if possible."
     (orgstrap--add-link-to-orgstrap-block)
     ;; FIXME sometimes local variables don't populate due to an out of range error
     (orgstrap--add-file-local-variables (or prefix-argument orgstrap-use-minimal-local-variables))
-    (orgstrap-mode)))
+    (orgstrap-edit-mode)))
 #+end_src
 
 # (orgstrap--dedoc '(defvar lol 'hello))
@@ -1123,10 +1196,12 @@ minimal as possible is critical.
 ;; standalone computational artifacts, dependent only on Emacs,
 ;; or other implementations of the Org-babel protocol in the future.
 
-;; orgstrap.el is an elisp implementation of the orgstrap conventions and
-;; provides `orgstrap-init' and `orgstrap-mode' to simplify authoring of
-;; orgstrapped files.  For more details see README.org which is also the
-;; literate source for this orgstrap.el file in the git repo at
+;; orgstrap.el is an elisp implementation of the orgstrap conventions.
+;; It defines a regional minor mode for `org-mode' that runs orgstrap
+;; blocks.  It also provides `orgstrap-init' and `orgstrap-edit-mode'
+;; to simplify authoring of orgstrapped files.  For more details see
+;; README.org which is also the literate source for this orgstrap.el
+;; file in the git repo at
 ;; https://github.com/tgbugs/orgstrap/blob/master/README.org
 ;; or whever you can find git:c1b28526ef9931654b72dff559da2205feb87f75
 
@@ -1145,6 +1220,8 @@ minimal as possible is critical.
 ;;; Code:
 
 (require 'org)
+
+<<orgstrap-run-helper-defuns>>
 
 <<orgstrap-edit-helper-defuns>>
 
@@ -1177,6 +1254,26 @@ emacs-26 -q orgstrap-minimal.org
 emacs-27 -q orgstrap-minimal.org
 emacs-28-vcs -q orgstrap-minimal.org
 #+end_src
+* Change log
+:PROPERTIES:
+:CUSTOM_ID: change-log
+:END:
+** 1.1
+- Renamed existing =orgstrap-mode= to =orgstrap-edit-mode=.
+
+  This is a BREAKING CHANGE. Better make the change sooner rather than later.
+
+- Added the new =orgstrap-mode= implementation.
+
+  This is a regional minor mode for =org-mode= which makes it possible to use orgstrap
+  without the embedded local variables. This allows for greater security at the expense of
+  portability, depending on the exact use case. By a stroke of good fortune it is possible
+  to use the =hack-local-variables= hooks to trap and remove the embedded local variables
+  if they are present so that the orgstrap block is not evaluated twice.
+
+- Added =orgstrap-always-edit= as a custom variable.
+
+  If non-nil then =orgstrap-edit-mode= will be automatically activated by =orgstrap-mode=.
 * Best practices
 ** Use the system package manager.
 There is a big difference between using a script to install a program directly
@@ -1597,15 +1694,6 @@ When running a file.
 :PROPERTIES:
 :CUSTOM_ID: future-work
 :END:
-** orgstrap-mode-global
-If orgstrap is installed, then having a global-orgstrap-mode which could add itself to
-org-mode-hook when enabled would supersede the local variables list implementation, or
-possibly just do it when the local variables version was absent. Disabling the local
-variables when global-orgstrap-mode is detect to be on might be possible, but without
-it the user would have to explicitly decline the variables or risk having the orgstrap
-block run twice. Going to have to get this resolved before doing any announcements since
-it could leave users with quite a bit of pain if we don't get that check in before people
-start using it.
 ** Spec extension to support arbitrary orgstrap block names.
 Since all the conventions for how this is done are defined locally by each file, you could
 in principle rename the special block as you see fit, perhaps from =orgstrap= to =main= if
@@ -1752,6 +1840,15 @@ which is currently embedded along with everything else.
 ** TODO command to checksum the file local variables               :noexport:
 ** TODO ruby org so that github can render footnotes correctly     :noexport:
 [[file:~/git/NOFORK/org-ruby]]
+** DONE orgstrap-mode
+If orgstrap is installed, then having a orgstrap-mode which could add itself to
+org-mode-hook when enabled would supersede the local variables list implementation, or
+possibly just do it when the local variables version was absent. Disabling the local
+variables when orgstrap-mode is detect to be on might be possible, but without
+it the user would have to explicitly decline the variables or risk having the orgstrap
+block run twice. Going to have to get this resolved before doing any announcements since
+it could leave users with quite a bit of pain if we don't get that check in before people
+start using it.
 ** DONE Auto update block checksum on save
 Before save hook and/or before commit hook to automatically update the block checksum.
 ** DONE use orgstrap to automatically keep example blocks in sync  :noexport:

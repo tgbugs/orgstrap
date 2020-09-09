@@ -20,10 +20,12 @@
 ;; standalone computational artifacts, dependent only on Emacs,
 ;; or other implementations of the Org-babel protocol in the future.
 
-;; orgstrap.el is an elisp implementation of the orgstrap conventions and
-;; provides `orgstrap-init' and `orgstrap-mode' to simplify authoring of
-;; orgstrapped files.  For more details see README.org which is also the
-;; literate source for this orgstrap.el file in the git repo at
+;; orgstrap.el is an elisp implementation of the orgstrap conventions.
+;; It defines a regional minor mode for `org-mode' that runs orgstrap
+;; blocks.  It also provides `orgstrap-init' and `orgstrap-edit-mode'
+;; to simplify authoring of orgstrapped files.  For more details see
+;; README.org which is also the literate source for this orgstrap.el
+;; file in the git repo at
 ;; https://github.com/tgbugs/orgstrap/blob/master/README.org
 ;; or whever you can find git:c1b28526ef9931654b72dff559da2205feb87f75
 
@@ -43,6 +45,77 @@
 
 (require 'org)
 
+(require 'cl-lib)
+
+(defcustom orgstrap-always-edit nil
+  "If non-nil then command `orgstrap-mode' will activate command `orgstrap-edit-mode'.")
+
+;; orgstrap-mode implementation
+
+(defun orgstrap--org-buffer ()
+  "Only run when in `org-mode' and command `orgstrap-mode' is enabled.
+Sets further hooks."
+  (add-hook 'before-hack-local-variables-hook #'orgstrap--before-hack-lv nil t))
+
+(defun orgstrap--before-hack-lv ()
+  "Cull any orgstrap eval local variables.
+If `orgstrap' is used in the current buffer, add hook to run the orgstrap block."
+  (remove-hook 'before-hack-local-variables-hook #'orgstrap--before-hack-lv t)
+  (add-hook 'hack-local-variables-hook #'orgstrap--hack-lv nil t)
+  (orgstrap--cull-eval-local-variables))
+
+(defun orgstrap--used-in-current-buffer-p ()
+  "Return t if all the required orgstrap prop line local variables are present."
+  (and (boundp 'orgstrap-cypher) orgstrap-cypher
+       (boundp 'orgstrap-block-checksum) orgstrap-block-checksum
+       (boundp 'orgstrap-norm-func-name) orgstrap-norm-func-name))
+
+(defun orgstrap--hack-lv ()
+  "If orgstrap is present, run the orgstrap block for the current buffer."
+  (remove-hook 'hack-local-variables-hook #'orgstrap--hack-lv)
+  (when (orgstrap--used-in-current-buffer-p)
+    (let ((ocbe org-confirm-babel-evaluate))
+      (setq-local orgstrap-norm-func orgstrap-norm-func-name)
+      (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
+      (unwind-protect
+          (save-excursion
+            (org-babel-goto-named-src-block ,orgstrap-orgstrap-block-name) ; quasiquoted when nowebbed
+            (org-babel-execute-src-block))
+        (setq-local org-confirm-babel-evaluate ocbe)))
+    (when orgstrap-always-edit
+      (orgstrap-edit-mode))))
+
+(defun orgstrap--match-eval-local-variables (pair)
+  "Return nil if PAIR matchs any eval local variable used by orgstrap.
+Avoid false positives if possible if at all possible."
+  (not (and (eq (car pair) 'eval)
+            (message "%s" (cdr pair))
+            ;; keep the detection simple for now, any eval lv that
+            ;; so much as mentions orgstrap is nuked, and in the future
+            ;; if orgstrap-nb is used we may need to nuke that too
+            (string-match "orgstrap" (prin1-to-string (cdr pair))))))
+
+(defun orgstrap--cull-eval-local-variables ()
+  "When command `orgstrap-mode' is enabled cull orgstrap file local variables."
+  (when (eq major-mode 'org-mode)
+    (remove-hook 'before-hack-local-variables-hook #'orgstrap--cull-eval-local-variables)
+    (let ((clva file-local-variables-alist))
+      (setq-local file-local-variables-alist
+                  (cl-remove-if-not #'orgstrap--match-eval-local-variables clva)))))
+
+;;;###autoload
+(define-minor-mode orgstrap-mode
+  "A regional minor mode for `org-mode' that automatically runs orgstrap blocks.
+When visiting an Org file or activating `org-mode', if orgstrap prop line local
+variables are detect then use the installed orgstrap implementation to run the
+orgstrap block. If orgstrap embedded local variables are present, they will not
+be executed."
+  nil "" nil
+  (cond (orgstrap-mode
+         (add-hook 'org-mode-hook #'orgstrap--org-buffer))
+        (t
+         (remove-hook 'org-mode-hook #'orgstrap--org-buffer))))
+
 ;;; edit helpers
 (defvar orgstrap-orgstrap-block-name "orgstrap"
   "Set the default blockname to orgstrap by convention.
@@ -60,7 +133,7 @@ Defaults to `orgstrap-norm-func--prp-1.0'.")
   "If non-nil run `orgstrap-norm' in debug mode.")
 
 (defcustom orgstrap-on-change-hook nil
-  "Hook run via `before-save-hook' when command `orgstrap-mode' is enabled.
+  "Hook run via `before-save-hook' when command `orgstrap-edit-mode' is enabled.
 Only runs when the contents of the orgstrap block have changed."
   :type 'hook
   :group 'orgstrap)
@@ -218,22 +291,20 @@ directly if it has been calculated before and only needs to be set."
     (org-babel-execute-src-block)))
 
 ;;;###autoload
-(define-minor-mode orgstrap-mode
-  "Minor mode for working with orgstrapped files."
+(define-minor-mode orgstrap-edit-mode
+  "Minor mode for editing with orgstrapped files."
   nil "" nil
 
   (unless (eq major-mode 'org-mode)
-    (setq orgstrap-mode nil)
-    (user-error "`orgstrap-mode' only works with org-mode buffers"))
+    (setq orgstrap-edit-mode nil)
+    (user-error "`orgstrap-edit-mode' only works with org-mode buffers"))
 
-  (cond (orgstrap-mode
+  (cond (orgstrap-edit-mode
          (add-hook 'before-save-hook #'orgstrap--update-on-change nil t))
         (t
          (remove-hook 'before-save-hook #'orgstrap--update-on-change t))))
 
 ;;; init helpers
-(require 'cl-lib)
-
 (defvar orgstrap-link-message "jump to the orgstrap block for this file"
   "Default message for file internal links.")
 
@@ -527,7 +598,7 @@ buffer or global setting for `orgstrap-norm-func'."
 ;; init user facing functions
 ;;;###autoload
 (defun orgstrap-init (&optional prefix-argument)
-  "Initialize orgstrap in the current buffer and enable command `orgstrap-mode'.
+  "Initialize orgstrap in a buffer and enable command `orgstrap-edit-mode'.
 PREFIX-ARGUMENT is essentially minimal from other functions, when non-nil
 the minimal local variables will be used if possible."
   (interactive "P")
@@ -541,7 +612,7 @@ the minimal local variables will be used if possible."
     (orgstrap--add-link-to-orgstrap-block)
     ;; FIXME sometimes local variables don't populate due to an out of range error
     (orgstrap--add-file-local-variables (or prefix-argument orgstrap-use-minimal-local-variables))
-    (orgstrap-mode)))
+    (orgstrap-edit-mode)))
 
 ;;; extra helpers
 (defun orgstrap-update-src-block (name content)
