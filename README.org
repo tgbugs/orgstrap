@@ -1,4 +1,4 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 2708c9e1bd52af5cb9c19f53491d3ea3fe34627c10042542635be4f5f63c23f0; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: f1699d66472922b3937e54fed840dc27b6e48ecf14702be836eaf2d34c22b754; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an Org file using file local variables
 #+options: num:nil \n:nil
@@ -571,7 +571,7 @@ Here is the prop line from the first line of this file that
 includes the cypher and checksum of the =orgstrap= block.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 2708c9e1bd52af5cb9c19f53491d3ea3fe34627c10042542635be4f5f63c23f0; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: f1699d66472922b3937e54fed840dc27b6e48ecf14702be836eaf2d34c22b754; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
 #+end_src
 
 # BE VERY CAREFUL WITH MANUAL EDITS
@@ -649,6 +649,18 @@ _FMT has the wrong meaning in 24 and 25."
        (org-src-coderef-regexp coderef) "" expand nil nil 1))))
 #+end_src
 *** Run
+In order for orgstrap to be maximally portable and not depend on
+already being installed the implementation needs to work with the
+local variables list eval variable without complicating the situation
+when orgstrap is installed as a package.
+
+While ideally this would be done using only the standard hooks around
+=hack-local-variables= this approach does not work because the variables
+are filtered before those hooks can run. Therefore we have to advise
+=hack-local-variables-confirm= in order to capture and remove any orgstrap
+eval local variables that we find. For maximum safety this minimally requires
+mutation of the =all-vars= list passed to =hack-local-variables-confirm=.
+
 #+caption: run helpers
 #+name: orgstrap-run-helper-defuns
 #+begin_src elisp :noweb yes
@@ -666,12 +678,18 @@ an orgstrapped file and wants to know what is going on.")
   "Local variable for the cypher for the current buffer.
 If you change `orgstrap-default-cypher' you should update this as well
 using `setq-default' since it will not change automatically.")
+(put 'orgstrap-cypher 'safe-local-variable (lambda (value) t))
 
 (defvar-local orgstrap-block-checksum nil
   "Local variable for the expected checksum for the current orgstrap block.")
+(put 'orgstrap-cypher 'safe-local-variable (lambda (value) t))
 
 (defvar-local orgstrap-norm-func-name nil
   "Local variable for the name of the current orgstrap-norm-func.")
+(put 'orgstrap-norm-func-name 'safe-local-variable
+     (lambda (value) (and orgstrap-mode (memq value orgstrap--known-norm-funcs)))) ;; FIXME naming
+;; Unless orgstrap-mode is enabled and the name is in the list of
+;; functions that are implemented internally this is not safe
 
 (defvar orgstrap-norm-func #'orgstrap-norm-func--prp-1.0
   "Dynamic variable to simplify calling normalizaiton functions.
@@ -686,7 +704,7 @@ Defaults to `orgstrap-norm-func--prp-1.0'.")
 
 ;; orgstrap-mode implementation
 
-(defvar orgstrap-mode nil "Sigh.")
+(defvar orgstrap-mode nil "Variable to track whether `orgstrap-mode' is enabled.")
 
 (defcustom orgstrap-always-edit nil
   "If non-nil then command `orgstrap-mode' will activate command `orgstrap-edit-mode'."
@@ -696,14 +714,38 @@ Defaults to `orgstrap-norm-func--prp-1.0'.")
 (defun orgstrap--org-buffer ()
   "Only run when in `org-mode' and command `orgstrap-mode' is enabled.
 Sets further hooks."
+  (advice-add #'hack-local-variables-confirm :around #'orgstrap--hack-lv-confirm)
   (add-hook 'before-hack-local-variables-hook #'orgstrap--before-hack-lv nil t))
 
+(defun orgstrap--hack-lv-confirm (command &rest args)
+  "Advise `hack-local-variables-confirm' to remove orgstrap eval variables.
+COMMAND should be `hack-local-variables-confirm' with ARGS
+(all-vars unsafe-vars risky-vars dir-name). After removal we have to recheck
+to see if unsafe-vars and risky-vars are empty so we can skip the confirm
+dialogue. If we do not, then the dialogue breaks the flow.
+Critically, this function must mutate all-vars to delete any matching
+orgstrap variable, otherwise the list pointed to by all-vars in the calling
+scope will remain unmodified and the eval variable will be run without
+being checked or confirmed."
+  (advice-remove #'hack-local-variables-confirm #'orgstrap--hack-lv-confirm)
+  (cl-destructuring-bind (all-vars unsafe-vars risky-vars dir-name)
+      ;; emacs 28 doesn't alias the non cl- prefixed form so use unaliased?
+      (mapcar (lambda (arg)
+                (if (listp arg)
+                    (cl-remove-if-not #'orgstrap--match-eval-local-variables arg)
+                  arg))
+              args)
+    (or (and (null unsafe-vars)
+             (null risky-vars))
+        (funcall command all-vars unsafe-vars risky-vars dir-name))))
+
 (defun orgstrap--before-hack-lv ()
-  "Cull any orgstrap eval local variables.
-If `orgstrap' is used in the current buffer, add hook to run the orgstrap block."
+  "If `orgstrap' is in the current buffer, add hook to run the orgstrap block."
+  ;; This approach is safer than trying to introspect some of the implementation
+  ;; internals. This hook will only run if there are actually local variables to
+  ;; hack, so there is little to no chance of lingering hooks if an error occures
   (remove-hook 'before-hack-local-variables-hook #'orgstrap--before-hack-lv t)
-  (add-hook 'hack-local-variables-hook #'orgstrap--hack-lv nil t)
-  (orgstrap--cull-eval-local-variables))
+  (add-hook 'hack-local-variables-hook #'orgstrap--hack-lv nil t))
 
 (defun orgstrap--used-in-current-buffer-p ()
   "Return t if all the required orgstrap prop line local variables are present."
@@ -733,14 +775,6 @@ Avoid false positives if possible if at all possible."
             ;; so much as mentions orgstrap is nuked, and in the future
             ;; if orgstrap-nb is used we may need to nuke that too
             (string-match "orgstrap" (prin1-to-string (cdr pair))))))
-
-(defun orgstrap--cull-eval-local-variables ()
-  "When command `orgstrap-mode' is enabled cull orgstrap file local variables."
-  (when (eq major-mode 'org-mode)
-    (remove-hook 'before-hack-local-variables-hook #'orgstrap--cull-eval-local-variables)
-    (let ((clva file-local-variables-alist))
-      (setq-local file-local-variables-alist
-                  (cl-remove-if-not #'orgstrap--match-eval-local-variables clva)))))
 
 ;;;###autoload
 (defun orgstrap-mode (&optional arg)
@@ -1324,6 +1358,7 @@ emacs-28-vcs -q orgstrap-minimal.org
 ;;  with noweb
 ;;  without noweb
 ;;  iterate over norm funcs
+;;  .org extension and mode: org local variable
 #+end_src
 
 # #+header: :comments link  # broken atm
@@ -1342,8 +1377,8 @@ emacs-28-vcs -q orgstrap-minimal.org
 #+end_src
 
 #+name: test-lv-list-portable
-#+begin_src org :tangle ./test-lv-list-portable.org :noweb yes
-# -*- orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; orgstrap-block-checksum: 603a9516e87fab71715b5c15cec401c497430de8fd2fa852394b52c3090fcd74; -*-
+#+begin_src org :tangle ./test-lv-list-portable :noweb yes
+# -*- mode: org; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; orgstrap-block-checksum: 603a9516e87fab71715b5c15cec401c497430de8fd2fa852394b52c3090fcd74; -*-
 # [[orgstrap][jump to the orgstrap block for this file]]
 
 ,* Bootstrap :noexport:
@@ -1357,8 +1392,8 @@ emacs-28-vcs -q orgstrap-minimal.org
 #+end_src
 
 #+name: test-lv-list-minimal
-#+begin_src org :tangle ./test-lv-list-minimal.org :noweb yes
-# -*- orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; orgstrap-block-checksum: 318708fa6836483faebffa30d6c1cca1deb235b0c8d64c3b2450b70aebe08d47; -*-
+#+begin_src org :tangle ./test-lv-list-minimal :noweb yes
+# -*- mode: org; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; orgstrap-block-checksum: 318708fa6836483faebffa30d6c1cca1deb235b0c8d64c3b2450b70aebe08d47; -*-
 # [[orgstrap][jump to the orgstrap block for this file]]
 
 ,* Bootstrap :noexport:
@@ -1371,22 +1406,18 @@ emacs-28-vcs -q orgstrap-minimal.org
 <<local-variables-minimal-example>>
 #+end_src
 
-# TODO when we autogenerate test-safe-eval-vars.el print-escape-newlines nil must be set
-# because that is how save local variables works now ... pretty sure that this is a bug
-# that is actively breaking users saved variables lists as we speak due to the change in 27
-# SIGH
 # XXX note that you cannot use append t with add-to-list for local variables
 # it puts any additional values in the wrong place, need to check other cases
 # reminder that you can't use bare bangs ! anywhere in bash scripts :/
 #+begin_src bash :var checksum=(identity orgstrap-block-checksum)
 versions=( 24 25 26 27 28-vcs )
-test_files=( test-no-lv-list.org test-lv-list-portable.org test-lv-list-minimal.org )
+test_files=( test-no-lv-list.org test-lv-list-portable test-lv-list-minimal )
 for v in ${versions[@]}; do
 for f in ${test_files[@]};do
+# uncomment and reorder to debug tests
 #f=test-lv-list-minimal.org
 #emacs -q \
 emacs-$v -q --batch \
--l test-safe-eval-vars.el \
 -l orgstrap-autoloads.el \
 -f toggle-debug-on-error \
 --eval "(add-to-list 'load-path \"$(pwd)/\")" \

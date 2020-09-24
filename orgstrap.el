@@ -59,12 +59,18 @@ an orgstrapped file and wants to know what is going on.")
   "Local variable for the cypher for the current buffer.
 If you change `orgstrap-default-cypher' you should update this as well
 using `setq-default' since it will not change automatically.")
+(put 'orgstrap-cypher 'safe-local-variable (lambda (value) t))
 
 (defvar-local orgstrap-block-checksum nil
   "Local variable for the expected checksum for the current orgstrap block.")
+(put 'orgstrap-cypher 'safe-local-variable (lambda (value) t))
 
 (defvar-local orgstrap-norm-func-name nil
   "Local variable for the name of the current orgstrap-norm-func.")
+(put 'orgstrap-norm-func-name 'safe-local-variable
+     (lambda (value) (and orgstrap-mode (memq value orgstrap--known-norm-funcs)))) ;; FIXME naming
+;; Unless orgstrap-mode is enabled and the name is in the list of
+;; functions that are implemented internally this is not safe
 
 (defvar orgstrap-norm-func #'orgstrap-norm-func--prp-1.0
   "Dynamic variable to simplify calling normalizaiton functions.
@@ -96,7 +102,7 @@ Defaults to `orgstrap-norm-func--prp-1.0'.")
 
 ;; orgstrap-mode implementation
 
-(defvar orgstrap-mode nil "Sigh.")
+(defvar orgstrap-mode nil "Variable to track whether `orgstrap-mode' is enabled.")
 
 (defcustom orgstrap-always-edit nil
   "If non-nil then command `orgstrap-mode' will activate command `orgstrap-edit-mode'."
@@ -106,14 +112,38 @@ Defaults to `orgstrap-norm-func--prp-1.0'.")
 (defun orgstrap--org-buffer ()
   "Only run when in `org-mode' and command `orgstrap-mode' is enabled.
 Sets further hooks."
+  (advice-add #'hack-local-variables-confirm :around #'orgstrap--hack-lv-confirm)
   (add-hook 'before-hack-local-variables-hook #'orgstrap--before-hack-lv nil t))
 
+(defun orgstrap--hack-lv-confirm (command &rest args)
+  "Advise `hack-local-variables-confirm' to remove orgstrap eval variables.
+COMMAND should be `hack-local-variables-confirm' with ARGS
+(all-vars unsafe-vars risky-vars dir-name). After removal we have to recheck
+to see if unsafe-vars and risky-vars are empty so we can skip the confirm
+dialogue. If we do not, then the dialogue breaks the flow.
+Critically, this function must mutate all-vars to delete any matching
+orgstrap variable, otherwise the list pointed to by all-vars in the calling
+scope will remain unmodified and the eval variable will be run without
+being checked or confirmed."
+  (advice-remove #'hack-local-variables-confirm #'orgstrap--hack-lv-confirm)
+  (cl-destructuring-bind (all-vars unsafe-vars risky-vars dir-name)
+      ;; emacs 28 doesn't alias the non cl- prefixed form so use unaliased?
+      (mapcar (lambda (arg)
+                (if (listp arg)
+                    (cl-remove-if-not #'orgstrap--match-eval-local-variables arg)
+                  arg))
+              args)
+    (or (and (null unsafe-vars)
+             (null risky-vars))
+        (funcall command all-vars unsafe-vars risky-vars dir-name))))
+
 (defun orgstrap--before-hack-lv ()
-  "Cull any orgstrap eval local variables.
-If `orgstrap' is used in the current buffer, add hook to run the orgstrap block."
+  "If `orgstrap' is in the current buffer, add hook to run the orgstrap block."
+  ;; This approach is safer than trying to introspect some of the implementation
+  ;; internals. This hook will only run if there are actually local variables to
+  ;; hack, so there is little to no chance of lingering hooks if an error occures
   (remove-hook 'before-hack-local-variables-hook #'orgstrap--before-hack-lv t)
-  (add-hook 'hack-local-variables-hook #'orgstrap--hack-lv nil t)
-  (orgstrap--cull-eval-local-variables))
+  (add-hook 'hack-local-variables-hook #'orgstrap--hack-lv nil t))
 
 (defun orgstrap--used-in-current-buffer-p ()
   "Return t if all the required orgstrap prop line local variables are present."
@@ -150,14 +180,6 @@ Avoid false positives if possible if at all possible."
             ;; so much as mentions orgstrap is nuked, and in the future
             ;; if orgstrap-nb is used we may need to nuke that too
             (string-match "orgstrap" (prin1-to-string (cdr pair))))))
-
-(defun orgstrap--cull-eval-local-variables ()
-  "When command `orgstrap-mode' is enabled cull orgstrap file local variables."
-  (when (eq major-mode 'org-mode)
-    (remove-hook 'before-hack-local-variables-hook #'orgstrap--cull-eval-local-variables)
-    (let ((clva file-local-variables-alist))
-      (setq-local file-local-variables-alist
-                  (cl-remove-if-not #'orgstrap--match-eval-local-variables clva)))))
 
 ;;;###autoload
 (defun orgstrap-mode (&optional arg)
