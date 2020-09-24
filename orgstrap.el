@@ -118,21 +118,26 @@ Sets further hooks."
 (defun orgstrap--hack-lv-confirm (command &rest args)
   "Advise `hack-local-variables-confirm' to remove orgstrap eval variables.
 COMMAND should be `hack-local-variables-confirm' with ARGS
-(all-vars unsafe-vars risky-vars dir-name). After removal we have to recheck
-to see if unsafe-vars and risky-vars are empty so we can skip the confirm
-dialogue. If we do not, then the dialogue breaks the flow.
-Critically, this function must mutate all-vars to delete any matching
-orgstrap variable, otherwise the list pointed to by all-vars in the calling
-scope will remain unmodified and the eval variable will be run without
-being checked or confirmed."
+(all-vars unsafe-vars risky-vars dir-name)."
   (advice-remove #'hack-local-variables-confirm #'orgstrap--hack-lv-confirm)
   (cl-destructuring-bind (all-vars unsafe-vars risky-vars dir-name)
       ;; emacs 28 doesn't alias the non cl- prefixed form so use unaliased?
       (mapcar (lambda (arg)
                 (if (listp arg)
-                    (cl-remove-if-not #'orgstrap--match-eval-local-variables arg)
+                    ;; We must use `cl-delete-if-not' on all-vars,
+                    ;; otherwise the list pointed to by all-vars in
+                    ;; the calling scope will remain unmodified and
+                    ;; the eval variable will be run without being
+                    ;; checked or confirmed. This also spills over to
+                    ;; the other -vars which is extra insurance
+                    ;; against any future changes to the
+                    ;; implementation in the calling scope.
+                    (cl-delete-if-not #'orgstrap--match-eval-local-variables arg)
                   arg))
               args)
+    ;; After removal we have to recheck to see if unsafe-vars and
+    ;; risky-vars are empty so we can skip the confirm dialogue. If we
+    ;; do not, then the dialogue breaks the flow.
     (or (and (null unsafe-vars)
              (null risky-vars))
         (funcall command all-vars unsafe-vars risky-vars dir-name))))

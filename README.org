@@ -1,4 +1,4 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: f1699d66472922b3937e54fed840dc27b6e48ecf14702be836eaf2d34c22b754; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 111d5caeaa1f2ac98d0075926b241b1ea695da2f7349d99bbbee3b3cfa994655; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an Org file using file local variables
 #+options: num:nil \n:nil
@@ -571,7 +571,7 @@ Here is the prop line from the first line of this file that
 includes the cypher and checksum of the =orgstrap= block.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: f1699d66472922b3937e54fed840dc27b6e48ecf14702be836eaf2d34c22b754; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 111d5caeaa1f2ac98d0075926b241b1ea695da2f7349d99bbbee3b3cfa994655; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
 #+end_src
 
 # BE VERY CAREFUL WITH MANUAL EDITS
@@ -661,6 +661,10 @@ are filtered before those hooks can run. Therefore we have to advise
 eval local variables that we find. For maximum safety this minimally requires
 mutation of the =all-vars= list passed to =hack-local-variables-confirm=.
 
+This is a fairly deep tampering with the way that hack-local-variables works,
+so special attention should be given when reviewing the security implications
+of any changes.
+
 #+caption: run helpers
 #+name: orgstrap-run-helper-defuns
 #+begin_src elisp :noweb yes
@@ -720,21 +724,26 @@ Sets further hooks."
 (defun orgstrap--hack-lv-confirm (command &rest args)
   "Advise `hack-local-variables-confirm' to remove orgstrap eval variables.
 COMMAND should be `hack-local-variables-confirm' with ARGS
-(all-vars unsafe-vars risky-vars dir-name). After removal we have to recheck
-to see if unsafe-vars and risky-vars are empty so we can skip the confirm
-dialogue. If we do not, then the dialogue breaks the flow.
-Critically, this function must mutate all-vars to delete any matching
-orgstrap variable, otherwise the list pointed to by all-vars in the calling
-scope will remain unmodified and the eval variable will be run without
-being checked or confirmed."
+(all-vars unsafe-vars risky-vars dir-name)."
   (advice-remove #'hack-local-variables-confirm #'orgstrap--hack-lv-confirm)
   (cl-destructuring-bind (all-vars unsafe-vars risky-vars dir-name)
       ;; emacs 28 doesn't alias the non cl- prefixed form so use unaliased?
       (mapcar (lambda (arg)
                 (if (listp arg)
-                    (cl-remove-if-not #'orgstrap--match-eval-local-variables arg)
+                    ;; We must use `cl-delete-if-not' on all-vars,
+                    ;; otherwise the list pointed to by all-vars in
+                    ;; the calling scope will remain unmodified and
+                    ;; the eval variable will be run without being
+                    ;; checked or confirmed. This also spills over to
+                    ;; the other -vars which is extra insurance
+                    ;; against any future changes to the
+                    ;; implementation in the calling scope.
+                    (cl-delete-if-not #'orgstrap--match-eval-local-variables arg)
                   arg))
               args)
+    ;; After removal we have to recheck to see if unsafe-vars and
+    ;; risky-vars are empty so we can skip the confirm dialogue. If we
+    ;; do not, then the dialogue breaks the flow.
     (or (and (null unsafe-vars)
              (null risky-vars))
         (funcall command all-vars unsafe-vars risky-vars dir-name))))
@@ -1364,28 +1373,36 @@ emacs-28-vcs -q orgstrap-minimal.org
 # #+header: :comments link  # broken atm
 #+name: test-no-lv-list
 #+begin_src org :tangle ./test-no-lv-list.org
-# -*- orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; orgstrap-block-checksum: 9c636c7227f3ccdd095ccfc6335efd54d40edebe32120ce6be574e2e90fd734f; -*-
+# -*- orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; orgstrap-block-checksum: ae24698a522395890d3471f31a8700aa07050bc77db28af6c5cac6e07fbf4b6e; -*-
 # [[orgstrap][jump to the orgstrap block for this file]]
 
 ,* Bootstrap :noexport:
 
 ,#+name: orgstrap
 ,#+begin_src elisp :results none :lexical yes
-(defun orgstrap-test () (message "No local variables here!"))
+(defun orgstrap-test ()
+  (if (cl-remove-if-not (lambda (pair) (not (orgstrap--match-eval-local-variables pair)))
+                        file-local-variables-alist)
+      (error "eval local variable is still present!")
+    (message "No local variables here!")))
 (message "orgstrap successful")
 ,#+end_src
 #+end_src
 
 #+name: test-lv-list-portable
 #+begin_src org :tangle ./test-lv-list-portable :noweb yes
-# -*- mode: org; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; orgstrap-block-checksum: 603a9516e87fab71715b5c15cec401c497430de8fd2fa852394b52c3090fcd74; -*-
+# -*- mode: org; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; orgstrap-block-checksum: d0d9fad32505a072e4adfe23b6dd664d5543f63d62cb26276dd0f3176567102b; -*-
 # [[orgstrap][jump to the orgstrap block for this file]]
 
 ,* Bootstrap :noexport:
 
 ,#+name: orgstrap
 ,#+begin_src elisp :results none :lexical yes
-(defun orgstrap-test () (message "Portable local variables here!"))
+(defun orgstrap-test ()
+  (if (cl-remove-if-not (lambda (pair) (not (orgstrap--match-eval-local-variables pair)))
+                        file-local-variables-alist)
+      (error "eval local variable is still present!")
+    (message "Portable local variables here!")))
 (message "orgstrap successful")
 ,#+end_src
 <<local-variables-portable-example>>
@@ -1393,14 +1410,18 @@ emacs-28-vcs -q orgstrap-minimal.org
 
 #+name: test-lv-list-minimal
 #+begin_src org :tangle ./test-lv-list-minimal :noweb yes
-# -*- mode: org; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; orgstrap-block-checksum: 318708fa6836483faebffa30d6c1cca1deb235b0c8d64c3b2450b70aebe08d47; -*-
+# -*- mode: org; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; orgstrap-block-checksum: 7454ff29e936cdf84c2949ce1e8e3ae0a426d8595ccb91b502b7b574ac349785; -*-
 # [[orgstrap][jump to the orgstrap block for this file]]
 
 ,* Bootstrap :noexport:
 
 ,#+name: orgstrap
 ,#+begin_src elisp :results none :lexical yes
-(defun orgstrap-test () (message "Minimal local variables here!"))
+(defun orgstrap-test ()
+  (if (cl-remove-if-not (lambda (pair) (not (orgstrap--match-eval-local-variables pair)))
+                        file-local-variables-alist)
+      (error "eval local variable is still present!")
+    (message "Minimal local variables here!")))
 (message "orgstrap successful")
 ,#+end_src
 <<local-variables-minimal-example>>
@@ -1426,11 +1447,11 @@ emacs-$v -q --batch \
 --eval "(add-to-list 'safe-local-variable-values '(orgstrap-cypher . sha256))" \
 --eval "(add-to-list 'safe-local-variable-values '(orgstrap-norm-func-name . orgstrap-norm-func--prp-1.0))" \
 --eval "(add-to-list 'safe-local-variable-values '(orgstrap-block-checksum .
-9c636c7227f3ccdd095ccfc6335efd54d40edebe32120ce6be574e2e90fd734f))" \
+ae24698a522395890d3471f31a8700aa07050bc77db28af6c5cac6e07fbf4b6e))" \
 --eval "(add-to-list 'safe-local-variable-values '(orgstrap-block-checksum .
-603a9516e87fab71715b5c15cec401c497430de8fd2fa852394b52c3090fcd74))" \
+d0d9fad32505a072e4adfe23b6dd664d5543f63d62cb26276dd0f3176567102b))" \
 --eval "(add-to-list 'safe-local-variable-values '(orgstrap-block-checksum .
-318708fa6836483faebffa30d6c1cca1deb235b0c8d64c3b2450b70aebe08d47))" \
+7454ff29e936cdf84c2949ce1e8e3ae0a426d8595ccb91b502b7b574ac349785))" \
 --visit $f \
 --eval "(orgstrap-test)"
 done
