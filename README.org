@@ -1,4 +1,4 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: bf05d0dbb29baffc152f6b2248b70b3a50df262fc794534ea904e3b9d2bf6f92; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 721350f98c87e3f101925d348e7d44062517d21725c8f252b1ae5569935b10ca; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an Org file using file local variables
 #+options: num:nil \n:nil
@@ -74,14 +74,14 @@ The bare minimum needed to make an =org-mode= file executable (with a bit of saf
 # [[orgstrap][jump to orgstrap block for this file]]
 
 ,#+name: orgstrap
-,#+begin_src elisp :results none :noweb yes
+,#+begin_src elisp :results none
 (message "orgstrap successful!") ; (ref:im-a-coderef-and-thats-ok)
 ,#+end_src
 
 =orgstrap= a plain-text executable format. Powered by Org mode and Emacs.
 
 # Local Variables:
-# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((actual (org-version)) (need orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not need) (string< need actual) (string= need actual) (error "Your org is too old! %s < %s" actual need))) (defun orgstrap-norm-func--prp-1\.0 (body) (let ((print-quoted nil)) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (unless (boundp 'orgstrap-norm-func) (defvar orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm 'orgstrap-norm-embd)) (defun orgstrap--confirm-eval-minimal (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (eq orgstrap-block-checksum (intern (secure-hash orgstrap-cypher (orgstrap-norm body))))))) (unless (fboundp 'orgstrap--confirm-eval) (defalias 'orgstrap--confirm-eval 'orgstrap--confirm-eval-minimal)) (let ((ocbe org-confirm-babel-evaluate)) (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (unwind-protect (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block)) (setq-local org-confirm-babel-evaluate ocbe))))
+# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((actual (org-version)) (need orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not need) (string< need actual) (string= need actual) (error "Your Org is too old! %s < %s" actual need))) (defun orgstrap-norm-func--prp-1\.0 (body) (let ((print-quoted nil)) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (unless (boundp 'orgstrap-norm-func) (defvar orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap--confirm-eval-minimal (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (eq orgstrap-block-checksum (intern (secure-hash orgstrap-cypher (orgstrap-norm body))))))) (unless (fboundp 'orgstrap--confirm-eval) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-minimal)) (let ((ocbe org-confirm-babel-evaluate)) (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (unwind-protect (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block)) (setq-local org-confirm-babel-evaluate ocbe))))
 # End:
 #+end_src
 * Inspiration
@@ -223,6 +223,7 @@ emacs-23 and older versions.
 :CUSTOM_ID: specification
 :END:
 # Except for this comment, comments in the spec are not official parts of the spec.
+** Terminology
 The specification for orgstrap makes extensive use of terminology
 derived from the Emacs manual section on
 [[info:emacs#Specifying File Variables][Specifying File Variables]]
@@ -240,7 +241,7 @@ local variables.].
 
 What the Org manual refers to as a =source code block= we refer to in the
 same way.
-
+** File contents
 In order for an Org mode file to support the use of =orgstrap= it must
 contain the following.
 
@@ -292,7 +293,7 @@ header arguments, and noweb expansion.
 # to pose quite the challenge for the portable implementation, and thus I think
 # all the spec needs to say is that an implementation must be able to reproduce
 # the orgstrap block hash when the whole file hash is the same.
-
+** Implementation behavior
 When provided with the same file whose =orgstrap block= was originally hashed
 (where "the same file" means a file with the same checksum when hashed using
 the algorithm specified by the =orgstrap-cypher= variable), a conforming
@@ -305,16 +306,23 @@ contained in the rest of the file explicitly excluding the contents of
 the =orgstrap-cypher= =prop line local varaible=. The most obvious
 additional information required being the contents of the =orgstrap block= [fn::
 The reference implementation provided in the readme containing this specification
-uses an Emacs =eval:= local variable in the =local variables list=. This is a maximal
-implementation that is only dependent on the core Emacs implementation. One could
-imagine a minimal implementation which checks whether orgstrap is present on the
-current system and calls =(orgstrap-current-buffer)= if so, and otherwise raises
-an error asking the user to install orgstrap or upgrade their version of Org or
-Emacs. In fact one could imagine a case where only the prop line local variables
-are needed. There is a fine balance between portability and compactness since
-a minimal implementation has to make more assumptions about the systems it will
-run on. Multi-stage orgstrap, or other means of bootstrapping a working runtime
-for an Org file such as the process implemented in the
+uses an Emacs =eval:= local variable in the =local variables list=. Embedding an
+=eval:= local variable is not required by this specification. However such an
+implementation makes allows files to depend only on the core Emacs implementation.
+
+In the future an optional extension may be added to this document that specifies the
+behavior for files using an =eval:= local variable in the =local variables list=.
+
+A minimal implementation that works without the =eval:= local variable is also provided.
+
+Files that contain only the prop line local variables are dependent on an implementation
+of orgstrap already being present on the system running the file.
+
+There is a fine balance between portability and compactness since a minimal implementation
+has to make more assumptions about the systems it will run on.
+
+Multi-stage orgstrap, or other means of bootstrapping a working runtime for an Org file such
+as the process implemented in the
 [[#bootstrapping-to-emacs-bootstrapping-to-org][Bootstrapping to Emacs, bootstrapping to Org.]]
 section of this readme are ongoing areas of exploration.].
 
@@ -575,7 +583,7 @@ Here is the prop line from the first line of this file that
 includes the cypher and checksum of the =orgstrap= block.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: bf05d0dbb29baffc152f6b2248b70b3a50df262fc794534ea904e3b9d2bf6f92; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 721350f98c87e3f101925d348e7d44062517d21725c8f252b1ae5569935b10ca; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
 #+end_src
 
 # BE VERY CAREFUL WITH MANUAL EDITS
@@ -1010,7 +1018,7 @@ MINIMAL is passed to `orgstrap--get-min-org-version'."
         (string< need actual)
         (string= need actual))))
 
-(defun orgstrap--dedoc (sexp)
+(defun orgstrap--dedoc (sexp) ; FIXME TODO arbitrary lisp forms
   "Remove docstrings from SEXP."
   ;; defun 3 defmacro 3 defvar 3
   (if (symbolp (elt sexp 0))
@@ -1148,7 +1156,12 @@ If MINIMAL is set but the orgstrap block uses features like noweb and
 uncommented coderefs and function `org-version' is too old, then the portable
 block will be used.  NORM-FUNC-NAME is an optional argument that can be provided
 to determine which normalization function is used independent of the current
-buffer or global setting for `orgstrap-norm-func'."
+buffer or global setting for `orgstrap-norm-func'.
+
+When run this function replaces any existing orgstrap eval local variable with
+the latest implementation available according to the preferences for the current
+buffer and configuration. Other eval local variables are retained if they are
+present, and the orgstrap eval local variable is always added first."
   ;; switching comments probably wont work ? we can try
   ;; Use a prefix argument (i.e. C-u) to add file local variables comments instead of in a :noexport:
   (interactive)
@@ -1166,12 +1179,16 @@ buffer or global setting for `orgstrap-norm-func'."
                     info
                     minimal))
           (lv-ecom (orgstrap--local-variables--eval-common)))
-      (let ((lv-command (orgstrap--dedoc (append '(progn) lv-cver lv-norm lv-ncom lv-eval lv-ecom)))
+      (let ((lv-command (cons 'progn (orgstrap--dedoc (append lv-cver lv-norm lv-ncom lv-eval lv-ecom))))
             (commands-existing (mapcar #'cdr (cl-remove-if-not (lambda (l) (eq (car l) 'eval)) elv)))) ;(ref:clrin)
-        (let (eval-commands (cons lv-command (cl-remove-if-not #'orgstrap--match-eval-local-variables commands-existing)))
+        (let ((eval-commands
+               (cons lv-command (cl-remove-if-not
+                                 (lambda (cmd) (orgstrap--match-eval-local-variables (cons 'eval cmd)))
+                                 commands-existing))))
           (when commands-existing
             (delete-file-local-variable 'eval))
-          (mapcar (lambda (sexp) (add-file-local-variable 'eval sexp)) eval-commands))))))
+          (let ((print-escape-newlines t))  ; needed to preserve the escaped newlines
+            (mapcar (lambda (sexp) (add-file-local-variable 'eval sexp)) eval-commands)))))))
 
 ;; init user facing functions
 ;;;###autoload
@@ -1286,7 +1303,7 @@ minimal as possible is critical.
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.0
+;; Version: 1.1
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -1490,21 +1507,38 @@ done
 :CUSTOM_ID: change-log
 :END:
 ** 1.1
+:PROPERTIES:
+:CUSTOM_ID: 11
+:END:
 - Renamed existing =orgstrap-mode= to =orgstrap-edit-mode=.
 
   This is a *BREAKING CHANGE*. Thus better make it sooner rather than later.
 
 - Added the new =orgstrap-mode= implementation.
 
-  This is a regional minor mode for =org-mode= which makes it possible to use orgstrap
-  without the embedded local variables. This allows for greater security at the expense of
-  portability, depending on the exact use case. By a stroke of good fortune it is possible
-  to use the =hack-local-variables= hooks to trap and remove the embedded local variables
-  if they are present so that the orgstrap block is not evaluated twice.
+  This is a regional minor mode for =org-mode= which makes it possible
+  to use orgstrap without the embedded local variables. This allows
+  for greater security at the expense of portability, depending on the
+  exact use case. By a stroke of good fortune it is possible to use
+  the =hack-local-variables= hooks to trap and remove the embedded
+  local variables if they are present so that the orgstrap block is
+  not evaluated twice.
 
 - Added =orgstrap-always-edit= as a custom variable.
 
-  If non-nil then =orgstrap-edit-mode= will be automatically activated by =orgstrap-mode=.
+  If non-nil then =orgstrap-edit-mode= will be automatically activated
+  by =orgstrap-mode=.
+
+- =orgstrap--add-file-local-variables= update existing =eval:= vars.
+
+  This change makes it vastly easier to switch between portable and
+  minimal implementations, and should make it easier to switch the
+  normalization function once we get that implemented.
+
+  If an existing orgstrap eval file local variable is detected it is
+  removed and the latest version is added. Other =eval:= variables are
+  are not modified. Note however that the orgstrap eval variable will
+  always be placed first.
 * Best practices
 ** Use the system package manager.
 There is a big difference between using a script to install a program directly
@@ -2058,11 +2092,6 @@ function.
    any later assignment. Then defuns and assignments, finally procedure invocations
    which might also include assignments. I get the sense that this is covered under
    some part of compiler theory but can't quite put my finger on it.
-** Smart update/upgrade using the version specifier
-This is much easier now that I have put all the normalization and hashing
-machinery in a single eval local variable, and it no longer needs to rely
-on the version of the block, just the version of the normalization function,
-which is currently embedded along with everything else.
 ** Figure out how to demo loading the packages used in this file
 #+begin_src elisp
 (use-package org-ref)
@@ -2078,6 +2107,11 @@ are present, do nothing, if they are absent run the block?
 ** TODO command to checksum the file local variables               :noexport:
 ** TODO ruby org so that github can render footnotes correctly     :noexport:
 [[file:~/git/NOFORK/org-ruby]]
+** DONE Smart update/upgrade using the version specifier
+This is much easier now that I have put all the normalization and hashing
+machinery in a single eval local variable, and it no longer needs to rely
+on the version of the block, just the version of the normalization function,
+which is currently embedded along with everything else.
 ** DONE orgstrap-mode
 If orgstrap is installed, then having a orgstrap-mode which could add itself to
 org-mode-hook when enabled would supersede the local variables list implementation, or
@@ -2101,5 +2135,5 @@ the file is too old (i.e. < =9.3.8=).
 * Local Variables Footer :noexport:
 
 # Local Variables:
-# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((actual (org-version)) (need orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not need) (string< need actual) (string= need actual) (error "Your Org is too old! %s < %s" actual need))) (defun orgstrap-norm-func--prp-1\.0 (body) (let ((print-quoted nil)) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (unless (boundp 'orgstrap-norm-func) (defvar orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap-org-src-coderef-regexp (_fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))) (unless (fboundp #'org-src-coderef-regexp) (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp)) (defun orgstrap--expand-body (info) (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1)))) (defun orgstrap--confirm-eval-portable (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (orgstrap-norm body)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum))))) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable) (let ((ocbe org-confirm-babel-evaluate)) (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (unwind-protect (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block)) (setq-local org-confirm-babel-evaluate ocbe))))
+# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((actual (org-version)) (need orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not need) (string< need actual) (string= need actual) (error "Your Org is too old! %s < %s" actual need))) (defun orgstrap-norm-func--prp-1\.0 (body) (let ((print-quoted nil)) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (unless (boundp 'orgstrap-norm-func) (defvar orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap-org-src-coderef-regexp (_fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))) (unless (fboundp #'org-src-coderef-regexp) (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp)) (defun orgstrap--expand-body (info) (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1)))) (defun orgstrap--confirm-eval-portable (lang _body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (orgstrap-norm body)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum))))) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable) (let ((ocbe org-confirm-babel-evaluate)) (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (unwind-protect (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block)) (setq-local org-confirm-babel-evaluate ocbe))))
 # End:

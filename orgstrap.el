@@ -3,7 +3,7 @@
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.0
+;; Version: 1.1
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -434,7 +434,7 @@ MINIMAL is passed to `orgstrap--get-min-org-version'."
         (string< need actual)
         (string= need actual))))
 
-(defun orgstrap--dedoc (sexp)
+(defun orgstrap--dedoc (sexp) ; FIXME TODO arbitrary lisp forms
   "Remove docstrings from SEXP."
   ;; defun 3 defmacro 3 defvar 3
   (if (symbolp (elt sexp 0))
@@ -656,7 +656,12 @@ If MINIMAL is set but the orgstrap block uses features like noweb and
 uncommented coderefs and function `org-version' is too old, then the portable
 block will be used.  NORM-FUNC-NAME is an optional argument that can be provided
 to determine which normalization function is used independent of the current
-buffer or global setting for `orgstrap-norm-func'."
+buffer or global setting for `orgstrap-norm-func'.
+
+When run this function replaces any existing orgstrap eval local variable with
+the latest implementation available according to the preferences for the current
+buffer and configuration. Other eval local variables are retained if they are
+present, and the orgstrap eval local variable is always added first."
   ;; switching comments probably wont work ? we can try
   ;; Use a prefix argument (i.e. C-u) to add file local variables comments instead of in a :noexport:
   (interactive)
@@ -674,20 +679,16 @@ buffer or global setting for `orgstrap-norm-func'."
                     info
                     minimal))
           (lv-ecom (orgstrap--local-variables--eval-common)))
-      (let ((lv-commands (orgstrap--dedoc (append lv-cver lv-norm lv-ncom lv-eval lv-ecom)))
+      (let ((lv-command (cons 'progn (orgstrap--dedoc (append lv-cver lv-norm lv-ncom lv-eval lv-ecom))))
             (commands-existing (mapcar #'cdr (cl-remove-if-not (lambda (l) (eq (car l) 'eval)) elv)))) ;(ref:clrin)
-        (cond ((equal commands-existing lv-commands) nil)
-              ((not commands-existing)
-               (let ((print-escape-newlines t))  ; needed to preserve the escaped newlines
-                 ' ; one sexp per eval line, too hard to manage switching it out
-                 (mapcar (lambda (sexp) (add-file-local-variable 'eval sexp)) lv-commands)
-                 ;; easier to put it all in a single progn that we can id and swap
-                 ;; yes it is harder to read, but that is why we have all the docs
-                 ;; FIXME detect if orgstrap-global-mode is enabled and do nothing
-                 (add-file-local-variable 'eval (cons 'progn lv-commands))))
-              ;; we could try to do something fancy here, but it is much simpler
-              ;; to just alert the user and have them fix it than trying to guess
-              (t (error "Existing eval commands that do not match the commands to be installed have been detected.  Please remove those commands and run `orgsrap-add-file-local-variables' again or manually add the orgstrap file local variables.  The existing commands are as follows.\n%s" commands-existing)))))))
+        (let ((eval-commands
+               (cons lv-command (cl-remove-if-not
+                                 (lambda (cmd) (orgstrap--match-eval-local-variables (cons 'eval cmd)))
+                                 commands-existing))))
+          (when commands-existing
+            (delete-file-local-variable 'eval))
+          (let ((print-escape-newlines t))  ; needed to preserve the escaped newlines
+            (mapcar (lambda (sexp) (add-file-local-variable 'eval sexp)) eval-commands)))))))
 
 ;; init user facing functions
 ;;;###autoload
