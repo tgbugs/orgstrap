@@ -47,6 +47,9 @@
 
 (require 'cl-lib)
 
+(defvar orgstrap-mode nil
+  "Variable to track whether `orgstrap-mode' is enabled.")
+
 (defvar orgstrap-orgstrap-block-name "orgstrap"
   "Set the default blockname to orgstrap by convention.
 This makes it easier to search for orgstrap if someone encounters
@@ -59,16 +62,21 @@ an orgstrapped file and wants to know what is going on.")
   "Local variable for the cypher for the current buffer.
 If you change `orgstrap-default-cypher' you should update this as well
 using `setq-default' since it will not change automatically.")
-(put 'orgstrap-cypher 'safe-local-variable (lambda (value) t))
+(put 'orgstrap-cypher 'safe-local-variable (lambda (v) (ignore v) t))
 
 (defvar-local orgstrap-block-checksum nil
   "Local variable for the expected checksum for the current orgstrap block.")
-(put 'orgstrap-cypher 'safe-local-variable (lambda (value) t))
+(put 'orgstrap-cypher 'safe-local-variable (lambda (v) (ignore v) t))
+
+(defconst orgstrap--internal-norm-funcs
+  '(orgstrap-norm-func--prp-1.0)
+  "List internally implemented normalization functions.
+Used to determine which norm func names are safe local variables.")
 
 (defvar-local orgstrap-norm-func-name nil
   "Local variable for the name of the current orgstrap-norm-func.")
 (put 'orgstrap-norm-func-name 'safe-local-variable
-     (lambda (value) (and orgstrap-mode (memq value orgstrap--known-norm-funcs)))) ;; FIXME naming
+     (lambda (value) (and orgstrap-mode (memq value orgstrap--internal-norm-funcs))))
 ;; Unless orgstrap-mode is enabled and the name is in the list of
 ;; functions that are implemented internally this is not safe
 
@@ -79,10 +87,19 @@ Defaults to `orgstrap-norm-func--prp-1.0'.")
 (defvar orgstrap--debug nil
   "If non-nil run `orgstrap-norm' in debug mode.")
 
+(defcustom orgstrap-always-edit nil
+  "If non-nil then command `orgstrap-mode' will activate command `orgstrap-edit-mode'."
+  :type 'boolean
+  :group 'orgstrap)
+
 ;; orgstrap run helpers
 
 ;;;###autoload
 (defun orgstrap--confirm-eval-portable (lang _body)
+  "A backwards compatible, portable implementation for confirm-eval.
+This should be called by `org-confirm-babel-evaluate'.  As implemented
+the only LANG that is supported is emacs-lisp or elisp.  The argument
+_BODY is rederived for portability and thus not used."
   ;; `org-confirm-babel-evaluate' will prompt the user when the value
   ;; that is returned is non-nil, therefore we negate positive matchs
   (not (and (member lang '("elisp" "emacs-lisp"))
@@ -102,13 +119,6 @@ Defaults to `orgstrap-norm-func--prp-1.0'.")
 
 ;; orgstrap-mode implementation
 
-(defvar orgstrap-mode nil "Variable to track whether `orgstrap-mode' is enabled.")
-
-(defcustom orgstrap-always-edit nil
-  "If non-nil then command `orgstrap-mode' will activate command `orgstrap-edit-mode'."
-  :type 'boolean
-  :group 'orgstrap)
-
 (defun orgstrap--org-buffer ()
   "Only run when in `org-mode' and command `orgstrap-mode' is enabled.
 Sets further hooks."
@@ -117,8 +127,8 @@ Sets further hooks."
 
 (defun orgstrap--hack-lv-confirm (command &rest args)
   "Advise `hack-local-variables-confirm' to remove orgstrap eval variables.
-COMMAND should be `hack-local-variables-confirm' with ARGS
-(all-vars unsafe-vars risky-vars dir-name)."
+COMMAND should be `hack-local-variables-confirm' with ARGS (all-vars
+unsafe-vars risky-vars dir-name)."
   (advice-remove #'hack-local-variables-confirm #'orgstrap--hack-lv-confirm)
   (cl-destructuring-bind (all-vars unsafe-vars risky-vars dir-name)
       ;; emacs 28 doesn't alias the non cl- prefixed form so use unaliased?
@@ -191,9 +201,10 @@ Avoid false positives if possible if at all possible."
   "A regional minor mode for `org-mode' that automatically runs orgstrap blocks.
 When visiting an Org file or activating `org-mode', if orgstrap prop line local
 variables are detect then use the installed orgstrap implementation to run the
-orgstrap block. If orgstrap embedded local variables are present, they will not
-be executed. `orgstrap-mode' is not a normal minor mode since it does not run
-any hooks and when enabled only adds a function to `org-mode-hook'."
+orgstrap block.  If orgstrap embedded local variables are present, they will not
+be executed.  `orgstrap-mode' is not a normal minor mode since it does not run
+any hooks and when enabled only adds a function to `org-mode-hook'.  ARG is the
+universal prefix argument."
   (interactive "P")
   (ignore arg)
   (let ((turn-on (not orgstrap-mode)))
@@ -523,6 +534,10 @@ MINIMAL is passed to `orgstrap--get-min-org-version'."
 
         ;;;###autoload
         (defun orgstrap--confirm-eval-portable (lang _body)
+          "A backwards compatible, portable implementation for confirm-eval.
+        This should be called by `org-confirm-babel-evaluate'.  As implemented
+        the only LANG that is supported is emacs-lisp or elisp.  The argument
+        _BODY is rederived for portability and thus not used."
           ;; `org-confirm-babel-evaluate' will prompt the user when the value
           ;; that is returned is non-nil, therefore we negate positive matchs
           (not (and (member lang '("elisp" "emacs-lisp"))
@@ -697,9 +712,16 @@ the minimal local variables will be used if possible."
 
 ;; leaving out the -on-open from these vars to reduce typing
 ;; since these will be used repeatedly
-(defvar orgstrap-tangle nil "Dynamic variable that by convention can be used inside orgstrap blocks to make it possible to run `org-babel-tangle' only when it is non-nil when set on the command line when launching emacs with --batch. Individual orgstrap blocks should also define (defvar orgstrap-on-tangle-open nil) if they want this functionality.")
+(defvar orgstrap-tangle nil
+  "Dynamic variable that by convention can be used inside orgstrap blocks.
+It makes it possible to run `org-babel-tangle' only when it is non-nil when set
+on the command line when launching Emacs with --batch.  Individual orgstrap
+blocks should also define (defvar orgstrap-on-tangle-open nil) if they want
+this functionality.")
 
-(defvar orgstrap-test nil "Dynamic variable used to control whether to run any tests that are embedded in an orgstrap file. If non-nil then load the orgstrap block and run tests.")
+(defvar orgstrap-test nil
+  "Variable to control whether to run tests embedded in an orgstrap file.
+If non-nil then load the orgstrap block and run tests.")
 ;; Running tests via a batch process can be a bit tricky if the test code is also part of the orgstrap block.
 
 (defun orgstrap-update-src-block (name content)
