@@ -50,10 +50,12 @@
 (defvar orgstrap-mode nil
   "Variable to track whether `orgstrap-mode' is enabled.")
 
-(defvar orgstrap-orgstrap-block-name "orgstrap"
-  "Set the default blockname to orgstrap by convention.
+(cl-eval-when (eval compile load)
+  ;; prevent warnings since this is used as a variable in a macro
+  (defvar orgstrap-orgstrap-block-name "orgstrap"
+    "Set the default blockname to orgstrap by convention.
 This makes it easier to search for orgstrap if someone encounters
-an orgstrapped file and wants to know what is going on.")
+an orgstrapped file and wants to know what is going on."))
 
 (defvar orgstrap-default-cypher 'sha256
   "The default cypher passed to `secure-hash' when hashing blocks.")
@@ -660,7 +662,7 @@ buffer or global setting for `orgstrap-norm-func'.
 
 When run this function replaces any existing orgstrap eval local variable with
 the latest implementation available according to the preferences for the current
-buffer and configuration. Other eval local variables are retained if they are
+buffer and configuration.  Other eval local variables are retained if they are
 present, and the orgstrap eval local variable is always added first."
   ;; switching comments probably wont work ? we can try
   ;; Use a prefix argument (i.e. C-u) to add file local variables comments instead of in a :noexport:
