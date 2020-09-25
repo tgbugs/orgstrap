@@ -1514,7 +1514,7 @@ done
 :END:
 - Renamed existing =orgstrap-mode= to =orgstrap-edit-mode=.
 
-  This is a *BREAKING CHANGE*. Thus better make it sooner rather than later.
+  This is a *BREAKING CHANGE*. Please update your workflows.
 
 - Added the new =orgstrap-mode= implementation.
 
@@ -1539,7 +1539,7 @@ done
 
   If an existing orgstrap eval file local variable is detected it is
   removed and the latest version is added. Other =eval:= variables are
-  are not modified. Note however that the orgstrap eval variable will
+  not modified. Note however that the orgstrap eval variable will
   always be placed first.
 * Best practices
 ** Use the system package manager.
