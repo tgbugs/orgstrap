@@ -1,4 +1,4 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: bd24b957d2da67208432b883ecfb4eb1c7930ad295fdca3be0da168c956a20e3; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: e8dc1bee8ead4b622a67b455b9d401e6311b6dcfc02c9e2bb7e69bc8c9021cd0; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an Org file using file local variables
 #+options: num:nil \n:nil
@@ -583,7 +583,7 @@ Here is the prop line from the first line of this file that
 includes the cypher and checksum of the =orgstrap= block.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: bd24b957d2da67208432b883ecfb4eb1c7930ad295fdca3be0da168c956a20e3; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: e8dc1bee8ead4b622a67b455b9d401e6311b6dcfc02c9e2bb7e69bc8c9021cd0; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.0; -*-
 #+end_src
 
 # BE VERY CAREFUL WITH MANUAL EDITS
@@ -789,7 +789,7 @@ unsafe-vars risky-vars dir-name)."
 
 (defun orgstrap--hack-lv ()
   "If orgstrap is present, run the orgstrap block for the current buffer."
-  (remove-hook 'hack-local-variables-hook #'orgstrap--hack-lv)
+  (remove-hook 'hack-local-variables-hook #'orgstrap--hack-lv t)
   (when (orgstrap--used-in-current-buffer-p)
     (orgstrap--lv-common-with-block-name)
     (when orgstrap-always-edit
@@ -1305,7 +1305,7 @@ minimal as possible is critical.
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.1
+;; Version: 1.1.1
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary

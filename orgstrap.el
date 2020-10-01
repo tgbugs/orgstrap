@@ -3,7 +3,7 @@
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.1
+;; Version: 1.1.1
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -182,7 +182,7 @@ unsafe-vars risky-vars dir-name)."
 
 (defun orgstrap--hack-lv ()
   "If orgstrap is present, run the orgstrap block for the current buffer."
-  (remove-hook 'hack-local-variables-hook #'orgstrap--hack-lv)
+  (remove-hook 'hack-local-variables-hook #'orgstrap--hack-lv t)
   (when (orgstrap--used-in-current-buffer-p)
     (orgstrap--lv-common-with-block-name)
     (when orgstrap-always-edit
