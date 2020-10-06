@@ -13,7 +13,8 @@
   "If not `nil' orgstrap uses the default package-user-dir
 instead of creating one in the same folder as this init.el file")
 
-(unless orgstrap-use-default-package-dir (setq package-user-dir (expand-file-name "elpa"  working-dir)))
+(unless orgstrap-use-default-package-dir
+  (setq package-user-dir (expand-file-name "elpa"  working-dir)))
 
 (require 'package)
 
@@ -48,7 +49,20 @@ instead of creating one in the same folder as this init.el file")
 
 (set-language-environment "UTF-8")
 
-(require 'bootstrap)
+;;; bootstrap --- install use-package
+
+(unless package--initialized
+  (package-initialize))
+
+(unless (package-installed-p 'use-package)
+  (package-refresh-contents)
+  (package-install 'use-package))
+
+(eval-when-compile
+  (require 'use-package))
+
+;;; bootstrap ends here
+
 (require 'packages)
 
 ;;; batch mode color fixes
@@ -81,12 +95,11 @@ instead of creating one in the same folder as this init.el file")
      ;; NOTE if you wrap emacs for launch in any way e.g. with emacs "${@}" & this script will fail
      ;; NOTE in emacs 25 the title of the buffer takes precedence for some reason?
      (interactive)
-     (let (this-read
-           (to-be-inserted-into-buffer ""))
+     (let ((to-be-inserted-into-buffer "")
+           this-read)
        (while (setq this-read (ignore-errors
                                 (read-from-minibuffer "")))
          (setq to-be-inserted-into-buffer (concat to-be-inserted-into-buffer "\n" this-read)))
-
        (with-temp-buffer
          (insert to-be-inserted-into-buffer)
          ,@body
