@@ -3,7 +3,7 @@
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.1.1
+;; Version: 1.2
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -71,7 +71,8 @@ using `setq-default' since it will not change automatically.")
 (put 'orgstrap-cypher 'safe-local-variable (lambda (v) (ignore v) t))
 
 (defconst orgstrap--internal-norm-funcs
-  '(orgstrap-norm-func--prp-1.0)
+  '(orgstrap-norm-func--prp-1.0
+    orgstrap-norm-func--prp-1.1)
   "List internally implemented normalization functions.
 Used to determine which norm func names are safe local variables.")
 
@@ -82,9 +83,9 @@ Used to determine which norm func names are safe local variables.")
 ;; Unless orgstrap-mode is enabled and the name is in the list of
 ;; functions that are implemented internally this is not safe
 
-(defvar orgstrap-norm-func #'orgstrap-norm-func--prp-1.0
+(defvar orgstrap-norm-func #'orgstrap-norm-func--prp-1.1
   "Dynamic variable to simplify calling normalizaiton functions.
-Defaults to `orgstrap-norm-func--prp-1.0'.")
+Defaults to `orgstrap-norm-func--prp-1.1'.")
 
 (defvar orgstrap--debug nil
   "If non-nil run `orgstrap-norm' in debug mode.")
@@ -294,10 +295,16 @@ _FMT has the wrong meaning in 24 and 25."
 
 ;; orgstrap normalization functions
 
+(defun orgstrap-norm-func--prp-1.1 (body)
+  "Normalize BODY using prp-1.1."
+  (let (print-quoted print-length print-level)
+    (prin1-to-string (read (concat "(progn\n" body "\n)")))))
+
 (defun orgstrap-norm-func--prp-1.0 (body)
   "Normalize BODY using prp-1.0."
   (let ((print-quoted nil))
     (prin1-to-string (read (concat "(progn\n" body "\n)")))))
+(make-obsolete #'orgstrap-norm-func--prp-1.0 #'orgstrap-norm-func--prp-1.1 "1.2")
 
 (defmacro orgstrap--with-block (blockname &rest macro-body)
   "Go to the source block named BLOCKNAME and execute MACRO-BODY.
@@ -464,12 +471,15 @@ MINIMAL is passed to `orgstrap--get-min-org-version'."
   "Return the normalization function for local variables given NORM-FUNC-NAME."
   (let ((norm-func-name (or norm-func-name orgstrap-norm-func)))
     (cl-case norm-func-name
-      (orgstrap-norm-func--prp-1.0
+      (orgstrap-norm-func--prp-1.1
        '(
-         (defun orgstrap-norm-func--prp-1.0 (body)
-           "Normalize BODY using prp-1.0."
-           (let ((print-quoted nil))
+         (defun orgstrap-norm-func--prp-1.1 (body)
+           "Normalize BODY using prp-1.1."
+           (let (print-quoted print-length print-level)
              (prin1-to-string (read (concat "(progn\n" body "\n)")))))))
+      (orgstrap-norm-func--prp-1.0
+       (error "`orgstrap-norm-func--prp-1.0' is deprecated.
+Please update `orgstrap-norm-func-name' to `orgstrap-norm-func--prp-1.1'"))
       (otherwise (error "Don't know that normalization function %s" norm-func-name)))))
 
 (defun orgstrap--local-variables--norm-common ()
@@ -660,7 +670,7 @@ block will be used.  NORM-FUNC-NAME is an optional argument that can be provided
 to determine which normalization function is used independent of the current
 buffer or global setting for `orgstrap-norm-func'.
 
-When run this function replaces any existing orgstrap eval local variable with
+When run, this function replaces any existing orgstrap eval local variable with
 the latest implementation available according to the preferences for the current
 buffer and configuration.  Other eval local variables are retained if they are
 present, and the orgstrap eval local variable is always added first."
@@ -689,7 +699,13 @@ present, and the orgstrap eval local variable is always added first."
                                  commands-existing))))
           (when commands-existing
             (delete-file-local-variable 'eval))
-          (let ((print-escape-newlines t))  ; needed to preserve the escaped newlines
+          (let ((print-escape-newlines t)  ; needed to preserve the escaped newlines
+                ;; if `print-length' or `print-level' is accidentally set
+                ;; `add-file-local-variable' will truncate the sexp with and elispsis
+                ;; this is clearly a bug in `add-file-local-variable' and possibly in
+                ;; something deeper, `print-length' is the only one that has actually
+                ;; caused issues, but better safe than sorry
+                print-length print-level)
             (mapcar (lambda (sexp) (add-file-local-variable 'eval sexp)) eval-commands)))))))
 
 ;; init user facing functions
