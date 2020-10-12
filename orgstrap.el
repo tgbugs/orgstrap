@@ -3,7 +3,7 @@
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.2
+;; Version: 1.2.1
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -179,7 +179,8 @@ unsafe-vars risky-vars dir-name)."
         (save-excursion
           (org-babel-goto-named-src-block ,orgstrap-orgstrap-block-name) ; quasiquoted when nowebbed
           (org-babel-execute-src-block))
-      (setq-local org-confirm-babel-evaluate ocbe))))
+      (setq-local org-confirm-babel-evaluate ocbe)
+      (org-set-startup-visibility))))
 
 (defun orgstrap--hack-lv ()
   "If orgstrap is present, run the orgstrap block for the current buffer."
@@ -577,7 +578,8 @@ Please update `orgstrap-norm-func-name' to `orgstrap-norm-func--prp-1.1'"))
           (save-excursion
             (org-babel-goto-named-src-block ,orgstrap-orgstrap-block-name) ; quasiquoted when nowebbed
             (org-babel-execute-src-block))
-        (setq-local org-confirm-babel-evaluate ocbe)))))
+        (setq-local org-confirm-babel-evaluate ocbe)
+        (org-set-startup-visibility)))))
 
 ;; init utility functions
 
