@@ -179,7 +179,9 @@ unsafe-vars risky-vars dir-name)."
         (save-excursion
           (org-babel-goto-named-src-block ,orgstrap-orgstrap-block-name) ; quasiquoted when nowebbed
           (org-babel-execute-src-block))
-      (setq-local org-confirm-babel-evaluate ocbe)
+      (if (eq #'orgstrap--confirm-eval org-confirm-babel-evaluate)
+          (setq-local org-confirm-babel-evaluate ocbe)
+        (message "`org-confirm-babel-evaluate' was set by the orgstrap block!"))
       (org-set-startup-visibility))))
 
 (defun orgstrap--hack-lv ()
@@ -578,7 +580,9 @@ Please update `orgstrap-norm-func-name' to `orgstrap-norm-func--prp-1.1'"))
           (save-excursion
             (org-babel-goto-named-src-block ,orgstrap-orgstrap-block-name) ; quasiquoted when nowebbed
             (org-babel-execute-src-block))
-        (setq-local org-confirm-babel-evaluate ocbe)
+        (if (eq #'orgstrap--confirm-eval org-confirm-babel-evaluate)
+            (setq-local org-confirm-babel-evaluate ocbe)
+          (message "`org-confirm-babel-evaluate' was set by the orgstrap block!"))
         (org-set-startup-visibility)))))
 
 ;; init utility functions
