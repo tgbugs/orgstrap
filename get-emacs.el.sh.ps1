@@ -20,15 +20,21 @@
 ":"; #px scurl () {
 ":"; #px     # safe(r) curl, yet still scurrilous thus scurl
 ":"; #px     # example: scurl my-audited-checksum https://example.org/file.ext /tmp/file.ext
-":"; #px     local CHECKSUM="${1}"
-":"; #px     local URL="${2}"
-":"; #px     local path="${3}"
+":"; #px     local CYPHER="${1}"
+":"; #px     local CHECKSUM="${2}"
+":"; #px     local URL="${3}"
+":"; #px     local path="${4}"
 ":"; #px     local dname="$(dirname "${path}")"
 ":"; #px     local fname="$(basename "${path}")"
+":"; #px     if [ $CYPHER != sha256 ]; then
+":"; #px         # TODO cypher command ...
+":"; #px         echo "Unsupported cypher ${CYPHER}"
+":"; #px         return 1
+":"; #px     fi
 ":"; #px     if [ -f "${path}" ]; then
 ":"; #px         echo "$(sha256sum "${path}" 2>/dev/null || shasum -a 256 "${path}")" | \
 ":"; #px         awk '$1!="'"${CHECKSUM}"'" { exit 1 }'
-":"; #px         CODE=$?
+":"; #px         local CODE=$?
 ":"; #px         if [ $CODE -ne 0 ]; then
 ":"; #px             echo failed with $CODE
 ":"; #px             echo "${path}" existing checksum does not match new checksum.
@@ -46,7 +52,7 @@
 ":"; #px     curl --location "${URL}" --output "${temp_path}" || return $?
 ":"; #px     echo "$(sha256sum "${temp_path}" 2>/dev/null || shasum -a 256 "${temp_path}")" | \
 ":"; #px     awk '$1!="'"${CHECKSUM}"'" { exit 1 }'
-":"; #px     CODE=$?
+":"; #px     local CODE=$?
 ":"; #px     if [ $CODE -ne 0 ]; then
 ":"; #px         echo failed with $CODE
 ":"; #px         echo "${temp_path}" checksum did not pass! something evil is going on!
@@ -55,6 +61,15 @@
 ":"; #px     else
 ":"; #px         mv "${temp_path}" "${path}"
 ":"; #px     fi
+":"; #px }
+":"; #px function install_homebrew {
+":"; #px     echo "Not implemented yet!"
+":"; #px     return 1
+":"; #px     local path_install_sh
+":"; #px     path_install_sh="$(mktemp -d)/install.sh"  # FIXME
+":"; #px     scurl sha256 "45c12bcd7765986674142230fc0860f5274903adbe37d582e5537771a1bae0b8" "https://raw.githubusercontent.com/Homebrew/install/fea1e80dd6c80ff0ac64e0e78afa387179f08660/install.sh" "${path_isntall_sh}"
+":"; #px     /usr/bin/env bash "${path_install_sh}"
+":"; #px     # TODO cleanup after ourselves.
 ":"; #px }
 ":"; #px function package_manager {
 ":"; #px     local full;
@@ -65,6 +80,8 @@
 ":"; #px     echo "${cmd}"
 ":"; #px }
 ":"; #px function posix_bootstrap {
+":"; #px     local nopm
+":"; #px     local cmd
 ":"; #px     cmd=$(package_manager)
 ":"; #px     case $cmd in
 ":"; #px         emerge)  $cmd app-editors/emacs ;;
@@ -75,14 +92,21 @@
 ":"; #px         nix-env) $cmd -i emacs-nox ;;
 ":"; #px         guix)    $cmd install emacs-nox ;;
 ":"; #px         brew)    $cmd cask install emacs ;;
-":"; #px         *)       echo No package manager found! Checked emerge apt yum dnf pacaman nix-env guix brew. ;return 1 ;;
+":"; #px         *)       nopm=1; echo No package manager found! Checked emerge apt yum dnf pacaman nix-env guix brew. ;;
 ":"; #px     esac
-":"; #px     return $?
-":"; #px     # TODO
-":"; #px     # get-yourself-a-real-package-manager
+":"; #px     local CODE=$?
 ":"; #px     # none -> os detection -> get the right one -> run this again
-":"; #px     echo yay posix
+":"; #px     if [ -n "${nopm}" ]; then
+":"; #px         if [ ${OSTYPE%-*} = darwin ]; then
+":"; #px             install_homebrew && posix_bootstrap
+":"; #px             CODE=$?
+":"; #px         else
+":"; #px             echo "Don't know how to install a package manager for ${OSTYPE}."
+":"; #px             CODE=1
+":"; #px         fi
+":"; #px     fi
 ":"; #px     # should probably run emacs in here ??
+":"; #px     return $CODE
 ":"; #px }
 ":"; #px function missing_emacs {
 ":"; #px     echo "Emacs missing, preparing to bootstrap."

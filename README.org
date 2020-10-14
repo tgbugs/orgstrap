@@ -1705,15 +1705,19 @@ be handled for them by the code in the Org mode file. Live and learn.
 So here we are, not quite at curl pipe bash, but hopefully at a form
 that is slightly more auditable[fn::Which means that this section may
 need to be broken out into its own file and published separately.].
+** Common variables
+#+name: &message-emacs-missing
+: Emacs missing, preparing to bootstrap.
 ** Posix bootstrap
 # =apt= has some insane name collision on gentoo from the eselect-java ebuild.
 Package manager commands.
 #+name: &var-cmds
 : emerge apt yum dnf pacaman nix-env guix brew
 
-We start with builtin package managers rather than parasitic package managers
-because anyone using one of those should know enough to either already have emacs
-installed or to figure out how to get it installed without this script.
+We start with builtin package managers rather than parasitic package
+managers because anyone using one of those should know enough to
+either already have emacs installed or to figure out how to get it
+installed without this script.
 
 # shells ... bash dash zsh fish powershell
 We don't use hyphen-minus =-= in function names so that we can support bash running in posix mode.
@@ -1729,15 +1733,21 @@ echo "Bootstrapping in posix mode."
 scurl () {
     # safe(r) curl, yet still scurrilous thus scurl
     # example: scurl my-audited-checksum https://example.org/file.ext /tmp/file.ext
-    local CHECKSUM="${1}"
-    local URL="${2}"
-    local path="${3}"
+    local CYPHER="${1}"
+    local CHECKSUM="${2}"
+    local URL="${3}"
+    local path="${4}"
     local dname="$(dirname "${path}")"
     local fname="$(basename "${path}")"
+    if [ $CYPHER != sha256 ]; then
+        # TODO cypher command ...
+        echo "Unsupported cypher ${CYPHER}"
+        return 1
+    fi
     if [ -f "${path}" ]; then
         echo "$(sha256sum "${path}" 2>/dev/null || shasum -a 256 "${path}")" | \
         awk '$1!="'"${CHECKSUM}"'" { exit 1 }'
-        CODE=$?
+        local CODE=$?
         if [ $CODE -ne 0 ]; then
             echo failed with $CODE
             echo "${path}" existing checksum does not match new checksum.
@@ -1755,7 +1765,7 @@ scurl () {
     curl --location "${URL}" --output "${temp_path}" || return $?
     echo "$(sha256sum "${temp_path}" 2>/dev/null || shasum -a 256 "${temp_path}")" | \
     awk '$1!="'"${CHECKSUM}"'" { exit 1 }'
-    CODE=$?
+    local CODE=$?
     if [ $CODE -ne 0 ]; then
         echo failed with $CODE
         echo "${temp_path}" checksum did not pass! something evil is going on!
@@ -1764,6 +1774,15 @@ scurl () {
     else
         mv "${temp_path}" "${path}"
     fi
+}
+function install_homebrew {
+    echo "Not implemented yet!"
+    return 1
+    local path_install_sh
+    path_install_sh="$(mktemp -d)/install.sh"  # FIXME
+    scurl sha256 "<<&brew-install.sh-checksum()>>" "<<&brew-install.sh-url()>>" "${path_isntall_sh}"
+    /usr/bin/env bash "${path_install_sh}"
+    # TODO cleanup after ourselves.
 }
 function package_manager {
     local full;
@@ -1774,6 +1793,8 @@ function package_manager {
     echo "${cmd}"
 }
 function posix_bootstrap {
+    local nopm
+    local cmd
     cmd=$(package_manager)
     case $cmd in
         emerge)  $cmd app-editors/emacs ;;
@@ -1784,14 +1805,21 @@ function posix_bootstrap {
         nix-env) $cmd -i emacs-nox ;;
         guix)    $cmd install emacs-nox ;;
         brew)    $cmd cask install emacs ;;
-        ,*)       echo No package manager found! Checked <<&var-cmds()>>. ;return 1 ;;
+        ,*)       nopm=1; echo No package manager found! Checked <<&var-cmds()>>. ;;
     esac
-    return $?
-    # TODO
-    # get-yourself-a-real-package-manager
+    local CODE=$?
     # none -> os detection -> get the right one -> run this again
-    echo yay posix
+    if [ -n "${nopm}" ]; then
+        if [ ${OSTYPE%-*} = darwin ]; then
+            install_homebrew && posix_bootstrap
+            CODE=$?
+        else
+            echo "Don't know how to install a package manager for ${OSTYPE}."
+            CODE=1
+        fi
+    fi
     # should probably run emacs in here ??
+    return $CODE
 }
 function missing_emacs {
     echo "<<&message-emacs-missing()>>"
@@ -1810,10 +1838,29 @@ $EMACS --no-site-file --script "$0" -- "$@"
 CODE=$?
 exit $CODE
 #+end_src
+*** Package managers
+Latest audited package manager install urls and checksums.
+**** Homebrew
+#+name: &brew-install.sh-url
+: https://raw.githubusercontent.com/Homebrew/install/fea1e80dd6c80ff0ac64e0e78afa387179f08660/install.sh
 
-#+name: &message-emacs-missing
-: Emacs missing, preparing to bootstrap.
+#+name: &brew-install.sh-checksum
+: 45c12bcd7765986674142230fc0860f5274903adbe37d582e5537771a1bae0b8
 
+Homebrew is my suggested package manager for macos. The threat model
+that is latent in the version of install.sh at =fea1e80d= that I have
+audited does not make any attempt to counter https MITM attacks, nor
+attacks against the main brew git repository. For example, it is not
+possible to install known safe versions via =install.sh= because the
+script always installs from master and there is no attempt to verify
+the integrity of what is pulled from github over https.
+
+If you are not comfortable with a threat model that is vulnerable to
+https MITM attacks then don't use this. For most users this is not an
+issue.
+
+Other than that, =fea1e80d= looks ok.
+** Powershell bootstrap
 FIXME I do NOT like the fact that choco is effectively pulling a =curl | bash= here.
 This needs a signature.
 # https://chocolatey.org/install#install-with-powershellexe
