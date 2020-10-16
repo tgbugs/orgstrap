@@ -1,4 +1,4 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 6bc4dce3fed43b8d97c44c0f811099ddd617c114ef840d00b167dfc4d5427f9a; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 61089edb947e0e3a97b891894e2b13f53f5ac062497b827b0d8de2c9debea059; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an Org file using file local variables
 #+options: num:nil \n:nil
@@ -622,7 +622,7 @@ Here is the prop line from the first line of this file that
 includes the cypher and checksum of the =orgstrap= block.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 6bc4dce3fed43b8d97c44c0f811099ddd617c114ef840d00b167dfc4d5427f9a; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 61089edb947e0e3a97b891894e2b13f53f5ac062497b827b0d8de2c9debea059; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 #+end_src
 
 # BE VERY CAREFUL WITH MANUAL EDITS
@@ -764,10 +764,56 @@ Defaults to `orgstrap-norm-func--prp-1.1'.")
 (defvar orgstrap--debug nil
   "If non-nil run `orgstrap-norm' in debug mode.")
 
+(defgroup orgstrap nil
+  "Tools for bootstraping Org mode files using Org Babel."
+  :tag "orgstrap"
+  :group 'org
+  :link '(url-link :tag "README on GitHub"
+                   "https://github.com/tgbugs/orgstrap/blob/master/README.org"))
+
 (defcustom orgstrap-always-edit nil
   "If non-nil then command `orgstrap-mode' will activate command `orgstrap-edit-mode'."
   :type 'boolean
   :group 'orgstrap)
+
+(defcustom orgstrap-always-eval nil
+  "Always try to run orgstrap blocks even when populating `org-agenda'."
+  :type 'boolean
+  :group 'orgstrap)
+
+(defcustom orgstrap-always-eval-whitelist nil
+  "List of files that should always try to run orgstrap blocks."
+  :type 'list
+  :group 'orgstrap)
+
+;; orgstrap revoke
+
+(defun orgstrap-revoke-checksums (&rest checksums)
+  "Delete CHECKSUMS or all checksums if nil from `safe-local-variables-values'."
+  (interactive)
+  (cl-delete-if (lambda (pair)
+                  (destructuring-bind (key . value)
+                      pair
+                    (and
+                     (eq key 'orgstrap-block-checksum)
+                     (or (null checksums) (memq value checksums)))))
+                safe-local-variable-values)
+  (customize-save-variable 'safe-local-variable-values safe-local-variable-values))
+
+(defun orgstrap-revoke-current-buffer ()
+  "Delete checksum(s) for current buffer from `safe-local-variable-values'.
+Deletes embedded and current values of `orgstrap-block-checksum'."
+  (interactive)
+  (let* ((elv (orgstrap--read-current-local-variables))
+         (cpair (assoc 'orgstrap-block-checksum elv))
+         (checksum-existing (and cpair (cdr cpair))))
+    (orgstrap-revoke-checksums orgstrap-block-checksum checksum-existing)))
+
+(defun orgstrap-revoke-eval-local-variables ()
+  "Delete all approved orgstrap eval local variables from `safe-local-variable-values'."
+  (interactive)
+  (cl-delete-if #'orgstrap--match-eval-local-variables safe-local-variable-values)
+  (customize-save-variable 'safe-local-variable-values safe-local-variable-values))
 
 ;; orgstrap run helpers
 
@@ -778,8 +824,13 @@ Defaults to `orgstrap-norm-func--prp-1.1'.")
 (defun orgstrap--org-buffer ()
   "Only run when in `org-mode' and command `orgstrap-mode' is enabled.
 Sets further hooks."
-  (advice-add #'hack-local-variables-confirm :around #'orgstrap--hack-lv-confirm)
-  (add-hook 'before-hack-local-variables-hook #'orgstrap--before-hack-lv nil t))
+  (when enable-local-eval
+    ;; if `enable-local-eval' is nil we honor it and will not run
+    ;; orgstrap blocks natively, this matches the behavior of the
+    ;; embedded eval local variables and simplifies logic for cases
+    ;; where orgstrap should not run (e.g. when populating `org-agenda')
+    (advice-add #'hack-local-variables-confirm :around #'orgstrap--hack-lv-confirm)
+    (add-hook 'before-hack-local-variables-hook #'orgstrap--before-hack-lv nil t)))
 
 (defun orgstrap--hack-lv-confirm (command &rest args)
   "Advise `hack-local-variables-confirm' to remove orgstrap eval variables.
@@ -798,7 +849,7 @@ unsafe-vars risky-vars dir-name)."
                     ;; the other -vars which is extra insurance
                     ;; against any future changes to the
                     ;; implementation in the calling scope.
-                    (cl-delete-if-not #'orgstrap--match-eval-local-variables arg)
+                    (cl-delete-if #'orgstrap--match-eval-local-variables arg)
                   arg))
               args)
     ;; After removal we have to recheck to see if unsafe-vars and
@@ -838,12 +889,12 @@ unsafe-vars risky-vars dir-name)."
 (defun orgstrap--match-eval-local-variables (pair)
   "Return nil if PAIR matchs any eval local variable used by orgstrap.
 Avoid false positives if possible if at all possible."
-  (not (and (eq (car pair) 'eval)
-            ;;(message "%s" (cdr pair))
-            ;; keep the detection simple for now, any eval lv that
-            ;; so much as mentions orgstrap is nuked, and in the future
-            ;; if orgstrap-nb is used we may need to nuke that too
-            (string-match "orgstrap" (prin1-to-string (cdr pair))))))
+  (and (eq (car pair) 'eval)
+       ;;(message "%s" (cdr pair))
+       ;; keep the detection simple for now, any eval lv that
+       ;; so much as mentions orgstrap is nuked, and in the future
+       ;; if orgstrap-nb is used we may need to nuke that too
+       (string-match "orgstrap" (prin1-to-string (cdr pair)))))
 
 ;;;###autoload
 (defun orgstrap-mode (&optional arg)
@@ -867,6 +918,28 @@ universal prefix argument."
            (remove-hook 'org-mode-hook #'orgstrap--org-buffer)
            (setq orgstrap-mode nil)
            (message "orgstrap-mode disabled")))))
+
+;; orgstrap do not run aka `org-agenda' eval protection
+
+(defun orgstrap--advise-no-eval-lv (command &rest args)
+  "Advise COMMAND to disable eval local variables for files loaded inside it.
+ARGS will vary depending in which function was advised."
+  ;; orgstrapped files are just plain old org files in this context
+  ;; since agenda doesn't use any babel functionality ... of course
+  ;; I can totally imagine using orgstrap to automatically populate
+  ;; an org file or update an org file using orgstrap to keep the
+  ;; agenda in sync with some external source ... so need a variable
+  ;; to control this
+  (if orgstrap-always-eval
+      (apply command args)
+    (let ((enable-local-eval (and args
+                                  orgstrap-always-eval-whitelist
+                                  (member (car args)
+                                          orgstrap-always-eval-whitelist)
+                                  enable-local-eval)))
+      (apply command args))))
+
+(advice-add #'org-get-agenda-file-buffer :around #'orgstrap--advise-no-eval-lv)
 #+end_src
 *** Edit
 #+caption: edit helpers
@@ -932,7 +1005,7 @@ if so update the `orgstrap-block-checksum' local variable
 and then run `orgstrap-on-change-hook'."
   (let* ((elv (orgstrap--read-current-local-variables))
          (cpair (assoc 'orgstrap-block-checksum elv))
-         (checksum-existing (if cpair (cdr cpair) nil))
+         (checksum-existing (and cpair (cdr cpair)))
          (checksum (orgstrap-get-block-checksum)))
     (unless (eq checksum-existing (intern checksum))
       (remove-hook 'before-save-hook #'orgstrap--update-on-change t)
@@ -1354,7 +1427,7 @@ minimal as possible is critical.
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.2.1
+;; Version: 1.2.2
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -1458,7 +1531,7 @@ test_files=( test-no-lv-list.org test-lv-list-portable test-lv-list-minimal )
 for v in ${versions[@]}; do
 for f in ${test_files[@]};do
 # uncomment and reorder to debug tests
-#f=test-lv-list-minimal.org
+#f=test-lv-list-minimal
 #emacs -q \
 emacs-$v -q --batch \
 -l orgstrap-autoloads.el \
@@ -1469,11 +1542,11 @@ emacs-$v -q --batch \
 --eval "(add-to-list 'safe-local-variable-values '(orgstrap-cypher . sha256))" \
 --eval "(add-to-list 'safe-local-variable-values '(orgstrap-norm-func-name . orgstrap-norm-func--prp-1.1))" \
 --eval "(add-to-list 'safe-local-variable-values '(orgstrap-block-checksum .
-ae24698a522395890d3471f31a8700aa07050bc77db28af6c5cac6e07fbf4b6e))" \
+f08685ce887c39e60249bb7b17cf10df1fc5a57910aff8be396dff6b22064b3b))" \
 --eval "(add-to-list 'safe-local-variable-values '(orgstrap-block-checksum .
-d0d9fad32505a072e4adfe23b6dd664d5543f63d62cb26276dd0f3176567102b))" \
+ac1c7f4aa98c75911b82af8e2e21003d0669571795188810fefa6dfe30405b4c))" \
 --eval "(add-to-list 'safe-local-variable-values '(orgstrap-block-checksum .
-7454ff29e936cdf84c2949ce1e8e3ae0a426d8595ccb91b502b7b574ac349785))" \
+536cd93653b292459d338c1c4a1949fd01d1240f5eae31509f5f58241c6d0378))" \
 --visit $f \
 --eval "(orgstrap-test)"
 done
@@ -1519,7 +1592,7 @@ done
 # #+header: :comments link  # broken atm
 #+name: test-no-lv-list
 #+begin_src org :tangle ./test-no-lv-list.org
-# -*- orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; orgstrap-block-checksum: ae24698a522395890d3471f31a8700aa07050bc77db28af6c5cac6e07fbf4b6e; -*-
+# -*- orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; orgstrap-block-checksum: f08685ce887c39e60249bb7b17cf10df1fc5a57910aff8be396dff6b22064b3b; -*-
 # [[orgstrap][jump to the orgstrap block for this file]]
 
 ,* Bootstrap :noexport:
@@ -1527,7 +1600,7 @@ done
 ,#+name: orgstrap
 ,#+begin_src elisp :results none :lexical yes
 (defun orgstrap-test ()
-  (if (cl-remove-if-not (lambda (pair) (not (orgstrap--match-eval-local-variables pair)))
+  (if (cl-remove-if-not #'orgstrap--match-eval-local-variables
                         file-local-variables-alist)
       (error "eval local variable is still present!")
     (message "No local variables here!")))
@@ -1537,7 +1610,7 @@ done
 
 #+name: test-lv-list-portable
 #+begin_src org :tangle ./test-lv-list-portable :noweb yes
-# -*- mode: org; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; orgstrap-block-checksum: d0d9fad32505a072e4adfe23b6dd664d5543f63d62cb26276dd0f3176567102b; -*-
+# -*- mode: org; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; orgstrap-block-checksum: ac1c7f4aa98c75911b82af8e2e21003d0669571795188810fefa6dfe30405b4c; -*-
 # [[orgstrap][jump to the orgstrap block for this file]]
 
 ,* Bootstrap :noexport:
@@ -1545,7 +1618,7 @@ done
 ,#+name: orgstrap
 ,#+begin_src elisp :results none :lexical yes
 (defun orgstrap-test ()
-  (if (cl-remove-if-not (lambda (pair) (not (orgstrap--match-eval-local-variables pair)))
+  (if (cl-remove-if-not #'orgstrap--match-eval-local-variables
                         file-local-variables-alist)
       (error "eval local variable is still present!")
     (message "Portable local variables here!")))
@@ -1556,7 +1629,7 @@ done
 
 #+name: test-lv-list-minimal
 #+begin_src org :tangle ./test-lv-list-minimal :noweb yes
-# -*- mode: org; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; orgstrap-block-checksum: 7454ff29e936cdf84c2949ce1e8e3ae0a426d8595ccb91b502b7b574ac349785; -*-
+# -*- mode: org; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; orgstrap-block-checksum: 536cd93653b292459d338c1c4a1949fd01d1240f5eae31509f5f58241c6d0378; -*-
 # [[orgstrap][jump to the orgstrap block for this file]]
 
 ,* Bootstrap :noexport:
@@ -1564,7 +1637,7 @@ done
 ,#+name: orgstrap
 ,#+begin_src elisp :results none :lexical yes
 (defun orgstrap-test ()
-  (if (cl-remove-if-not (lambda (pair) (not (orgstrap--match-eval-local-variables pair)))
+  (if (cl-remove-if-not #'orgstrap--match-eval-local-variables
                         file-local-variables-alist)
       (error "eval local variable is still present!")
     (message "Minimal local variables here!")))
@@ -1577,6 +1650,35 @@ done
 :PROPERTIES:
 :CUSTOM_ID: changelog
 :END:
+** 1.2.2
+- Do not run eval local variables when loading org-agenda.
+
+  ~orgstrap-always-eval~ can be set to ~t~ by users who want to
+  evaluate orgstrap blocks in all situations. More granular control is
+  provided by adding the full path of files that should always try to
+  run their orgstrap block to ~orgstrap-always-eval-whitelist~.
+
+  In all cases, if the global setting for ~enable-local-eval~ is more
+  restrictive then it is honored (i.e., nil will block any execution
+  and the default ~'maybe~ will continue to prompt).
+
+- Add ability to revoke previously approved orgstrap-block-checksums.
+
+  Rapid revocation of permissions is an important part of any security
+  system. Therefore we now provide a way to revoke all previously
+  approved values for ~orgstrap-block-checksum~ in a single command
+  ~orgstrap-revoke-checksums~. This command can also be provided
+  with a specific list of checksums to revoke. Another convenience function
+  ~orgstrap-revoke-current-buffer~ is provided that revokes the checksum
+  of the orgstrap block for the current buffer.
+
+- Add ability to revoke previously approved eval local variables.
+
+  As with revocations for ~orgstrap-block-checksum~ values, we also
+  need a way to revoke eval local variables. There is no granular
+  control. Use ~orgstrap-revoke-eval-local-variables~ to nuke all
+  orgstrap eval local variables from orbit.
+
 ** 1.2.1
 - Fix bad startup visibility when using orgstrap.
 
@@ -2335,6 +2437,17 @@ function.
 (use-package org-ref)  ; for ref:
 (use-package ox-gfm)  ; simplify export of changelog for release
 #+end_src
+** TODO blacklist and whitelist
+:PROPERTIES:
+:CREATED:  [2020-10-15 Thu 22:32]
+:END:
+#+begin_example elisp
+(defcustom orgstrap-blacklist-files nil
+  "List of files that should not be orgstrapped."
+  ;; TODO but that should still have orgstrap-edit-mode enabled?
+  :type 'list
+  :group 'orgstrap)
+#+end_example
 ** TODO BUG :comments link breaks prop line :noexport:
 or rather not breaks, but tries to co-exist with it which duplicates the line
 which seems to break the ability to detangle among other things
