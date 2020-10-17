@@ -2177,57 +2177,136 @@ the string output of the process.
         string))))
 #+end_src
 *** +reval+ reload
-Remote +eval+ load. Ephemoral code reuse. Somewhere between load
+Remote +eval+ load. Ephemeral code reuse. Somewhere between load
 eval, and securl then load. More auditable and stable curl pipe bash.
 #+begin_src elisp :lexical yes
-;; FIXME TODO dedupe this code
-(defun resum (cypher path-or-url)
-  "Return checksum under CYPHER for PATH-OR-URL."
-  (cl-flet ((do-the-thing
-             ()
-             (let (enable-local-eval)
-               (save-window-excursion
-                 (with-current-buffer (find-file path-or-url)
-                   (intern (secure-hash cypher (buffer-string))))))))
-    (if url-handler-mode
-        (do-the-thing)
-      (unwind-protect
-          (progn
-            (url-handler-mode)
-            (do-the-thing))
-        (url-handler-mode)))))
+(defvar reval-failed-buffer-list nil "List of failed reval buffers.")
+
+(defun id->buffer (path-or-url)
+  "Given a PATH-OR-URL return a buffer of its contents."
+  ;; We explicitly do not catch errors here since they need should
+  ;; be caught by the human in the loop later.
+  (if url-handler-mode
+      (find-file-noselect path-or-url)
+    (unwind-protect
+        (progn
+          (url-handler-mode)
+          (find-file-noselect path-or-url))
+      (url-handler-mode))))
+
+(defun resum (cypher buffer &optional review)
+  "Return checksum under CYPHER for BUFFER.
+If REVIEW is non-nil then switch to BUFFER and prompt asking if audit
+is ok before continuing."
+  ;; we don't need to check or review alternates here because they
+  ;; must all be identical
+  (let (enable-local-eval)
+    (save-window-excursion
+      (with-current-buffer buffer
+        (when review
+          (switch-to-buffer (current-buffer))
+          (unless (yes-or-no-p "Audit of file ok? ") ; not using `y-or-n-p' since it is too easy
+            (error "Audit failed. Checksum will not be calculated for %s" (buffer-file-name (current-buffer)))))
+        (unless (eq major-mode 'emacs-lisp-mode)
+          (error "Not an emacs lisp file!"))
+        ;; need to ensure that it is actually elisp
+        ;; note that in some cases read can succeed
+        ;; even when a file is not elisp e.g. and html
+        ;; file can sometimes read without error but
+        ;; will fail on eval
+        (condition-case nil
+            (read (concat "(progn\n"
+                          (buffer-substring-no-properties (point-min) (point-max))
+                          "\n)"))
+          (error (error "Not an emacs lisp file!")))
+        (intern (secure-hash cypher (current-buffer)))))))
 
 (defun make-reval (cypher path-or-url)
-  `(reval ,cypher ',(resum cypher path-or-url) ,path-or-url))
+  `(reval ',cypher ',(resum cypher (id->buffer path-or-url) t) ,path-or-url))
 
-(defun reval (cypher checksum path-or-url)
-  "Open PATH-OR-URL, match CHECKSUM under CYPHER, then eval."
-  (cl-flet ((do-the-thing
-             ()
-             (let (enable-local-eval)
-               (save-window-excursion
-                 (with-current-buffer (find-file path-or-url)
-                   (unless (eq major-mode 'emacs-lisp-mode)
-                     (error "Not an emacs lisp file!"))
-                   (let ((buffer-checksum (intern (secure-hash cypher (buffer-string)))))
-                     (if (eq buffer-checksum checksum)
-                         (eval-buffer)
-                       (error "checksum mismatch!"))))))))
-    (if url-handler-mode
-        (do-the-thing)
-      (unwind-protect
-          (progn
-            (url-handler-mode)
-            (do-the-thing))
-        (url-handler-mode)))))
+(defun reval (cypher checksum path-or-url &rest alternates)
+  "Open PATH-OR-URL, match CHECKSUM under CYPHER, then eval.
+If an error is encountered try ALTERNATES in order."
+  (let* ((buffer (id->buffer path-or-url))
+         (buffer-checksum (resum cypher buffer)))
+    (if (eq buffer-checksum checksum)
+        (eval-buffer buffer)
+      (with-current-buffer buffer
+        (push buffer reval-failed-buffer-list)
+        ;; push first since it is better to have a dead buffer linger in a list
+        ;; than it is to have an error happen during execution of `kill-buffer-hook'
+        (add-hook 'kill-buffer-hook
+                  (lambda () 
+                    ;; read the manual for sets and lists to see why we have to
+                    ;; setq here ... essentially if our element is found in the
+                    ;; car of the list then the underlying list is not modified
+                    ;; and the cdr of the list is returned, therefore if you have
+                    ;; a list of all zeros and try to delete zero from it the list
+                    ;; will remain unchanged unless you also setq the name to the
+                    ;; (now) cdr value
+                    (setq reval-failed-buffer-list
+                          (delete (current-buffer) reval-failed-buffer-list)))
+                  nil t))
+      (error "checksum mismatch!"))))
+
+(defun reval-view-last-failed ()
+  "View last failed reval buffer and kill or keep."
+  (interactive)
+  (when reval-failed-buffer-list
+    (save-window-excursion
+      (with-current-buffer (car reval-failed-buffer-list)
+        (switch-to-buffer (current-buffer))
+        (when (y-or-n-p "Kill buffer? ")
+          (kill-buffer))))))
 #+end_src
 
 Testing
 #+begin_src elisp
-(make-reval 'sha256 "https://github.com/tgbugs/orgstrap/blob/417b87304da27397d3ce1b79039119a9337be305/packages.el")
 ;; `eval-print-last-sexp'
-(reval sha256 '6c0e1703016725caef7b0b8c25955cebe6ad72624386c2d45752bbf53763bbf0 "https://github.com/tgbugs/orgstrap/blob/417b87304da27397d3ce1b79039119a9337be305/packages.el")
+
+;; bad since html not elisp
+(make-reval 'sha256 "https://github.com/tgbugs/orgstrap/blob/417b87304da27397d3ce1b79039119a9337be305/packages.el")
+
+;; bad 404 file exists but cannot be read ... 404 error or something like that should just fail ?
+(make-reval 'sha256 "https://github.com/tgbugs/orgstrap/blob/does-no-exist/packages-does-not-exist.el")
+
+(make-reval 'sha256 "https://raw.githubusercontent.com/tgbugs/orgstrap/does-no-exist/packages-does-not-exist.el")
+
+;; connection error
+(make-reval 'sha256 "https://127.0.0.2/connection-error")
+
+(make-reval 'sha256 "https://0.0.0.0/connection-error")
+
+;;(setq debug-on-message "File exists, but cannot be read")
+;;(setq debug-on-message nil)
+
+;; ok
+(make-reval 'sha256 "https://raw.githubusercontent.com/tgbugs/orgstrap/417b87304da27397d3ce1b79039119a9337be305/packages.el")
+
+;; checksum match
+(reval 'sha256 'aada229afa36ac1f3e9f26e1ec7c0c09214d75563adb62aa0fac2f1ae58496fe "https://raw.githubusercontent.com/tgbugs/orgstrap/417b87304da27397d3ce1b79039119a9337be305/packages.el")
+
+;; checksum mismatch
+(reval 'sha256 'bada229afa36ac1f3e9f26e1ec7c0c09214d75563adb62aa0fac2f1ae58496fe "https://raw.githubusercontent.com/tgbugs/orgstrap/417b87304da27397d3ce1b79039119a9337be305/packages.el")
+
 #+end_src
+
+Understanding delete
+#+begin_src elisp
+(defvar asdf '(a a))
+(member (car asdf) asdf)
+(delete (car asdf) asdf)
+asdf
+(delete 'a asdf)
+(delq 'a asdf)
+(setq asdf '(a a))
+(setq asdf '(b a b a))
+
+reval-failed-buffer-list
+(switch-to-buffer (car reval-failed-buffer-list))
+(pop reval-failed-buffer-list)
+#+end_src
+
 *** securl
 An extremely common pattern when bootstrapping is to retrieve files
 from a remote location. This provides a pure elisp implementation that
@@ -2250,7 +2329,7 @@ portable makes it significantly harder to understand and audit.
   (let ((cypher (or cypher default-cypher)))
     (with-temp-buffer
       (insert-file-contents-literally path)
-      (secure-hash cypher (buffer-string)))))
+      (secure-hash cypher (current-buffer)))))
 
 (defun securl (cypher checksum url path)
   "Securely fetch URL to PATH only if it matches CHECKSUM under CYPHER.
