@@ -116,6 +116,4 @@ instead of creating one in the same folder as this init.el file")
   (org-table-map-tables 'org-table-align)
   (org-html-export-as-html))
 
-(provide 'init)
-
 ;;; init.el ends here
