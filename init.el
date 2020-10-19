@@ -1,4 +1,4 @@
-;;; init.el --- entry point
+;;; init.el --- entry point -*- lexical-binding: t -*-
 ;;; Commentary:
 ;; minimal init to bootstrap orgmode
 ;; for compiling documentation in CI
@@ -63,7 +63,17 @@ instead of creating one in the same folder as this init.el file")
 
 ;;; bootstrap ends here
 
-(require 'packages)
+;;; packages.el --- minimal packages needed for html export
+
+(setq use-package-always-ensure t)
+
+;; * org-mode
+(use-package org-plus-contrib
+  :mode ("\\.org\\'" . org-mode))
+
+(use-package htmlize)
+
+;;; packages ends here
 
 ;;; batch mode color fixes
 ;; this one was a real adventure, found `display-color-cells' and
