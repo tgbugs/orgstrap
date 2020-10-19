@@ -2182,15 +2182,35 @@ going to publish it to an elpa, you are likely going to use
 checksum matches, and then eval it --- without using ~securl~ which is
 a much heavier solution for asset retrieval.
 
-#+begin_src elisp
-#+end_src
+Given that I am aware of nearly a dozen ways to install and manage
+elisp packages, and this means that I'm only going to support
+packages.el (and possibly use-package) and will make sure that users
+can modify/disable package installation if they are using a different
+package manager. In theory we should also be able to detect the use of
+alternate package managers or use of a starter kit so that we can prompt
+those users that package-install will run if require fails. Maybe there
+is a way to create a recipe generator that will work for all of these.
+Without something that can interpolate between all of these, the burden
+on the developer is too large to be practical.
+
+1. manual
+2. packages.el
+3. use-package
+4. straight
+5. borg
+6. el-get
+7. quelpa
+8. cask
+9. ebuild
+10. nix
+11. guix
 
 #+name: install-orgstrap
 #+begin_src elisp
 ;; install `orgstrap'
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
 
-;; so this section is a bit trickier than 
+;; so this section is a bit trickier than anticipanted ...
 (defmacro orgstrap-package (name)
   ()
 )
