@@ -3,7 +3,7 @@
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.2.2
+;; Version: 1.2.3
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -112,6 +112,32 @@ Defaults to `orgstrap-norm-func--prp-1.1'.")
   :type 'list
   :group 'orgstrap)
 
+(defcustom orgstrap-file-blacklist nil
+  "List of files that should never run orgstrap blocks.
+
+For files on the blacklist `orgstrap-block-checksum' is removed from
+the local variables list so that the checksum will not be added to
+the `safe-local-variable-values' list. If it were added it would then
+be impossible to prevent execution of the source block when `orgstrap-mode'
+is disabled.
+
+This is useful when developing a block that modifies Emacs' configuration.
+NOTE this variable only works if `orgstrap-mode' is enabled."
+  :type 'list
+  :group 'orgstrap)
+
+;; orgstrap blacklist
+
+(defun orgstrap-blacklist-current-file ()
+  "Add the current file to `orgstrap-file-blacklist'."
+  (interactive)
+  (add-to-list 'orgstrap-file-blacklist (buffer-file-name)))
+
+(defun orgstrap-unblacklist-current-file ()
+  "Remove the current file from `orgstrap-file-blacklist'"
+  (interactive)
+  (setq orgstrap-file-blacklist (delete (buffer-file-name) orgstrap-file-blacklist)))
+
 ;; orgstrap revoke
 
 (defun orgstrap-revoke-checksums (&rest checksums)
@@ -177,7 +203,8 @@ Sets further hooks."
     ;; embedded eval local variables and simplifies logic for cases
     ;; where orgstrap should not run (e.g. when populating `org-agenda')
     (advice-add #'hack-local-variables-confirm :around #'orgstrap--hack-lv-confirm)
-    (add-hook 'before-hack-local-variables-hook #'orgstrap--before-hack-lv nil t)))
+    (unless (member (buffer-file-name) orgstrap-file-blacklist)
+      (add-hook 'before-hack-local-variables-hook #'orgstrap--before-hack-lv nil t))))
 
 (defun orgstrap--hack-lv-confirm (command &rest args)
   "Advise `hack-local-variables-confirm' to remove orgstrap eval variables.
@@ -188,7 +215,7 @@ unsafe-vars risky-vars dir-name)."
       ;; emacs 28 doesn't alias the non cl- prefixed form so use unaliased?
       (mapcar (lambda (arg)
                 (if (listp arg)
-                    ;; We must use `cl-delete-if-not' on all-vars,
+                    ;; We must use `cl-delete-if' on all-vars,
                     ;; otherwise the list pointed to by all-vars in
                     ;; the calling scope will remain unmodified and
                     ;; the eval variable will be run without being
@@ -198,7 +225,16 @@ unsafe-vars risky-vars dir-name)."
                     ;; implementation in the calling scope.
                     (cl-delete-if #'orgstrap--match-eval-local-variables arg)
                   arg))
-              args)
+              (if (member (buffer-file-name) orgstrap-file-blacklist)
+                  (mapcar (lambda (arg) ; zap checksums for blacklisted
+                            (if (listp arg)
+                                (cl-delete-if
+                                 (lambda (pair)
+                                   (eq (car pair) 'orgstrap-block-checksum))
+                                 arg)
+                              arg))
+                          args)
+                args))
     ;; After removal we have to recheck to see if unsafe-vars and
     ;; risky-vars are empty so we can skip the confirm dialogue. If we
     ;; do not, then the dialogue breaks the flow.
