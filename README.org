@@ -1,4 +1,4 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 61bcec4fd82ac7f9a67e7455496558888d89bde6a99f53ce7119b804fb7efa48; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: fddd77698e7701d0bde10ac5a9d04186aea14aee3ff5635830d6500fbe4a1587; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an Org file using file local variables
 #+options: num:nil \n:nil
@@ -315,14 +315,14 @@ contained in the rest of the file explicitly excluding the contents of
 the =orgstrap-cypher= =prop line local varaible=. The most obvious
 additional information required being the contents of the =orgstrap block= [fn::
 The reference implementation provided in the readme containing this specification
-uses an Emacs =eval:= local variable in the =local variables list=. Embedding an
-=eval:= local variable is not required by this specification. However such an
-implementation makes allows files to depend only on the core Emacs implementation.
+uses an Emacs =eval:= local variable (elv) in the =local variables list=. Embedding
+an elv is not required by this specification. However, such an implementation allows
+files to depend only on the core Emacs implementation.
 
 In the future an optional extension may be added to this document that specifies the
-behavior for files using an =eval:= local variable in the =local variables list=.
+behavior for files using an elv in the =local variables list=.
 
-A minimal implementation that works without the =eval:= local variable is also provided.
+A minimal implementation that works without elvs is also provided.
 
 Files that contain only the prop line local variables are dependent on an implementation
 of orgstrap already being present on the system running the file.
@@ -330,9 +330,9 @@ of orgstrap already being present on the system running the file.
 There is a fine balance between portability and compactness since a minimal implementation
 has to make more assumptions about the systems it will run on.
 
-Multi-stage orgstrap, or other means of bootstrapping a working runtime for an Org file such
+Multi-stage orgstrap or other means of bootstrapping a working runtime for an Org file such
 as the process implemented in the
-[[#bootstrapping-to-emacs-bootstrapping-to-org][Bootstrapping to Emacs, bootstrapping to Org.]]
+[[#bootstrapping-to-emacs-bootstrapping-to-org][Bootstrapping to Emacs, bootstrapping to Org]]
 section of this readme are ongoing areas of exploration.].
 
 #+begin_quote
@@ -364,7 +364,8 @@ on a system that they control.
 #+end_quote
 * Local Variables
 ** Overview
-Local variables must go at the end of a file.
+Local variables must go at the end of a file must start less than 3000
+chars from the end of the file.
 
 We have to use =setq-local= on =org-confirm-babel-evaluate= because it is marked
 as a =safe-local-variable=.  In this context this workaround seems reasonable and
@@ -375,6 +376,10 @@ Below in [[#definitions][Definitions]] there is a more readable
 version of what the compacted local variables code at the end of the file is doing.
 *Always check that the =eval:= local variables in unknown orgstrapped files*
 *match a known set when reviewing and accepting local variables.*
+
+=orgstrap= eval local variables, or *elvs* for short, are little helpers at the end
+of the file that make everything work in a portable manner when =orgstrap.el= is not
+present on a system.
 # TODO it is entirely possible to automate that check
 # but not without already having orgstrap available.
 # TODO publish the hashes of the eval sexps.
@@ -410,8 +415,8 @@ anyway so don't bother.
 #+end_quote
 ** Normalization
 *** Shared normalization machinery
-Shared normalization code embedded as eval local variables.
-#+caption: Shared normalization code embedded as eval local variables.
+Shared normalization code embedded as elvs.
+#+caption: Shared normalization code embedded as elvs.
 #+name: orgstrap-normalization-common-embed
 #+begin_src elisp
 (unless (boundp 'orgstrap-norm-func)
@@ -622,7 +627,7 @@ Here is the prop line from the first line of this file that
 includes the cypher and checksum of the =orgstrap= block.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 61bcec4fd82ac7f9a67e7455496558888d89bde6a99f53ce7119b804fb7efa48; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: fddd77698e7701d0bde10ac5a9d04186aea14aee3ff5635830d6500fbe4a1587; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 #+end_src
 
 # BE VERY CAREFUL WITH MANUAL EDITS
@@ -709,8 +714,8 @@ While ideally this would be done using only the standard hooks around
 =hack-local-variables= this approach does not work because the variables
 are filtered before those hooks can run. Therefore we have to advise
 =hack-local-variables-confirm= in order to capture and remove any orgstrap
-eval local variables that we find. For maximum safety this minimally requires
-mutation of the =all-vars= list passed to =hack-local-variables-confirm=.
+elvs that we find. For maximum safety this minimally requires mutation of
+the =all-vars= list passed to =hack-local-variables-confirm=.
 
 This is a fairly deep tampering with the way that hack-local-variables works,
 so special attention should be given when reviewing the security implications
@@ -835,11 +840,17 @@ Deletes embedded and current values of `orgstrap-block-checksum'."
          (checksum-existing (and cpair (cdr cpair))))
     (orgstrap-revoke-checksums orgstrap-block-checksum checksum-existing)))
 
-(defun orgstrap-revoke-eval-local-variables ()
-  "Delete all approved orgstrap eval local variables from `safe-local-variable-values'."
+(defun orgstrap-revoke-elvs ()
+  "Delete all approved orgstrap elvs from `safe-local-variable-values'."
   (interactive)
-  (cl-delete-if #'orgstrap--match-eval-local-variables safe-local-variable-values)
+  (cl-delete-if #'orgstrap--match-elvs safe-local-variable-values)
   (customize-save-variable 'safe-local-variable-values safe-local-variable-values))
+
+(define-obsolete-function-alias
+  #'orgstrap-revoke-eval-local-variables
+  #'orgstrap-revoke-elvs
+  "1.2.4"
+  "Replaced by the more compact `orgstrap-revoke-elvs'.")
 
 ;; orgstrap run helpers
 
@@ -853,7 +864,7 @@ Sets further hooks."
   (when enable-local-eval
     ;; if `enable-local-eval' is nil we honor it and will not run
     ;; orgstrap blocks natively, this matches the behavior of the
-    ;; embedded eval local variables and simplifies logic for cases
+    ;; embedded elvs and simplifies logic for cases
     ;; where orgstrap should not run (e.g. when populating `org-agenda')
     (advice-add #'hack-local-variables-confirm :around #'orgstrap--hack-lv-confirm)
     (unless (member (buffer-file-name) orgstrap-file-blacklist)
@@ -876,7 +887,7 @@ unsafe-vars risky-vars dir-name)."
                     ;; the other -vars which is extra insurance
                     ;; against any future changes to the
                     ;; implementation in the calling scope.
-                    (cl-delete-if #'orgstrap--match-eval-local-variables arg)
+                    (cl-delete-if #'orgstrap--match-elvs arg)
                   arg))
               (if (member (buffer-file-name) orgstrap-file-blacklist)
                   (mapcar (lambda (arg) ; zap checksums for blacklisted
@@ -922,8 +933,8 @@ unsafe-vars risky-vars dir-name)."
     (when orgstrap-always-edit
       (orgstrap-edit-mode))))
 
-(defun orgstrap--match-eval-local-variables (pair)
-  "Return nil if PAIR matchs any eval local variable used by orgstrap.
+(defun orgstrap--match-elvs (pair)
+  "Return nil if PAIR matchs any elv used by orgstrap.
 Avoid false positives if possible if at all possible."
   (and (eq (car pair) 'eval)
        ;;(message "%s" (cdr pair))
@@ -958,7 +969,7 @@ universal prefix argument."
 ;; orgstrap do not run aka `org-agenda' eval protection
 
 (defun orgstrap--advise-no-eval-lv (command &rest args)
-  "Advise COMMAND to disable eval local variables for files loaded inside it.
+  "Advise COMMAND to disable elvs for files loaded inside it.
 ARGS will vary depending in which function was advised."
   ;; orgstrapped files are just plain old org files in this context
   ;; since agenda doesn't use any babel functionality ... of course
@@ -1257,7 +1268,7 @@ Please update `orgstrap-norm-func-name' to `orgstrap-norm-func--prp-1.1'"))
     <<orgstrap-normalization-common-embed>>))
 
 (defun orgstrap--local-variables--eval (info &optional minimal)
-  "Return the portable or MINIMAL eval local variables given INFO."
+  "Return the portable or MINIMAL elvs given INFO."
   (let* ((minimal (or minimal orgstrap-use-minimal-local-variables))
          (minimal (and minimal (orgstrap--have-min-org-version info minimal))))
     (if minimal
@@ -1365,10 +1376,10 @@ block will be used.  NORM-FUNC-NAME is an optional argument that can be provided
 to determine which normalization function is used independent of the current
 buffer or global setting for `orgstrap-norm-func'.
 
-When run, this function replaces any existing orgstrap eval local variable with
-the latest implementation available according to the preferences for the current
-buffer and configuration.  Other eval local variables are retained if they are
-present, and the orgstrap eval local variable is always added first."
+When run, this function replaces any existing orgstrap elv with the latest
+implementation available according to the preferences for the current buffer
+and configuration.  Other elvs are retained if they are present, and the
+orgstrap elv is always added first."
   ;; switching comments probably wont work ? we can try
   ;; Use a prefix argument (i.e. C-u) to add file local variables comments instead of in a :noexport:
   (interactive)
@@ -1510,7 +1521,7 @@ minimal as possible is critical.
 #+caption: Retangle this if something changes.
 #+name: orgstrap.el
 #+header: :exports none
-#+begin_src elisp -r -l "[[:space:]]*(ref:%s)$" :noweb yes :eval never :tangle ./orgstrap.el
+#+begin_src elisp -r -l "\([[:space:]]\|;\)*(ref:%s)$" :noweb yes :eval never :tangle ./orgstrap.el
 ;;; orgstrap.el --- Bootstrap an Org file using file local variables -*- lexical-binding: t -*-
 
 ;; Author: Tom Gillespie
@@ -1694,7 +1705,7 @@ done
 (defun orgstrap-test ()
   (if (cl-remove-if-not #'orgstrap--match-eval-local-variables
                         file-local-variables-alist)
-      (error "eval local variable is still present!")
+      (error "elv is still present!")
     (message "No local variables here!")))
 (message "orgstrap successful")
 ,#+end_src
@@ -1712,7 +1723,7 @@ done
 (defun orgstrap-test ()
   (if (cl-remove-if-not #'orgstrap--match-eval-local-variables
                         file-local-variables-alist)
-      (error "eval local variable is still present!")
+      (error "elv is still present!")
     (message "Portable local variables here!")))
 (message "orgstrap successful")
 ,#+end_src
@@ -1731,7 +1742,7 @@ done
 (defun orgstrap-test ()
   (if (cl-remove-if-not #'orgstrap--match-eval-local-variables
                         file-local-variables-alist)
-      (error "eval local variable is still present!")
+      (error "elv is still present!")
     (message "Minimal local variables here!")))
 (message "orgstrap successful")
 ,#+end_src
@@ -1766,6 +1777,9 @@ Things that need to be done for a release.
 
 - Fix byte compile bug from destructuring-bind not being aliased.
 
+- Make ~orgstrap-revoke-eval-local-variables~ obsolete.
+
+  Replaced by the more compact ~orgstrap-revoke-elvs~.
 ** 1.2.3
 - Add ~orgstrap-file-blacklist~ to block eval of specific files.
 
@@ -1891,7 +1905,7 @@ encounter instructions that ask you to directly install software from a random p
 you should be suspicious, even, perhaps especially, if that random place is housed
 within a larger reputable site. If you're not in a hurry, ask for the software to be
 packaged, or package it yourself so that it can go through the process.
-* Bootstrapping to Emacs, bootstrapping to Org.
+* Bootstrapping to Emacs, bootstrapping to Org
 :PROPERTIES:
 :CUSTOM_ID: bootstrapping-to-emacs-bootstrapping-to-org
 :END:
@@ -2798,7 +2812,7 @@ to evaluate is not visible in the other window. So I have added a todo
 item for that.
 ** DONE Smart update/upgrade using the version specifier
 This is much easier now that I have put all the normalization and hashing
-machinery in a single eval local variable, and it no longer needs to rely
+machinery in a single elv, and it no longer needs to rely
 on the version of the block, just the version of the normalization function,
 which is currently embedded along with everything else.
 ** DONE orgstrap-mode
