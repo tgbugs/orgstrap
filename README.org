@@ -1,4 +1,4 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 628519ac01149ff4cff6932d1b650c227bc5a0994665e17c999198459d463987; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 61bcec4fd82ac7f9a67e7455496558888d89bde6a99f53ce7119b804fb7efa48; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Bootstrap an Org file using file local variables
 #+options: num:nil \n:nil
@@ -150,7 +150,7 @@ This is the =orgstrap= block that is used for this file.
 
 #+caption: The =orgstrap= block that is used for this file.
 #+name: orgstrap
-#+begin_src elisp :results none :noweb no-export
+#+begin_src elisp :results none :noweb no-export :lexical yes
 ;; This is an example that also nowebs in the source for
 ;; `orgstrap-init' and `orgstrap-add-block-checksum' along
 ;; with the rest of the orgstrap machinery so it is easy to
@@ -622,7 +622,7 @@ Here is the prop line from the first line of this file that
 includes the cypher and checksum of the =orgstrap= block.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 628519ac01149ff4cff6932d1b650c227bc5a0994665e17c999198459d463987; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 61bcec4fd82ac7f9a67e7455496558888d89bde6a99f53ce7119b804fb7efa48; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 #+end_src
 
 # BE VERY CAREFUL WITH MANUAL EDITS
@@ -818,7 +818,7 @@ NOTE this variable only works if `orgstrap-mode' is enabled."
   "Delete CHECKSUMS or all checksums if nil from `safe-local-variables-values'."
   (interactive)
   (cl-delete-if (lambda (pair)
-                  (destructuring-bind (key . value)
+                  (cl-destructuring-bind (key . value)
                       pair
                     (and
                      (eq key 'orgstrap-block-checksum)
@@ -1092,6 +1092,58 @@ directly if it has been calculated before and only needs to be set."
     (org-babel-goto-named-src-block orgstrap-orgstrap-block-name)
     (org-babel-execute-src-block)))
 
+(defvar orgstrap-clone--body-params nil
+  "Current source block body and parameters for clone operations.")
+(defvar orgstrap-clone--source-buffer nil
+  "Source buffer whose orgstrap block serves as the source for clone operations.")
+(defun orgstrap-clone-mark-source ()
+  "Mark the current buffer as the source for `orgstrap-clone'."
+  (interactive)
+  (if (orgstrap--used-in-current-buffer-p)
+      (setq orgstrap-clone--source-buffer (current-buffer))
+    (message "orgstrap is not used in the current buffer!")))
+
+(defun orgstrap-clone-mark-block ()
+  "Mark an arbitrary source block to clone to an orgstrap block."
+  (interactive)
+  (error "Not implemented. TODO"))
+
+(defun orgstrap-update-src-block-header (name new-params)
+  "Add header arguments to block NAME from NEW-PARAMS from some other block.
+Existing header arguments will NOT be removed if they are not included in
+NEW-PARAMS."
+  (let ((defaults (append org-babel-default-header-args
+                          org-babel-default-header-args:emacs-lisp)))
+    (orgstrap--with-block name
+      (ignore body body-unexpanded)
+      (dolist (pair new-params)
+        (cl-destructuring-bind (key . value)
+            pair
+          (when (and value
+                     (not (memq key '(:result-params :result-type)))
+                     (not (member pair defaults)))
+            (let ((header-arg (symbol-name key)))
+              (org-babel-insert-header-arg header-arg value))))))))
+
+(defun orgstrap-clone (&optional universal-argument overwrite)
+  "Clone orgstrap block via `orgstrap-clone-mark-source' to current buffer.
+If UNIVERSAL-ARGUMENT is '(64) aka (C-u C-u) this will OVERWRITE any existing
+block.  If you are not calling this interactively all as (orgstrap-clone nil t)
+for calirty.  You cannot clone an orgstrap block into its own buffer."
+  (interactive "P")
+  (let ((overwrite (or overwrite (equal universal-argument '(16))))
+        (source-buffer orgstrap-clone--source-buffer)
+        (target-buffer (current-buffer)))
+    (when (eq source-buffer target-buffer)
+      (error "Source and target are the same buffer!"))
+    (cl-destructuring-bind (source-body . source-params)
+        (with-current-buffer source-buffer
+          (orgstrap--with-block orgstrap-orgstrap-block-name
+            (ignore body-unexpanded)
+            (cons body params)))
+      (orgstrap--add-orgstrap-block source-body)
+      (orgstrap-update-src-block-header orgstrap-orgstrap-block-name))))
+
 ;;;###autoload
 (define-minor-mode orgstrap-edit-mode
   "Minor mode for editing with orgstrapped files."
@@ -1286,7 +1338,7 @@ can be used to override the default value set via `orgstrap-link-message'"
                       orgstrap-orgstrap-block-name
                       (or link-message orgstrap-link-message))))))
 
-(defun orgstrap--add-orgstrap-block ()
+(defun orgstrap--add-orgstrap-block (&optional block-contents)
   "Add a new elisp source block with #+name: orgstrap to the current buffer.
 If a block with that name already exists raise an error."
   (interactive)
@@ -1300,7 +1352,8 @@ If a block with that name already exists raise an error."
                                          t)
       (orgstrap--with-block orgstrap-orgstrap-block-name
         (ignore params body-unexpanded body)
-        ;;(error "TODO insert some minimal message or something")
+        (when block-contents
+          (org-babel-update-block-body block-contents))
         nil))))
 
 (defun orgstrap--add-file-local-variables (&optional minimal norm-func-name)
@@ -1457,13 +1510,13 @@ minimal as possible is critical.
 #+caption: Retangle this if something changes.
 #+name: orgstrap.el
 #+header: :exports none
-#+begin_src elisp :noweb yes :eval never :tangle ./orgstrap.el
+#+begin_src elisp -r -l "[[:space:]]*(ref:%s)$" :noweb yes :eval never :tangle ./orgstrap.el
 ;;; orgstrap.el --- Bootstrap an Org file using file local variables -*- lexical-binding: t -*-
 
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.2.3
+;; Version: 1.2.4                             (ref:orgstrap.el-version)
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -1684,11 +1737,34 @@ done
 ,#+end_src
 <<local-variables-minimal-example>>
 #+end_src
+** Release :noexport:
+Before a release.
+#+begin_src elisp :noweb yes :results drawer
+<<run-command>>
+(run-command "emacs" "-q" "--batch" "-f" "batch-byte-compile" "orgstrap.el")
+#+end_src
 
+Things that need to be done for a release.
+- Bump the version number in the [[(orgstrap.el-version)][orgstrap.el header comment]].
+- Update the [[#changelog][changelog]].
 * Changelog
 :PROPERTIES:
 :CUSTOM_ID: changelog
 :END:
+** 1.2.4
+- Add ~orgstrap-clone~ and ~orgstrap-clone-mark-source~ commands.
+
+  ~orgstrap-clone~ clones another orgstrap block from a buffer marked
+  via ~orgstrap-clone-mark-source~ to be the block for the current
+  buffer. Useful in cases where users want to duplicate functionality
+  in a new file.
+
+- ~orgstrap--add-orgstrap-block~ add ~block-contents~ argument.
+
+  This simplifies the implementation of clone, and makes it possible
+  to set the initial contents of the orgstrap block programmatically.
+
+- Fix byte compile bug from destructuring-bind not being aliased.
 
 ** 1.2.3
 - Add ~orgstrap-file-blacklist~ to block eval of specific files.
@@ -2659,7 +2735,18 @@ function.
 (use-package org-ref)  ; for ref:
 (use-package ox-gfm)  ; simplify export of changelog for release
 #+end_src
-** TODO blacklist and whitelist
+** TODO fix orgstrap--update-on-change hook so that it does not modify buffer fold state
+:PROPERTIES:
+:CREATED:  [2020-10-21 Wed 01:28]
+:END:
+Not sure exactly which function is causing this but getting the
+checksum of the block seems like it might be the one, unfolding and
+not restoring the state.
+** TODO fix orgstrap-init formatting issue where comment goes in headline
+:PROPERTIES:
+:CREATED:  [2020-10-19 Mon 18:01]
+:END:
+** DONE blacklist and whitelist
 :PROPERTIES:
 :CREATED:  [2020-10-15 Thu 22:32]
 :END:
