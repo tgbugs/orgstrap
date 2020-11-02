@@ -3,7 +3,7 @@
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.2.3
+;; Version: 1.2.4
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -144,7 +144,7 @@ NOTE this variable only works if `orgstrap-mode' is enabled."
   "Delete CHECKSUMS or all checksums if nil from `safe-local-variables-values'."
   (interactive)
   (cl-delete-if (lambda (pair)
-                  (destructuring-bind (key . value)
+                  (cl-destructuring-bind (key . value)
                       pair
                     (and
                      (eq key 'orgstrap-block-checksum)
@@ -755,7 +755,7 @@ can be used to override the default value set via `orgstrap-link-message'"
                       orgstrap-orgstrap-block-name
                       (or link-message orgstrap-link-message))))))
 
-(defun orgstrap--add-orgstrap-block ()
+(defun orgstrap--add-orgstrap-block (&optional block-contents)
   "Add a new elisp source block with #+name: orgstrap to the current buffer.
 If a block with that name already exists raise an error."
   (interactive)
@@ -769,7 +769,8 @@ If a block with that name already exists raise an error."
                                          t)
       (orgstrap--with-block orgstrap-orgstrap-block-name
         (ignore params body-unexpanded body)
-        ;;(error "TODO insert some minimal message or something")
+        (when block-contents
+          (org-babel-update-block-body block-contents))
         nil))))
 
 (defun orgstrap--add-file-local-variables (&optional minimal norm-func-name)
@@ -803,7 +804,7 @@ present, and the orgstrap eval local variable is always added first."
                     minimal))
           (lv-ecom (orgstrap--local-variables--eval-common)))
       (let ((lv-command (cons 'progn (orgstrap--dedoc (append lv-cver lv-norm lv-ncom lv-eval lv-ecom))))
-            (commands-existing (mapcar #'cdr (cl-remove-if-not (lambda (l) (eq (car l) 'eval)) elv)))) ;(ref:clrin)
+            (commands-existing (mapcar #'cdr (cl-remove-if-not (lambda (l) (eq (car l) 'eval)) elv))))
         (let ((eval-commands
                (cons lv-command (cl-remove-if-not
                                  (lambda (cmd) (orgstrap--match-eval-local-variables (cons 'eval cmd)))
@@ -889,7 +890,7 @@ XXX NOTE THAT THIS CANNOT BE USED WITH #+BEGIN_EXAMPLE BLOCKS."
            (orgstrap-norm body)))
       (secure-hash cypher body-normalized))))
 
-(defun orgstrap-run-additional-blocks (&rest name-checksum) ;(ref:oab)
+(defun orgstrap-run-additional-blocks (&rest name-checksum)
   "Securely run additional blocks in languages other than elisp.
 Do this by providing the name of the block and the checksum to be embedded
 in the orgstrap block as NAME-CHECKSUM pairs."
