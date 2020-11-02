@@ -2583,6 +2583,30 @@ When running a file.
    matches the content observed by the provider of the independent checksum
    (assuming no hash collisions).
 4. *Observe whether org-mode complains that the orgstrap block has changed.*
+* Experience reports
+** First trial
+The first use case for ~orgstrap~ beyond personal use was to create a
+stand alone application that would allow a user to run, modify, and
+create SPARQL queries running from a local server[fn::The file itself
+is in a private git repo at the moment, but the functionality will be
+extracted and made public, and the repo itself will be as well.]
+
+The primary users had no prior Emacs experience. Under supervision via
+a video call they were able to follow the instructions to download
+Emacs, download a zip of the file plus data and additional software,
+unzip, and click on the file (which opened in Emacs by default), and
+accept the local variables.
+
+There were a couple of hiccups. In one case Java for macos was
+missing. In the other case the built-in version of Org mode was not
+correctly replaced so Emacs had to be restarted. In the second case
+there was also an issue with multiple windows being opened and the
+confirmation window for the local variables thus being hard to find.
+
+Even with the slowdown they were able to get up and running within
+about 20 minutes. This is an enormous improvement over previous
+attempts which involved many hard to follow instructions that could
+take nearly 3 hours to complete and debug.
 * Future work
 :PROPERTIES:
 :CUSTOM_ID: future-work
