@@ -161,11 +161,17 @@ Deletes embedded and current values of `orgstrap-block-checksum'."
          (checksum-existing (and cpair (cdr cpair))))
     (orgstrap-revoke-checksums orgstrap-block-checksum checksum-existing)))
 
-(defun orgstrap-revoke-eval-local-variables ()
-  "Delete all approved orgstrap eval local variables from `safe-local-variable-values'."
+(defun orgstrap-revoke-elvs ()
+  "Delete all approved orgstrap elvs from `safe-local-variable-values'."
   (interactive)
-  (cl-delete-if #'orgstrap--match-eval-local-variables safe-local-variable-values)
+  (cl-delete-if #'orgstrap--match-elvs safe-local-variable-values)
   (customize-save-variable 'safe-local-variable-values safe-local-variable-values))
+
+(define-obsolete-function-alias
+  #'orgstrap-revoke-eval-local-variables
+  #'orgstrap-revoke-elvs
+  "1.2.4"
+  "Replaced by the more compact `orgstrap-revoke-elvs'.")
 
 ;; orgstrap run helpers
 
@@ -200,7 +206,7 @@ Sets further hooks."
   (when enable-local-eval
     ;; if `enable-local-eval' is nil we honor it and will not run
     ;; orgstrap blocks natively, this matches the behavior of the
-    ;; embedded eval local variables and simplifies logic for cases
+    ;; embedded elvs and simplifies logic for cases
     ;; where orgstrap should not run (e.g. when populating `org-agenda')
     (advice-add #'hack-local-variables-confirm :around #'orgstrap--hack-lv-confirm)
     (unless (member (buffer-file-name) orgstrap-file-blacklist)
@@ -212,7 +218,7 @@ COMMAND should be `hack-local-variables-confirm' with ARGS (all-vars
 unsafe-vars risky-vars dir-name)."
   (advice-remove #'hack-local-variables-confirm #'orgstrap--hack-lv-confirm)
   (cl-destructuring-bind (all-vars unsafe-vars risky-vars dir-name)
-      ;; emacs 28 doesn't alias the non cl- prefixed form so use unaliased?
+      ;; emacs 28 doesn't alias the non cl- prefixed form so use unaliased
       (mapcar (lambda (arg)
                 (if (listp arg)
                     ;; We must use `cl-delete-if' on all-vars,
@@ -223,7 +229,7 @@ unsafe-vars risky-vars dir-name)."
                     ;; the other -vars which is extra insurance
                     ;; against any future changes to the
                     ;; implementation in the calling scope.
-                    (cl-delete-if #'orgstrap--match-eval-local-variables arg)
+                    (cl-delete-if #'orgstrap--match-elvs arg)
                   arg))
               (if (member (buffer-file-name) orgstrap-file-blacklist)
                   (mapcar (lambda (arg) ; zap checksums for blacklisted
@@ -277,8 +283,8 @@ unsafe-vars risky-vars dir-name)."
     (when orgstrap-always-edit
       (orgstrap-edit-mode))))
 
-(defun orgstrap--match-eval-local-variables (pair)
-  "Return nil if PAIR matchs any eval local variable used by orgstrap.
+(defun orgstrap--match-elvs (pair)
+  "Return nil if PAIR matchs any elv used by orgstrap.
 Avoid false positives if possible if at all possible."
   (and (eq (car pair) 'eval)
        ;;(message "%s" (cdr pair))
@@ -313,7 +319,7 @@ universal prefix argument."
 ;; orgstrap do not run aka `org-agenda' eval protection
 
 (defun orgstrap--advise-no-eval-lv (command &rest args)
-  "Advise COMMAND to disable eval local variables for files loaded inside it.
+  "Advise COMMAND to disable elvs for files loaded inside it.
 ARGS will vary depending in which function was advised."
   ;; orgstrapped files are just plain old org files in this context
   ;; since agenda doesn't use any babel functionality ... of course
@@ -333,6 +339,9 @@ ARGS will vary depending in which function was advised."
 (advice-add #'org-get-agenda-file-buffer :around #'orgstrap--advise-no-eval-lv)
 
 ;;; edit helpers
+(defvar orgstrap--clone-stamp-source-buffer-block nil
+  "Source code buffer and block for `orgstrap-stamp'.")
+
 (defcustom orgstrap-on-change-hook nil
   "Hook run via `before-save-hook' when command `orgstrap-edit-mode' is enabled.
 Only runs when the contents of the orgstrap block have changed."
@@ -465,6 +474,69 @@ and then run `orgstrap-on-change-hook'."
             (run-hooks 'orgstrap-on-change-hook))
         (add-hook 'before-save-hook #'orgstrap--update-on-change nil t)))))
 
+(defun orgstrap--get-actual-params (params)
+  "Filter defaults, nulls, and junk from src block PARAMS."
+  (let ((defaults (append org-babel-default-header-args
+                          org-babel-default-header-args:emacs-lisp)))
+    (cl-remove-if (lambda (pair)
+                    (or (member pair defaults)
+                        (memq (car pair) '(:result-params :result-type))
+                        (null (cdr pair))))
+                  params)))
+
+(defun orgstrap-header-source-element (header-name &optional block-name &rest more-names)
+  "Given HEADER-NAME find the element that provides its value.
+If BLOCK-NAME is non-nil then search for headers for that block,
+otherwise search for headers associated with the current block."
+  ;; get the current headers, see if the value is set anywhere
+  ;; or if it is default, search for default anyway just to be sure
+  ;; return nil if not found
+  ;; when searching for any header go to the end of the src line
+  ;; `re-search-backward' from that point for :header-arg but not
+  ;; going beyond the affiliated keywords for the current element
+  ;; (if you can get affiliated keywords for the current element
+  ;; that might simplify the search as well? check the impl for how
+  ;; the actual values are obtained during execution etc)
+  ;; when found use `org-element-at-point' to obtain the element
+
+  ;; in another function the operates on the element
+  ;; the element will give start, end, value, etc.
+  ;; find bounds of value from element or sub element
+  ;; delete the value, replace with new value
+  (error "Not implemented TODO"))
+
+(defun orgstrap-update-src-block-header (name new-params &optional update)
+  "Add header arguments to block NAME from NEW-PARAMS from some other block.
+Existing header arguments will NOT be removed if they are not included in
+NEW-PARAMS. If UPDATE is non-nil existing header arguments are updated."
+  (let ((defaults (append org-babel-default-header-args
+                          org-babel-default-header-args:emacs-lisp))
+        (new-act-params (orgstrap--get-actual-params new-params)))
+    (orgstrap--with-block name
+      (ignore body body-unexpanded)
+      (let ((existing-act-params (orgstrap--get-actual-params params)))
+        (dolist (pair new-act-params)
+          (cl-destructuring-bind (key . value)
+              pair
+            (let ((header-arg (substring (symbol-name key) 1)))
+              (if (assq key existing-act-params)
+                  (if update
+                      (unless (member pair existing-act-params)
+                        ;; TODO remove existing
+                        ;; `org-babel-insert-header-arg' does not remove
+                        ;; and it is not trivial to find the actual location
+                        ;; of an existing header argument there are 4 places
+                        ;; that we will have to look and then in some cases
+                        ;; we will have to append even if we do find them
+                        (org-babel-insert-header-arg header-arg value)
+                        ;; This message works around the fact that we don't
+                        ;; have replace here, only append TODO consider
+                        ;; changing the way update works to be nil, replace,
+                        ;; or append once an in-place replace is implemented
+                        (message "%s superseded for block %s." key name))
+                    (warn "%s already defined for block %s!" key name))
+                (org-babel-insert-header-arg header-arg value)))))))))
+
 ;; edit user facing functions
 (defun orgstrap-get-block-checksum (&optional cypher)
   "Calculate the `orgstrap-block-checksum' for the current buffer using CYPHER."
@@ -498,6 +570,63 @@ directly if it has been calculated before and only needs to be set."
   (save-excursion
     (org-babel-goto-named-src-block orgstrap-orgstrap-block-name)
     (org-babel-execute-src-block)))
+
+(defun orgstrap-clone (&optional universal-argument)
+  "Set current block or orgstrap block as the source for `orgstrap-stamp'.
+If a universal argument is supplied then the orgstrap block is always used."
+  ;; TODO consider whether to avoid the inversion of behavior around C-u
+  ;; namely that nil -> always from orgstrap block, C-u -> current block
+  ;; this would avoid confusion where unprefixed could produce both
+  ;; behaviors and only switch when already on a src block
+  (interactive "P")
+  (let ((current-element (org-element-at-point))
+        (current-buffer (current-buffer)))
+    (if (and (eq (org-element-type current-element) 'src-block)
+             (not universal-argument))
+        (let ((block-name (org-element-property :name current-element)))
+          (if block-name
+              (setq orgstrap--clone-stamp-source-buffer-block
+                    (cons current-buffer block-name))
+            (warn "The current block has no name, it cannot be a clone source!")))
+      (if (orgstrap--used-in-current-buffer-p)
+          (setq orgstrap--clone-stamp-source-buffer-block
+                (cons current-buffer orgstrap-orgstrap-block-name))
+        (warn "orgstrap is not used in the current buffer!")))))
+
+(defun orgstrap-stamp (&optional universal-argument overwrite)
+  "Stamp orgstrap block via `orgstrap-clone' to current buffer.
+If UNIVERSAL-ARGUMENT is '(16) aka (C-u C-u) this will OVERWRITE any existing
+block.  If you are not calling this interactively all as (orgstrap-stamp nil t)
+for calirty.  You cannot stamp an orgstrap block into its own buffer."
+  (interactive "P")
+  (unless (eq major-mode 'org-mode)
+    (user-error "`orgstrap-stamp' only works in org-mode buffers"))
+  (let ((overwrite (or overwrite (equal universal-argument '(16))))
+        (source-buffer (car orgstrap--clone-stamp-source-buffer-block))
+        (source-block-name (cdr orgstrap--clone-stamp-source-buffer-block))
+        (target-buffer (current-buffer)))
+    (when (eq source-buffer target-buffer)
+      (error "Source and target are the same buffer. Not stamping!"))
+    (cl-destructuring-bind (source-body
+                            source-params
+                            org-adapt-indentation
+                            org-edit-src-content-indentation)
+        (save-window-excursion
+          (with-current-buffer source-buffer
+            (orgstrap--with-block source-block-name
+              (ignore body-unexpanded)
+              (list body
+                    params
+                    org-adapt-indentation
+                    org-edit-src-content-indentation))))
+      (if (and (not overwrite)
+               (member orgstrap-orgstrap-block-name
+                       (org-babel-src-block-names)))
+          (warn "orgstrap block already exists not stamping!")
+        (orgstrap--add-orgstrap-block source-body) ; FIXME somehow the hash is different !?!??!
+        (orgstrap-update-src-block-header orgstrap-orgstrap-block-name source-params t)
+        (orgstrap-add-block-checksum) ; I think it is correct to add the checksum here
+        (message "Stamped orgsrap block from %s" (buffer-file-name source-buffer))))))
 
 ;;;###autoload
 (define-minor-mode orgstrap-edit-mode
@@ -606,7 +735,7 @@ Please update `orgstrap-norm-func-name' to `orgstrap-norm-func--prp-1.1'"))
       (defalias 'orgstrap-norm #'orgstrap-norm-embd))))
 
 (defun orgstrap--local-variables--eval (info &optional minimal)
-  "Return the portable or MINIMAL eval local variables given INFO."
+  "Return the portable or MINIMAL elvs given INFO."
   (let* ((minimal (or minimal orgstrap-use-minimal-local-variables))
          (minimal (and minimal (orgstrap--have-min-org-version info minimal))))
     (if minimal
@@ -626,56 +755,57 @@ Please update `orgstrap-norm-func-name' to `orgstrap-norm-func--prp-1.1'"))
             ;; to produce different hashes
             (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-minimal)))
       '(
-        (defun orgstrap-org-src-coderef-regexp (_fmt &optional label)
-          "Backport `org-src-coderef-regexp' for 24 and 25.
-        See the upstream docstring for info on LABEL.
-        _FMT has the wrong meaning in 24 and 25."
-          (let ((fmt org-coderef-label-format))
-            (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$"
-                    (replace-regexp-in-string
-                     "%s"
-                     (if label
-                         (regexp-quote label)
-                       "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)")
-                     (regexp-quote fmt)
-                     nil t))))
-        (unless (fboundp #'org-src-coderef-regexp)
-          (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp))
-        (defun orgstrap--expand-body (info)
-          "Expand noweb references in INFO body and remove any coderefs."
-          ;; this is a backport of `org-babel--expand-body'
-          (let ((coderef (nth 6 info))
-                (expand
-                 (if (org-babel-noweb-p (nth 2 info) :eval)
-                     (org-babel-expand-noweb-references info)
-                   (nth 1 info))))
-            (if (not coderef)
-                expand
-              (replace-regexp-in-string
-               (org-src-coderef-regexp coderef) "" expand nil nil 1))))
+;; if you automatically reindent it will break these two
+(defun orgstrap-org-src-coderef-regexp (_fmt &optional label)
+  "Backport `org-src-coderef-regexp' for 24 and 25.
+See the upstream docstring for info on LABEL.
+_FMT has the wrong meaning in 24 and 25."
+  (let ((fmt org-coderef-label-format))
+    (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$"
+            (replace-regexp-in-string
+             "%s"
+             (if label
+                 (regexp-quote label)
+               "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)")
+             (regexp-quote fmt)
+             nil t))))
+(unless (fboundp #'org-src-coderef-regexp)
+  (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp))
+(defun orgstrap--expand-body (info)
+  "Expand noweb references in INFO body and remove any coderefs."
+  ;; this is a backport of `org-babel--expand-body'
+  (let ((coderef (nth 6 info))
+        (expand
+         (if (org-babel-noweb-p (nth 2 info) :eval)
+             (org-babel-expand-noweb-references info)
+           (nth 1 info))))
+    (if (not coderef)
+        expand
+      (replace-regexp-in-string
+       (org-src-coderef-regexp coderef) "" expand nil nil 1))))
 
-        ;;;###autoload
-        (defun orgstrap--confirm-eval-portable (lang _body)
-          "A backwards compatible, portable implementation for confirm-eval.
-        This should be called by `org-confirm-babel-evaluate'.  As implemented
-        the only LANG that is supported is emacs-lisp or elisp.  The argument
-        _BODY is rederived for portability and thus not used."
-          ;; `org-confirm-babel-evaluate' will prompt the user when the value
-          ;; that is returned is non-nil, therefore we negate positive matchs
-          (not (and (member lang '("elisp" "emacs-lisp"))
-                    (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info)))
-                           (body-normalized (orgstrap-norm body))
-                           (content-checksum
-                            (intern
-                             (secure-hash
-                              orgstrap-cypher
-                              body-normalized))))
-                      ;;(message "%s %s" orgstrap-block-checksum content-checksum)
-                      ;;(message "%s" body-normalized)
-                      (eq orgstrap-block-checksum content-checksum)))))
-        ;; portable eval is used as the default implementation in orgstrap.el
-        ;;;###autoload
-        (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable)))))
+;;;###autoload
+(defun orgstrap--confirm-eval-portable (lang _body)
+  "A backwards compatible, portable implementation for confirm-eval.
+This should be called by `org-confirm-babel-evaluate'.  As implemented
+the only LANG that is supported is emacs-lisp or elisp.  The argument
+_BODY is rederived for portability and thus not used."
+  ;; `org-confirm-babel-evaluate' will prompt the user when the value
+  ;; that is returned is non-nil, therefore we negate positive matchs
+  (not (and (member lang '("elisp" "emacs-lisp"))
+            (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info)))
+                   (body-normalized (orgstrap-norm body))
+                   (content-checksum
+                    (intern
+                     (secure-hash
+                      orgstrap-cypher
+                      body-normalized))))
+              ;;(message "%s %s" orgstrap-block-checksum content-checksum)
+              ;;(message "%s" body-normalized)
+              (eq orgstrap-block-checksum content-checksum)))))
+;; portable eval is used as the default implementation in orgstrap.el
+;;;###autoload
+(defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable)))))
 
 (defun orgstrap--local-variables--eval-common ()
   "Return the common eval check functions for local variables."
@@ -761,7 +891,7 @@ If a block with that name already exists raise an error."
   (interactive)
   (let ((all-block-names (org-babel-src-block-names)))
     (if (member orgstrap-orgstrap-block-name all-block-names)
-        (message "orgstrap block already exists not adding!")
+        (warn "orgstrap block already exists not adding!")
       (orgstrap--new-heading-elisp-block "Bootstrap"
                                          orgstrap-orgstrap-block-name
                                          '((results . none)
@@ -770,7 +900,13 @@ If a block with that name already exists raise an error."
       (orgstrap--with-block orgstrap-orgstrap-block-name
         (ignore params body-unexpanded body)
         (when block-contents
-          (org-babel-update-block-body block-contents))
+          ;; FIXME `org-babel-update-block-body' is broken in < 26
+          ;; for now warn and fail if the version is known bad NOTE trying to backport
+          ;; is not simple because there are changes to the function signatures
+          (if (string< org-version "8.3.4")
+              (warn "Your version of Org is too old to use this feature! %s < 8.3.4"
+                    org-version)
+            (org-babel-update-block-body block-contents)))
         nil))))
 
 (defun orgstrap--add-file-local-variables (&optional minimal norm-func-name)
@@ -782,10 +918,10 @@ block will be used.  NORM-FUNC-NAME is an optional argument that can be provided
 to determine which normalization function is used independent of the current
 buffer or global setting for `orgstrap-norm-func'.
 
-When run, this function replaces any existing orgstrap eval local variable with
-the latest implementation available according to the preferences for the current
-buffer and configuration.  Other eval local variables are retained if they are
-present, and the orgstrap eval local variable is always added first."
+When run, this function replaces any existing orgstrap elv with the latest
+implementation available according to the preferences for the current buffer
+and configuration.  Other elvs are retained if they are present, and the
+orgstrap elv is always added first."
   ;; switching comments probably wont work ? we can try
   ;; Use a prefix argument (i.e. C-u) to add file local variables comments instead of in a :noexport:
   (interactive)
