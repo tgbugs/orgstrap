@@ -45,6 +45,8 @@
 
 (require 'org)
 
+(require 'org-element)
+
 (require 'cl-lib)
 
 (defvar orgstrap-mode nil
@@ -117,7 +119,7 @@ Defaults to `orgstrap-norm-func--prp-1.1'.")
 
 For files on the blacklist `orgstrap-block-checksum' is removed from
 the local variables list so that the checksum will not be added to
-the `safe-local-variable-values' list. If it were added it would then
+the `safe-local-variable-values' list.  If it were added it would then
 be impossible to prevent execution of the source block when `orgstrap-mode'
 is disabled.
 
@@ -134,7 +136,7 @@ NOTE this variable only works if `orgstrap-mode' is enabled."
   (add-to-list 'orgstrap-file-blacklist (buffer-file-name)))
 
 (defun orgstrap-unblacklist-current-file ()
-  "Remove the current file from `orgstrap-file-blacklist'"
+  "Remove the current file from `orgstrap-file-blacklist'."
   (interactive)
   (setq orgstrap-file-blacklist (delete (buffer-file-name) orgstrap-file-blacklist)))
 
@@ -168,7 +170,7 @@ Deletes embedded and current values of `orgstrap-block-checksum'."
   (customize-save-variable 'safe-local-variable-values safe-local-variable-values))
 
 (define-obsolete-function-alias
-  #'orgstrap-revoke-eval-local-variables
+  'orgstrap-revoke-eval-local-variables
   #'orgstrap-revoke-elvs
   "1.2.4"
   "Replaced by the more compact `orgstrap-revoke-elvs'.")
@@ -334,6 +336,14 @@ ARGS will vary depending in which function was advised."
                                   (member (car args)
                                           orgstrap-always-eval-whitelist)
                                   enable-local-eval)))
+;; FIXME checksums are not correctly skipped here ? or do we not skip them ?
+;; (advice-add #'hack-local-variables-confirm :around #'orgstrap--hack-lv-confirm)
+;; doesn't realy do what we want because it will only fire once AND because those
+;; checksums that request confirmation should be accepted in a separate context
+;; the block itself will not evaluate, but I think we need a note to that effect?
+;; maybe we write a variant of `orgstrap--org-buffer' that strips all checksums or
+;; something like that? modifying `orgstrap--org-buffer' doesn't seem to be the
+;; right approach .... I've tried and it is really to run, not to not run things
       (apply command args))))
 
 (advice-add #'org-get-agenda-file-buffer :around #'orgstrap--advise-no-eval-lv)
@@ -487,7 +497,8 @@ and then run `orgstrap-on-change-hook'."
 (defun orgstrap-header-source-element (header-name &optional block-name &rest more-names)
   "Given HEADER-NAME find the element that provides its value.
 If BLOCK-NAME is non-nil then search for headers for that block,
-otherwise search for headers associated with the current block."
+otherwise search for headers associated with the current block.
+If MORE-NAMES are provided return the value for each (or nil)."
   ;; get the current headers, see if the value is set anywhere
   ;; or if it is default, search for default anyway just to be sure
   ;; return nil if not found
@@ -503,15 +514,14 @@ otherwise search for headers associated with the current block."
   ;; the element will give start, end, value, etc.
   ;; find bounds of value from element or sub element
   ;; delete the value, replace with new value
+  (ignore header-name block-name more-names)
   (error "Not implemented TODO"))
 
 (defun orgstrap-update-src-block-header (name new-params &optional update)
   "Add header arguments to block NAME from NEW-PARAMS from some other block.
 Existing header arguments will NOT be removed if they are not included in
-NEW-PARAMS. If UPDATE is non-nil existing header arguments are updated."
-  (let ((defaults (append org-babel-default-header-args
-                          org-babel-default-header-args:emacs-lisp))
-        (new-act-params (orgstrap--get-actual-params new-params)))
+NEW-PARAMS.  If UPDATE is non-nil existing header arguments are updated."
+  (let ((new-act-params (orgstrap--get-actual-params new-params)))
     (orgstrap--with-block name
       (ignore body body-unexpanded)
       (let ((existing-act-params (orgstrap--get-actual-params params)))
@@ -573,7 +583,7 @@ directly if it has been calculated before and only needs to be set."
 
 (defun orgstrap-clone (&optional universal-argument)
   "Set current block or orgstrap block as the source for `orgstrap-stamp'.
-If a universal argument is supplied then the orgstrap block is always used."
+If a UNIVERSAL-ARGUMENT is supplied then the orgstrap block is always used."
   ;; TODO consider whether to avoid the inversion of behavior around C-u
   ;; namely that nil -> always from orgstrap block, C-u -> current block
   ;; this would avoid confusion where unprefixed could produce both
@@ -601,12 +611,14 @@ for calirty.  You cannot stamp an orgstrap block into its own buffer."
   (interactive "P")
   (unless (eq major-mode 'org-mode)
     (user-error "`orgstrap-stamp' only works in org-mode buffers"))
+  (unless orgstrap--clone-stamp-source-buffer-block
+    (user-error "No value to clone!  Use `orgstrap-clone' first."))
   (let ((overwrite (or overwrite (equal universal-argument '(16))))
         (source-buffer (car orgstrap--clone-stamp-source-buffer-block))
         (source-block-name (cdr orgstrap--clone-stamp-source-buffer-block))
         (target-buffer (current-buffer)))
     (when (eq source-buffer target-buffer)
-      (error "Source and target are the same buffer. Not stamping!"))
+      (error "Source and target are the same buffer.  Not stamping!"))
     (cl-destructuring-bind (source-body
                             source-params
                             org-adapt-indentation
@@ -887,7 +899,8 @@ can be used to override the default value set via `orgstrap-link-message'"
 
 (defun orgstrap--add-orgstrap-block (&optional block-contents)
   "Add a new elisp source block with #+name: orgstrap to the current buffer.
-If a block with that name already exists raise an error."
+If a block with that name already exists raise an error.
+Insert BLOCK-CONTENTS if they are supplied."
   (interactive)
   (let ((all-block-names (org-babel-src-block-names)))
     (if (member orgstrap-orgstrap-block-name all-block-names)
@@ -943,7 +956,7 @@ orgstrap elv is always added first."
             (commands-existing (mapcar #'cdr (cl-remove-if-not (lambda (l) (eq (car l) 'eval)) elv))))
         (let ((eval-commands
                (cons lv-command (cl-remove-if-not
-                                 (lambda (cmd) (orgstrap--match-eval-local-variables (cons 'eval cmd)))
+                                 (lambda (cmd) (orgstrap--match-elvs (cons 'eval cmd)))
                                  commands-existing))))
           (when commands-existing
             (delete-file-local-variable 'eval))

@@ -1,7 +1,8 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 4f31b5559987bcd46bc615d5ed8ac2a75e1697903ee530edc5396b507193433d; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: a2f872728112636859f13ab1dc672f1d3f6f9ccbaa237458f872674753d52964; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
-#+title: Write Software Applications in Org
+#+title: Orgstrap: Executable Org files
 #+options: num:nil \n:nil
+#+property: header-args :eval no-export
 #+LATEX_HEADER: \usepackage[margin=0.8in]{geometry}
 #+LATEX_HEADER: \setlength\parindent{0pt}
 
@@ -39,7 +40,9 @@ If you already have =orgstrap= installed you can enable it for any
 Org file by running =M-x= =orgstrap-init= which will add the basic
 =orgstrap= machinery to the current buffer.
 
-If you don't have =orgstrap=, you can get it using itself.
+If you don't have =orgstrap=, it is available on [[https://melpa.org/#/orgstrap][melpa]],
+or if you are feeling adventurous you can get it using itself.
+
 1. Obtain the org mode source for this file. (e.g.
    [[https://raw.githubusercontent.com/tgbugs/orgstrap/master/orgstrap.org][from GitHub]]).
 2. Open the source in Emacs[[#bootstrapping-to-emacs-bootstrapping-to-org][*]].
@@ -51,8 +54,9 @@ If you don't have =orgstrap=, you can get it using itself.
 5. Reload the file and accept the file local variables.
 6. Congratulations you can now use =orgstrap= with your own files!
 
-For a somewhat more sane and persistent installation experience
-=orgstrap= is also available on [[https://melpa.org/#/orgstrap][melpa]].
+If you install =orgstrap= in this way you have to open the file again
+every time you open a new Emacs, so installing [[file:./orgstrap.el][orgstrap.el]]
+via ~package.el~ or by some other means is recommended.
 
 A minor mode for editing orgstrapped files is included as =orgstrap-edit-mode=.
 It is activated by =orgstrap-init=. When enabled it automatically updates
@@ -116,20 +120,21 @@ named source block only when it matches the hash.
 
 #+caption: Things you can do with arbitrary code execution and checksums.
 #+name: table-use-cases
-|----------------------------------------+------------------+--------------------------------|
-| Use case                               | Good idea        | Alternative                    |
-|----------------------------------------+------------------+--------------------------------|
-| Always run defuns used in file         | ✅ Yes           | init.el, =C-c C-c=             |
-| Install elisp code directly            | ❌ No            | Use =packages.el=              |
-| Self tangling files                    | ✅ I do it       | =C-c C-v C-t=                  |
-| Install packages required by file      | Probably         | System package manager         |
-| Create an Emacs based botnet           | ✅ ✅ Definitely | ???                            |
-| Replace hard to follow instructions    | ✅ Yes           | Hard to follow instructions    |
-| Tangle git hook files for publishing   | ✅ Yes           | Manually tangle                |
-| System specific behavior without edits | ✅ Yes           | #+name: literal blocks via =:= |
-| Version control for source blocks      | ❌ ❌ Please no  | git, hg, svn, anything please  |
-| Detect and set environment variables   | ✅ Yes           |                                |
-|----------------------------------------+------------------+--------------------------------|
+|----------------------------------------+------------------+------------------------------------|
+| Use case                               | Good idea        | Alternative                        |
+|----------------------------------------+------------------+------------------------------------|
+| Always run defuns used in file         | ✅ Yes           | init.el, =C-c C-c=                 |
+| Install elisp code directly            | ❌ No            | Use =package.el=, =straight=, etc. |
+| Self tangling files                    | ✅ I do it       | =C-c C-v C-t=                      |
+| Install packages required by file      | Probably         | System package manager             |
+| Create an Emacs based botnet           | ✅ ✅ Definitely | ???                                |
+| Create Orgware for non-technical users | ✅ Yes           | Web server and the unholy trinity. |
+| Replace hard to follow instructions    | ✅ Yes           | Hard to follow instructions        |
+| Tangle git hook files for publishing   | ✅ Yes           | Manually tangle                    |
+| System specific behavior without edits | ✅ Yes           | #+name: literal blocks via =:=     |
+| Version control for source blocks      | ❌ ❌ Please no  | git, hg, svn, anything please      |
+| Detect and set environment variables   | ✅ Yes           |                                    |
+|----------------------------------------+------------------+------------------------------------|
 # Actually I'm kind of hyped for though of describing the system used to version
 # control the code in the file itself. Not so simple to pull off though.
 # It only sort of works in this case because we have the rest of the file under
@@ -803,7 +808,7 @@ Defaults to `orgstrap-norm-func--prp-1.1'.")
 
 For files on the blacklist `orgstrap-block-checksum' is removed from
 the local variables list so that the checksum will not be added to
-the `safe-local-variable-values' list. If it were added it would then
+the `safe-local-variable-values' list.  If it were added it would then
 be impossible to prevent execution of the source block when `orgstrap-mode'
 is disabled.
 
@@ -820,7 +825,7 @@ NOTE this variable only works if `orgstrap-mode' is enabled."
   (add-to-list 'orgstrap-file-blacklist (buffer-file-name)))
 
 (defun orgstrap-unblacklist-current-file ()
-  "Remove the current file from `orgstrap-file-blacklist'"
+  "Remove the current file from `orgstrap-file-blacklist'."
   (interactive)
   (setq orgstrap-file-blacklist (delete (buffer-file-name) orgstrap-file-blacklist)))
 
@@ -854,7 +859,7 @@ Deletes embedded and current values of `orgstrap-block-checksum'."
   (customize-save-variable 'safe-local-variable-values safe-local-variable-values))
 
 (define-obsolete-function-alias
-  #'orgstrap-revoke-eval-local-variables
+  'orgstrap-revoke-eval-local-variables
   #'orgstrap-revoke-elvs
   "1.2.4"
   "Replaced by the more compact `orgstrap-revoke-elvs'.")
@@ -991,6 +996,14 @@ ARGS will vary depending in which function was advised."
                                   (member (car args)
                                           orgstrap-always-eval-whitelist)
                                   enable-local-eval)))
+;; FIXME checksums are not correctly skipped here ? or do we not skip them ?
+;; (advice-add #'hack-local-variables-confirm :around #'orgstrap--hack-lv-confirm)
+;; doesn't realy do what we want because it will only fire once AND because those
+;; checksums that request confirmation should be accepted in a separate context
+;; the block itself will not evaluate, but I think we need a note to that effect?
+;; maybe we write a variant of `orgstrap--org-buffer' that strips all checksums or
+;; something like that? modifying `orgstrap--org-buffer' doesn't seem to be the
+;; right approach .... I've tried and it is really to run, not to not run things
       (apply command args))))
 
 (advice-add #'org-get-agenda-file-buffer :around #'orgstrap--advise-no-eval-lv)
@@ -1092,7 +1105,8 @@ and then run `orgstrap-on-change-hook'."
 (defun orgstrap-header-source-element (header-name &optional block-name &rest more-names)
   "Given HEADER-NAME find the element that provides its value.
 If BLOCK-NAME is non-nil then search for headers for that block,
-otherwise search for headers associated with the current block."
+otherwise search for headers associated with the current block.
+If MORE-NAMES are provided return the value for each (or nil)."
   ;; get the current headers, see if the value is set anywhere
   ;; or if it is default, search for default anyway just to be sure
   ;; return nil if not found
@@ -1108,15 +1122,14 @@ otherwise search for headers associated with the current block."
   ;; the element will give start, end, value, etc.
   ;; find bounds of value from element or sub element
   ;; delete the value, replace with new value
+  (ignore header-name block-name more-names)
   (error "Not implemented TODO"))
 
 (defun orgstrap-update-src-block-header (name new-params &optional update)
   "Add header arguments to block NAME from NEW-PARAMS from some other block.
 Existing header arguments will NOT be removed if they are not included in
-NEW-PARAMS. If UPDATE is non-nil existing header arguments are updated."
-  (let ((defaults (append org-babel-default-header-args
-                          org-babel-default-header-args:emacs-lisp))
-        (new-act-params (orgstrap--get-actual-params new-params)))
+NEW-PARAMS.  If UPDATE is non-nil existing header arguments are updated."
+  (let ((new-act-params (orgstrap--get-actual-params new-params)))
     (orgstrap--with-block name
       (ignore body body-unexpanded)
       (let ((existing-act-params (orgstrap--get-actual-params params)))
@@ -1178,7 +1191,7 @@ directly if it has been calculated before and only needs to be set."
 
 (defun orgstrap-clone (&optional universal-argument)
   "Set current block or orgstrap block as the source for `orgstrap-stamp'.
-If a universal argument is supplied then the orgstrap block is always used."
+If a UNIVERSAL-ARGUMENT is supplied then the orgstrap block is always used."
   ;; TODO consider whether to avoid the inversion of behavior around C-u
   ;; namely that nil -> always from orgstrap block, C-u -> current block
   ;; this would avoid confusion where unprefixed could produce both
@@ -1206,12 +1219,14 @@ for calirty.  You cannot stamp an orgstrap block into its own buffer."
   (interactive "P")
   (unless (eq major-mode 'org-mode)
     (user-error "`orgstrap-stamp' only works in org-mode buffers"))
+  (unless orgstrap--clone-stamp-source-buffer-block
+    (user-error "No value to clone!  Use `orgstrap-clone' first."))
   (let ((overwrite (or overwrite (equal universal-argument '(16))))
         (source-buffer (car orgstrap--clone-stamp-source-buffer-block))
         (source-block-name (cdr orgstrap--clone-stamp-source-buffer-block))
         (target-buffer (current-buffer)))
     (when (eq source-buffer target-buffer)
-      (error "Source and target are the same buffer. Not stamping!"))
+      (error "Source and target are the same buffer.  Not stamping!"))
     (cl-destructuring-bind (source-body
                             source-params
                             org-adapt-indentation
@@ -1436,7 +1451,8 @@ can be used to override the default value set via `orgstrap-link-message'"
 
 (defun orgstrap--add-orgstrap-block (&optional block-contents)
   "Add a new elisp source block with #+name: orgstrap to the current buffer.
-If a block with that name already exists raise an error."
+If a block with that name already exists raise an error.
+Insert BLOCK-CONTENTS if they are supplied."
   (interactive)
   (let ((all-block-names (org-babel-src-block-names)))
     (if (member orgstrap-orgstrap-block-name all-block-names)
@@ -1492,7 +1508,7 @@ orgstrap elv is always added first."
             (commands-existing (mapcar #'cdr (cl-remove-if-not (lambda (l) (eq (car l) 'eval)) elv)))) ;(ref:clrin)
         (let ((eval-commands
                (cons lv-command (cl-remove-if-not
-                                 (lambda (cmd) (orgstrap--match-eval-local-variables (cons 'eval cmd)))
+                                 (lambda (cmd) (orgstrap--match-elvs (cons 'eval cmd)))
                                  commands-existing))))
           (when commands-existing
             (delete-file-local-variable 'eval))
@@ -1671,6 +1687,8 @@ minimal as possible is critical.
 
 (require 'org)
 
+(require 'org-element)
+
 <<orgstrap-run-helper-defuns>>
 
 <<orgstrap-edit-helper-defuns>>
@@ -1727,7 +1745,8 @@ of Emacs you will be testing against.
 # XXX note that you cannot use append t with add-to-list for local variables
 # it puts any additional values in the wrong place, need to check other cases
 # reminder that you can't use bare bangs ! anywhere in bash scripts :/
-#+begin_src bash :var checksum=(identity orgstrap-block-checksum)
+#+name: test-matrix-run
+#+begin_src bash :var checksum=(identity orgstrap-block-checksum) :results drawer output
 versions=( 24 25 26 27 28-vcs )
 test_files=( test-no-lv-list.org test-lv-list-portable test-lv-list-minimal )
 for v in ${versions[@]}; do
@@ -1737,6 +1756,7 @@ for f in ${test_files[@]};do
 #emacs -q \
 emacs-$v -q --batch \
 -l orgstrap-autoloads.el \
+--eval "(message \"\n%s\"(emacs-version))" \
 -f toggle-debug-on-error \
 --eval "(add-to-list 'load-path \"$(pwd)/\")" \
 --eval "(orgstrap-mode)" \
@@ -1744,13 +1764,13 @@ emacs-$v -q --batch \
 --eval "(add-to-list 'safe-local-variable-values '(orgstrap-cypher . sha256))" \
 --eval "(add-to-list 'safe-local-variable-values '(orgstrap-norm-func-name . orgstrap-norm-func--prp-1.1))" \
 --eval "(add-to-list 'safe-local-variable-values '(orgstrap-block-checksum .
-f08685ce887c39e60249bb7b17cf10df1fc5a57910aff8be396dff6b22064b3b))" \
+8d941e14e89664b834f5b28c070f9f7b0ec55b092b55cc23dd903c010fdaeda5))" \
 --eval "(add-to-list 'safe-local-variable-values '(orgstrap-block-checksum .
-ac1c7f4aa98c75911b82af8e2e21003d0669571795188810fefa6dfe30405b4c))" \
+14e85d1213ef7a6739ca6ca7361a227b0a55346d4c7c6457bdd5f7ba91ff5dff))" \
 --eval "(add-to-list 'safe-local-variable-values '(orgstrap-block-checksum .
-536cd93653b292459d338c1c4a1949fd01d1240f5eae31509f5f58241c6d0378))" \
+3008580fd616cdfca904c7508ae023f782585229a87adab33fb8c2d391f89561))" \
 --visit $f \
---eval "(orgstrap-test)"
+--eval "(orgstrap-test)" 2>&1
 done
 done
 #+end_src
@@ -1797,7 +1817,7 @@ done
 # #+header: :comments link  # broken atm
 #+name: test-no-lv-list
 #+begin_src org :tangle ./test-no-lv-list.org
-# -*- orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; orgstrap-block-checksum: f08685ce887c39e60249bb7b17cf10df1fc5a57910aff8be396dff6b22064b3b; -*-
+# -*- orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; orgstrap-block-checksum: 8d941e14e89664b834f5b28c070f9f7b0ec55b092b55cc23dd903c010fdaeda5; -*-
 # [[orgstrap][jump to the orgstrap block for this file]]
 
 ,* Bootstrap :noexport:
@@ -1805,7 +1825,7 @@ done
 ,#+name: orgstrap
 ,#+begin_src elisp :results none :lexical yes
 (defun orgstrap-test ()
-  (if (cl-remove-if-not #'orgstrap--match-eval-local-variables
+  (if (cl-remove-if-not #'orgstrap--match-elvs
                         file-local-variables-alist)
       (error "elv is still present!")
     (message "No local variables here!")))
@@ -1815,7 +1835,7 @@ done
 
 #+name: test-lv-list-portable
 #+begin_src org :tangle ./test-lv-list-portable :noweb yes
-# -*- mode: org; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; orgstrap-block-checksum: ac1c7f4aa98c75911b82af8e2e21003d0669571795188810fefa6dfe30405b4c; -*-
+# -*- mode: org; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; orgstrap-block-checksum: 14e85d1213ef7a6739ca6ca7361a227b0a55346d4c7c6457bdd5f7ba91ff5dff; -*-
 # [[orgstrap][jump to the orgstrap block for this file]]
 
 ,* Bootstrap :noexport:
@@ -1823,7 +1843,7 @@ done
 ,#+name: orgstrap
 ,#+begin_src elisp :results none :lexical yes
 (defun orgstrap-test ()
-  (if (cl-remove-if-not #'orgstrap--match-eval-local-variables
+  (if (cl-remove-if-not #'orgstrap--match-elvs
                         file-local-variables-alist)
       (error "elv is still present!")
     (message "Portable local variables here!")))
@@ -1834,7 +1854,7 @@ done
 
 #+name: test-lv-list-minimal
 #+begin_src org :tangle ./test-lv-list-minimal :noweb yes
-# -*- mode: org; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; orgstrap-block-checksum: 536cd93653b292459d338c1c4a1949fd01d1240f5eae31509f5f58241c6d0378; -*-
+# -*- mode: org; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; orgstrap-block-checksum: 3008580fd616cdfca904c7508ae023f782585229a87adab33fb8c2d391f89561; -*-
 # [[orgstrap][jump to the orgstrap block for this file]]
 
 ,* Bootstrap :noexport:
@@ -1842,7 +1862,7 @@ done
 ,#+name: orgstrap
 ,#+begin_src elisp :results none :lexical yes
 (defun orgstrap-test ()
-  (if (cl-remove-if-not #'orgstrap--match-eval-local-variables
+  (if (cl-remove-if-not #'orgstrap--match-elvs
                         file-local-variables-alist)
       (error "elv is still present!")
     (message "Minimal local variables here!")))
@@ -1851,12 +1871,34 @@ done
 <<local-variables-minimal-example>>
 #+end_src
 ** Release :noexport:
-Before a release.
+*** Flycheck
+Use ~flycheck-mode~ on [[file:./orgstrap.el]] to checkdoc for melpa.
+*** Byte compile
+Before a release run the following block and fix any byte compile
+errors and warnings.
 #+begin_src elisp :noweb yes :results drawer
 <<run-command>>
 (run-command "emacs" "-q" "--batch" "-f" "batch-byte-compile" "orgstrap.el")
 #+end_src
+*** Run test matrix
+Run ref:test-matrix-run.
+#+call: test-matrix-run()
+*** Run init tests
+These are not automated at the moment. Run ref:test-portable and
+do the following for each version of Emacs.
 
+1. Accept lvs.
+2. For Emacs >= 26 ~orgstrap-clone~.
+3. switch to ~*scratch*~
+4. enable ~org-mode~
+5. ~orgstrap-init~
+6. undo
+7. ~orgstrap-stamp~
+8. check that the checksum matches the checksum for this file
+9. quit
+
+#+call: test-portable()
+*** Final steps
 Things that need to be done for a release.
 - Bump the version number in the [[(orgstrap.el-version)][orgstrap.el header comment]].
 - Update the [[#changelog][changelog]].
