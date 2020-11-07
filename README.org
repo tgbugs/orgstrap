@@ -1,6 +1,6 @@
 # -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 4f31b5559987bcd46bc615d5ed8ac2a75e1697903ee530edc5396b507193433d; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
-#+title: Bootstrap an Org file using file local variables
+#+title: Write Software Applications in Org
 #+options: num:nil \n:nil
 #+LATEX_HEADER: \usepackage[margin=0.8in]{geometry}
 #+LATEX_HEADER: \setlength\parindent{0pt}
@@ -14,7 +14,7 @@
 # If you want to grow up to be a unicorn you're going to have to
 # pull yourself up by your own bootstraps!
 
-=orgstrap= is a [[#specification][specification]] and tooling for bootstrapping Org files.
+=orgstrap= turns Org files into full fledged software applications.
 
 It allows Org files to describe their own requirements, and define
 their own functionality, making them self-contained standalone
@@ -23,6 +23,10 @@ implementations of the Org Babel protocol in the future.
 
 This file bootstraps itself to provide the functionality needed to use
 =orgstrap= in any Org file.
+
+It contains a formal [[#specification][specification]] for =orgstrap=
+and the reference implementation in Emacs lisp which comes with
+tooling beyond the spec that simplifies common =orgstrap= workflows.
 
 =orgstrap= works with all versions of Emacs since =24.4= and all versions of Org since =8.2.10=.
 
@@ -2014,6 +2018,46 @@ encounter instructions that ask you to directly install software from a random p
 you should be suspicious, even, perhaps especially, if that random place is housed
 within a larger reputable site. If you're not in a hurry, ask for the software to be
 packaged, or package it yourself so that it can go through the process.
+** Opening orgstrapped files as an Emacs user
+One problem that orgstrap has is that an orgstrap block can modify the
+Emacs configuration. Modifying the config is often critical to get the
+desired behavior for the particular target user population.  This is
+not an issue if the users do not use Emacs for anything else. However,
+if the user opening the file is an Emacs user then blocks that modify
+the configuration are a serious problem.
+
+There are three ways around this issue: one a standard convention for
+naming a variable to control evaluation of config related code or two
+always use ~emacs -q~ and of course three a combination of both.
+
+In the first case a set of standard conventions for variable names can
+be used to control whether some, or all configuration variables are
+set. However, this can only attain the status of a best practice
+because orgstrap blocks run arbitrary code and there is no way to
+enforce the convention (thus why it is in this section).
+
+One convention that I have been testing is to ...
+# TODO enable-*
+# orgstrap-enable-config ? not a good name ...
+
+In the second case we suggest that users always open orgstrapped files
+with ~emacs -q~. This is as close as we can get to having a sandboxed
+execution environment. If the user also wants to load their config
+then they would have to use ~-l~ as well. This is a pain, but without
+converting all of the variables into buffer local variables this is
+unlikely to work.
+
+There is also the issue of how to handle potential name collisions.
+# TODO orgstrap--- prefix is too long, but is one solution
+
+In summary, Emacs and orgstrap are _very_ sharp tools. I have tried to
+provide a bit of protection via the checksum mechanism, however if you
+are an Emacs user, you should probably always check the orgstrap block
+to make sure that it won't completely klobber your config.
+
+If you are authoring a file that uses orgstrap, it is friendly to put
+any config related code in its own block so that it can be controlled
+globally via ~the-orgstrap-variable-name-to-be-determined~.
 * Bootstrapping to Emacs, bootstrapping to Org
 :PROPERTIES:
 :CUSTOM_ID: bootstrapping-to-emacs-bootstrapping-to-org
