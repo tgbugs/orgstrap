@@ -34,6 +34,127 @@ be handled for them by the code in the Org mode file. Live and learn.
 So here we are, not quite at curl pipe bash, but hopefully at a form
 that is slightly more auditable[fn::Which means that this section may
 need to be broken out into its own file and published separately.].
+
+At this point the basics of the script should be working on
+darwin, various linux distros, various bsds, and windows. At the moment
+only windows and a subset of linux distros can bootstrap from scratch.
+There is also a question of whether forcing a package manager on an
+unsuspecting user is a good idea. I tend to say yes, but maybe we need
+to make sure that they are a little less unsuspecting? Though there is
+nothing like a cold baptism into the world of proper systems administration.
+** Emacs lisp
+Below is what appears to be nothing more than an Emacs lisp block with
+3 other blocks nowebed into the ... comments? What is going on here?!
+
+The quoted colons and comments are no-ops in both powershell and
+bash/zsh so we can include the shell functionality needed safely
+hidden from elisp behind the comments.
+
+The three sections are implemented in the following sections.
+
+#+name: bootstrap-from-shell
+#+header: :shebang "#!/usr/bin/env bash"
+#+begin_src emacs-lisp :noweb no-export :tangle ./get-emacs.el.sh.ps1
+":"; # -*-emacs-lisp-*-
+":"; <<posix-powershell-switch>>
+":"; #px <<posix-bootstrap>>
+":"; #ps <<powershell-bootstrap>>
+(message "We have Emacs.")
+#+end_src
+*** Tests                                                          :noexport:
+Bash
+#+name: bootstrap-from-shell-bash
+#+begin_src bash :noweb no-export :results output :exports none
+<<bootstrap-from-shell>>
+#+end_src
+
+Bash in posix mode.
+If you try to run this block via org-babel on a Debian derived
+distro this will fail, see the =:shebang= header for details.
+#+name: bootstrap-from-shell-sh
+#+header: :shebang "#!/usr/bin/env -S bash --norc --posix"
+#+begin_src sh :noweb no-export :results output :exports none
+<<bootstrap-from-shell>>
+#+end_src
+
+Zsh
+#+name: bootstrap-from-shell-zsh
+#+begin_src zsh :noweb no-export :results output :exports none
+<<bootstrap-from-shell>>
+#+end_src
+
+Powershell
+#+name: bootstrap-from-shell-powershell
+#+begin_src powershell :noweb no-export :results output :exports none
+<<bootstrap-from-shell>>
+#+end_src
+** Posix powershell switch
+Right now the switch only works with bash, zsh, and powershell because
+https://unix.stackexchange.com/a/71137 is more than I want to try to
+deal with here. It will also run under =sh= if it points to bash
+running in =--posix= mode.
+
+It is unfortunate that there is no way to get this to work with dash,
+otherwise we could set =sh= for the shebang, but we can't due to the
+incompatible function syntax.
+
+The approach comes from https://stackoverflow.com/a/39422067. The block below
+is syntactically valid bash, zsh, and powershell. In a posix shell the quoted
+commands and ="exit"= run, whereas in powershell they are skipped. We then engage
+in some unspeakable hackery and parse the input file and grep for =#px= or =#ps=
+to select the code for the specific platform (see ref:bootstrap-from-shell).
+We then eval it[fn::If you are still nodding along in agreement, know that
+I am running in terror from this code block even as I write this footnote.].
+# A slight redeeming factor is that the use of =$0= means that you can't
+# curl pipe bash the output script because there is no =$0=. On the other hand
+# if you do want to simplify life by using streaming insecurities then we will
+# need to come up with an alternate approach.
+
+#+caption: This is where the magic happens.
+#+name: posix-powershell-switch
+#+begin_src bash :noweb yes
+function posix () {
+  eval "$(grep '^":";\ #px' $0 | sed -e 's/^":";\ #px //')"
+  return "$?"
+}
+function quirk () {
+  test "$ZSH_VERSION" && set +nofunctionargzero
+}
+function unquirk () {
+  test "$ZSH_VERSION" && set nofunctionargzero
+}
+"quirk"
+"posix"
+"unquirk"
+"exit"  # NOTE can't pass error code out easily here
+((Get-Content $MyInvocation.MyCommand.Source) -match '^":";\ #ps ' -replace '^":";\ #ps ') -join "`n" | Invoke-Expression
+exit
+#+end_src
+
+Many variants of the test for quirk have been tried and failed.  The
+variant below works but was not selected because =test= is more
+portable (see https://stackoverflow.com/a/6535252).
+#+begin_src bash
+function quirk () {
+  (( $ZSH_VERSION )) && set +nofunctionargzero
+}
+#+end_src
+Furthermore, =test= is compatible with powershell syntax so it is better to use that
+for bootstrapping. On all my windows systems =test= is available, but I suspect
+that it is coming from something I have installed and cannot be relied upon.
+
+Quirks are required for zsh due to the fact that it will set =$0= to the name
+of the function which breaks grepping =$0= since we encounter the name of the
+function not the name of the source file.
+*** Tests                                                          :noexport:
+Test blocks to ensure shell portability.
+#+begin_src powershell :noweb yes :results output :exports none
+<<posix-powershell-switch>>
+#+end_src
+
+#+begin_src zsh :noweb yes :results output :exports none
+<<posix-powershell-switch>>
+#+end_src
 ** Common variables
 #+name: &message-emacs-missing
 : Emacs missing, preparing to bootstrap.
@@ -217,122 +338,4 @@ try {
 } finally {
     exit
 }
-#+end_src
-** Posix powershell switch
-Right now the switch only works with bash, zsh, and powershell because
-https://unix.stackexchange.com/a/71137 is more than I want
-to try to deal with here. It will also run under =sh= if it
-points to bash running in =--posix= mode.
-
-It is unfortunate that there is no way to get this to work with dash,
-otherwise we could set =sh= for the shebang, but we can't due to the
-incompatible function syntax.
-
-The approach comes from https://stackoverflow.com/a/39422067. The block below
-is syntactically valid bash, zsh, and powershell. In a posix shell the quoted
-commands and ="exit"= run, whereas in powershell they are skipped. We then engage
-in some unspeakable hackery and parse the input file and grep for =#px= or =#ps=
-to select the code for the specific platform (see ref:bootstrap-from-shell).
-We then eval it[fn::If you are still nodding along in agreement, know that
-I am running in terror from this code block even as I write this footnote.].
-# A slight redeeming factor is that the use of =$0= means that you can't
-# curl pipe bash the output script because there is no =$0=. On the other hand
-# if you do want to simplify life by using streaming insecurities then we will
-# need to come up with an alternate approach.
-
-#+caption: This is where the magic happens.
-#+name: posix-powershell-switch
-#+begin_src bash :noweb yes
-function posix () {
-  eval "$(grep '^":";\ #px' $0 | sed -e 's/^":";\ #px //')"
-  return "$?"
-}
-function quirk () {
-  test "$ZSH_VERSION" && set +nofunctionargzero
-}
-function unquirk () {
-  test "$ZSH_VERSION" && set nofunctionargzero
-}
-"quirk"
-"posix"
-"unquirk"
-"exit"  # NOTE can't pass error code out easily here
-((Get-Content $MyInvocation.MyCommand.Source) -match '^":";\ #ps ' -replace '^":";\ #ps ') -join "`n" | Invoke-Expression
-exit
-#+end_src
-
-Many variants of the test for quirk have been tried and failed.
-This variant works but was not selected because =test= is more
-portable (see https://stackoverflow.com/a/6535252).
-#+begin_src bash
-function quirk () {
-  (( $ZSH_VERSION )) && set +nofunctionargzero
-}
-#+end_src
-Furthermore, =test= is compatible with powershell syntax so it is better to use that
-for bootstrapping. On all my windows systems =test= is available, but I suspect
-that it is coming from something I have installed and cannot be relied upon.
-
-Quirks are required for zsh due to the fact that it will set =$0= to the name
-of the function which breaks grepping =$0= since we encounter the name of the
-function not the name of the source file.
-*** Tests                                                          :noexport:
-Test blocks to ensure shell portability.
-#+begin_src powershell :noweb yes :results output :exports none
-<<posix-powershell-switch>>
-#+end_src
-
-#+begin_src zsh :noweb yes :results output :exports none
-<<posix-powershell-switch>>
-#+end_src
-** Emacs lisp
-This block is somewhat more straight forward. All this is really just an
-Emacs lisp file! ... but with some quoted colons and comments.
-It just so happens that those quoted colons and comments are no-ops
-in both powershell and bash/zsh so we can include the shell functionality
-needed safely hidden away from elisp behind the comments.
-
-#+name: bootstrap-from-shell
-#+header: :shebang "#!/usr/bin/env bash"
-#+begin_src emacs-lisp :noweb no-export :tangle ./get-emacs.el.sh.ps1
-":"; # -*-emacs-lisp-*-
-":"; <<posix-powershell-switch>>
-":"; #px <<posix-bootstrap>>
-":"; #ps <<powershell-bootstrap>>
-(message "We have Emacs.")
-#+end_src
-
-At this point the basics of the script should be working on
-darwin, various linux distros, various bsds, and windows. At the moment
-only windows and a subset of linux distros can bootstrap from scratch.
-There is also a question of whether forcing a package manager on an
-unsuspecting user is a good idea. I tend to say yes, but maybe we need
-to make sure that they are a little less unsuspecting? Though there is
-nothing like a cold baptism into the world of proper systems administration.
-*** Tests                                                          :noexport:
-Bash
-#+name: bootstrap-from-shell-bash
-#+begin_src bash :noweb no-export :results output :exports none
-<<bootstrap-from-shell>>
-#+end_src
-
-Bash in posix mode.
-If you try to run this block via org-babel on a Debian derived
-distro this will fail, see the =:shebang= header for details.
-#+name: bootstrap-from-shell-sh
-#+header: :shebang "#!/usr/bin/env -S bash --norc --posix"
-#+begin_src sh :noweb no-export :results output :exports none
-<<bootstrap-from-shell>>
-#+end_src
-
-Zsh
-#+name: bootstrap-from-shell-zsh
-#+begin_src zsh :noweb no-export :results output :exports none
-<<bootstrap-from-shell>>
-#+end_src
-
-Powershell
-#+name: bootstrap-from-shell-powershell
-#+begin_src powershell :noweb no-export :results output :exports none
-<<bootstrap-from-shell>>
 #+end_src
