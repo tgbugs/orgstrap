@@ -3,7 +3,7 @@
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.2.4
+;; Version: 1.2.5
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -130,15 +130,29 @@ NOTE this variable only works if `orgstrap-mode' is enabled."
 
 ;; orgstrap blacklist
 
-(defun orgstrap-blacklist-current-file ()
-  "Add the current file to `orgstrap-file-blacklist'."
-  (interactive)
-  (add-to-list 'orgstrap-file-blacklist (buffer-file-name)))
+(defun orgstrap-blacklist-current-file (&optional universal-argument)
+  "Add the current file to `orgstrap-file-blacklist'.
+If UNIVERSAL-ARGUMENT is provided do not run `orgstrap-revoke-current-buffer'."
+  ;; It is usually better to revoke a checksum when its file is blacklisted since
+  ;; it is easier for the user to add the checksum again when needed than it is
+  ;; for them to revoke manually. The prefix argument allows users who know that
+  ;; they only want to blacklist the file and not revoke to do so though such
+  ;; cases are expected to be fairly rare.
+
+  ;; FIXME blacklisting a bad file that has already been approved is painful
+  ;; right now, you have to manually set `enable-local-eval' to nil, load the
+  ;; file, run this function, and then reset `enable-local-eval'.
+  (interactive "P")
+  (unless universal-argument
+    (orgstrap-revoke-current-buffer))
+  (add-to-list 'orgstrap-file-blacklist (buffer-file-name))
+  (customize-save-variable 'orgstrap-file-blacklist orgstrap-file-blacklist))
 
 (defun orgstrap-unblacklist-current-file ()
   "Remove the current file from `orgstrap-file-blacklist'."
   (interactive)
-  (setq orgstrap-file-blacklist (delete (buffer-file-name) orgstrap-file-blacklist)))
+  (setq orgstrap-file-blacklist (delete (buffer-file-name) orgstrap-file-blacklist))
+  (customize-save-variable 'orgstrap-file-blacklist orgstrap-file-blacklist))
 
 ;; orgstrap revoke
 
@@ -313,6 +327,7 @@ universal prefix argument."
            (add-hook 'org-mode-hook #'orgstrap--org-buffer)
            (setq orgstrap-mode t)
            (message "orgstrap-mode enabled"))
+          (arg) ; orgstrap-mode already enabled so don't disable it
           (t
            (remove-hook 'org-mode-hook #'orgstrap--org-buffer)
            (setq orgstrap-mode nil)

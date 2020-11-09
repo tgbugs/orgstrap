@@ -1,10 +1,10 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: d3f0db9b631dd4cc95cb12354834c98512478b746b7652148f4bff589b7299d1; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: bbff0017fc930346a1c87de671f70afc1b0a1e7934b5e640528ecb2bec93601c; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Orgstrap: Executable Org files
 #+options: num:nil \n:nil
 #+property: header-args :eval no-export
-#+LATEX_HEADER: \usepackage[margin=0.8in]{geometry}
-#+LATEX_HEADER: \setlength\parindent{0pt}
+#+latex_header: \usepackage[margin=0.8in]{geometry}
+#+latex_header: \setlength\parindent{0pt}
 
 # [[file:./README.pdf]]
 # [[file:./README.html]]
@@ -17,17 +17,17 @@
 
 =orgstrap= turns Org files into full fledged software applications.
 
-It allows Org files to describe their own requirements, and define
-their own functionality, making them self-contained standalone
+=orgstrap= allows Org files to describe their own requirements and
+define their own functionality, making them self-contained standalone
 computational artifacts dependent only on Emacs or other
 implementations of the Org Babel protocol in the future.
 
 This file bootstraps itself to provide the functionality needed to use
 =orgstrap= in any Org file.
 
-It contains a formal [[#specification][specification]] for =orgstrap=
-and the reference implementation in Emacs lisp which comes with
-tooling beyond the spec that simplifies common =orgstrap= workflows.
+=orgstrap= has a formal [[#specification][specification]] and this
+file contains 3 implementations that support 3 slightly different use
+cases along with tooling for common =orgstrap= workflows.
 
 =orgstrap= works with all versions of Emacs since =24.4= and all versions of Org since =8.2.10=.
 
@@ -409,27 +409,56 @@ on a system that they control.
 :PROPERTIES:
 :CUSTOM_ID: local-variables
 :END:
+** Contents :noexport:
+:PROPERTIES:
+:TOC:      :include siblings :exclude this :depth 1
+:END:
+:CONTENTS:
+- [[#overview][Overview]]
+- [[#org-version-support][Org version support]]
+- [[#normalization][Normalization]]
+- [[#definitions][Definitions]]
+- [[#note-on-noweb-support][Note on noweb support]]
+- [[#note-on-coderefs][Note on coderefs]]
+- [[#how-local-variables-appear-in-the-file][How local variables appear in the file]]
+:END:
 ** Overview
-Local variables must go at the end of a file must start less than 3000
-chars from the end of the file.
+:PROPERTIES:
+:CUSTOM_ID: overview
+:END:
+This section contains two implementations of =orgstrap= (minimal and
+portable) that are small enough to fit in the local variables list at
+the end of a file. *The local variables list must start less than 3000*
+*chars from the end of the file*.
 
-We have to use =setq-local= on =org-confirm-babel-evaluate= because it is marked
-as a =safe-local-variable=.  In this context this workaround seems reasonable and
-not malicious because the use of =eval:= should alert users that some arbitrary
-stuff is going on and that they should be on high alert to check it.
+We use =setq-local= in =eval:= to set =org-confirm-babel-evaluate=
+because it is a =safe-local-variable= only when the value is =t= and
+cannot be set directly as a file local variable.  In this context this
+workaround seems reasonable and not malicious because the use of
+=eval:= should alert users that some arbitrary stuff is going on and
+that they should be on high alert to check it.
 
 Below in [[#definitions][Definitions]] there is a more readable
-version of what the compacted local variables code at the end of the file is doing.
-*Always check that the =eval:= local variables in unknown orgstrapped files*
-*match a known set when reviewing and accepting local variables.*
+version of what the compacted local variables code at the end of the
+file is doing.  *Always check that the =eval:= local variables in*
+*unknown orgstrapped files match a known set when reviewing and*
+*accepting local variables*.
 
-=orgstrap= eval local variables, or *elvs* for short, are little helpers at the end
-of the file that make everything work in a portable manner when =orgstrap.el= is not
-present on a system.
+=orgstrap= eval local variables, or *elvs* for short, are little
+helpers at the end of the file that make everything work in a portable
+manner when =orgstrap.el= is not present on a system.
+
+While elvs are not required by the specification, they greatly reduce
+the complexity of implementation. They also simplify the instructions
+to two steps: 1. install Emacs, 2. open the file.
+# the orgstrap block can the install orgstrap.el if needed
 # TODO it is entirely possible to automate that check
 # but not without already having orgstrap available.
 # TODO publish the hashes of the eval sexps.
 ** Org version support
+:PROPERTIES:
+:CUSTOM_ID: org-version-support
+:END:
 Different versions of the =orgstrap= local variables work with
 different versions of =org-mode=. We include an explicit version
 check and fail so that strange partial successes can be avoided
@@ -460,6 +489,9 @@ anyway so don't bother.
 =string<= must be used in order to support emacs-24
 #+end_quote
 ** Normalization
+:PROPERTIES:
+:CUSTOM_ID: normalization
+:END:
 *** Shared normalization machinery
 Shared normalization code embedded as elvs.
 #+caption: Shared normalization code embedded as elvs.
@@ -659,22 +691,31 @@ Since =orgstrap-norm-func= is a dynamic variable it simplifies the
 potential future case where we don't embed the normalization function,
 still not sure if we really want to do that though
 ** Note on noweb support
+:PROPERTIES:
+:CUSTOM_ID: note-on-noweb-support
+:END:
 The minimal set of local variables only works if you don't use noweb
 or if you are using Org =>== =9.3.8=.
 
 The portable set of local variables described below works with versions of
 Org as far back as =8.2.10= (the version bundled with =emacs-24.5=).
 ** Note on coderefs
+:PROPERTIES:
+:CUSTOM_ID: note-on-coderefs
+:END:
 Older versions of =org-mode= do not know what to do with coderefs.
 The simplest solution is to hide them in comments as =;(ref:coderef)=
 if you need them. See [[(clrin)]] and [[(oab)]] for examples in this file.
 ** How local variables appear in the file
+:PROPERTIES:
+:CUSTOM_ID: how-local-variables-appear-in-the-file
+:END:
 # DO NOT EDIT THESE BLOCKS THEY ARE UPDATED AUTOMATICALLY
 Here is the prop line from the first line of this file that
 includes the cypher and checksum of the =orgstrap= block.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 0c3abc0bd4db22e8994f3bb6d7d68c6f6ac898a4e004e3ab8241b3be0b9fe892; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: bbff0017fc930346a1c87de671f70afc1b0a1e7934b5e640528ecb2bec93601c; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 #+end_src
 
 # BE VERY CAREFUL WITH MANUAL EDITS
@@ -721,7 +762,7 @@ orgit-rev:~/git/NOFORK/org-mode::9f47b37231b3c45afcd604a191e346200bd76e98.
 All of this happend before orgit-rev:~/git/NOFORK/org-mode::release_9.0. By
 testing =org-src-coderef-regexp= with =fboundp= there are only a tiny number
 of versions where there might be some inconsistent behavior, e.g.
-orgit-rev:~/git/NOFORK/org-mode::release_8.3.6, but I that the probability
+orgit-rev:~/git/NOFORK/org-mode::release_8.3.6, but I suspect that the probability
 that anyone anywhere is running one of those versions is approximately zero.
 
 #+name: orgstrap-expand-body
@@ -756,16 +797,17 @@ _FMT has the wrong meaning in 24 and 25."
 #+end_src
 *** Run
 In order for orgstrap to be maximally portable and not depend on
-already being installed the implementation needs to work with the
+already being installed, the implementation needs to work with the
 local variables list eval variable without complicating the situation
 when orgstrap is installed as a package.
 
 While ideally this would be done using only the standard hooks around
-=hack-local-variables= this approach does not work because the variables
-are filtered before those hooks can run. Therefore we have to advise
-=hack-local-variables-confirm= in order to capture and remove any orgstrap
-elvs that we find. For maximum safety this minimally requires mutation of
-the =all-vars= list passed to =hack-local-variables-confirm=.
+=hack-local-variables= such an approach does not work because the
+variables are filtered before those hooks can run. Therefore, we have
+to advise =hack-local-variables-confirm= in order to capture and
+remove any orgstrap elvs that we find. For maximum safety this
+minimally requires mutation of the =all-vars= list passed to
+=hack-local-variables-confirm=.
 
 This is a fairly deep tampering with the way that hack-local-variables works,
 so special attention should be given when reviewing the security implications
@@ -857,15 +899,29 @@ NOTE this variable only works if `orgstrap-mode' is enabled."
 
 ;; orgstrap blacklist
 
-(defun orgstrap-blacklist-current-file ()
-  "Add the current file to `orgstrap-file-blacklist'."
-  (interactive)
-  (add-to-list 'orgstrap-file-blacklist (buffer-file-name)))
+(defun orgstrap-blacklist-current-file (&optional universal-argument)
+  "Add the current file to `orgstrap-file-blacklist'.
+If UNIVERSAL-ARGUMENT is provided do not run `orgstrap-revoke-current-buffer'."
+  ;; It is usually better to revoke a checksum when its file is blacklisted since
+  ;; it is easier for the user to add the checksum again when needed than it is
+  ;; for them to revoke manually. The prefix argument allows users who know that
+  ;; they only want to blacklist the file and not revoke to do so though such
+  ;; cases are expected to be fairly rare.
+
+  ;; FIXME blacklisting a bad file that has already been approved is painful
+  ;; right now, you have to manually set `enable-local-eval' to nil, load the
+  ;; file, run this function, and then reset `enable-local-eval'.
+  (interactive "P")
+  (unless universal-argument
+    (orgstrap-revoke-current-buffer))
+  (add-to-list 'orgstrap-file-blacklist (buffer-file-name))
+  (customize-save-variable 'orgstrap-file-blacklist orgstrap-file-blacklist))
 
 (defun orgstrap-unblacklist-current-file ()
   "Remove the current file from `orgstrap-file-blacklist'."
   (interactive)
-  (setq orgstrap-file-blacklist (delete (buffer-file-name) orgstrap-file-blacklist)))
+  (setq orgstrap-file-blacklist (delete (buffer-file-name) orgstrap-file-blacklist))
+  (customize-save-variable 'orgstrap-file-blacklist orgstrap-file-blacklist))
 
 ;; orgstrap revoke
 
@@ -1011,6 +1067,7 @@ universal prefix argument."
            (add-hook 'org-mode-hook #'orgstrap--org-buffer)
            (setq orgstrap-mode t)
            (message "orgstrap-mode enabled"))
+          (arg) ; orgstrap-mode already enabled so don't disable it
           (t
            (remove-hook 'org-mode-hook #'orgstrap--org-buffer)
            (setq orgstrap-mode nil)
@@ -1683,7 +1740,7 @@ minimal as possible is critical.
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.2.4                             (ref:orgstrap.el-version)
+;; Version: 1.2.5                             (ref:orgstrap.el-version)
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -1933,8 +1990,8 @@ do the following for each version of Emacs.
 4. enable ~org-mode~
 5. ~orgstrap-init~
 6. optional edit block
-7. optional ~orgstrap-add-block-checksum~ and test reload the saved file
-8. undo
+7. optional save to file and test reload the saved file
+8. in ~*scratch*~ buffer undo
 9. ~orgstrap-stamp~
 10. check that the checksum matches the checksum for this file
 11. quit
@@ -1943,6 +2000,7 @@ do the following for each version of Emacs.
 *** Final steps
 Things that need to be done for a release.
 - Bump the version number in the [[(orgstrap.el-version)][orgstrap.el header comment]].
+  You will need to manually retangle after this step.
 - Update the [[#changelog][changelog]].
 - Convert the changelog entry to markdown for the GitHub release.
   =C-c C-e C-s m M=.
@@ -1950,6 +2008,16 @@ Things that need to be done for a release.
 :PROPERTIES:
 :CUSTOM_ID: changelog
 :END:
+** 1.2.5
+- Improve behavior of ~orgstrap-blacklist-current-file~.
+
+  Now revokes the current buffer checksum by default, this can be
+  overridden by providing a universal argument. The blacklist is
+  immediately saved via ~customize-save-variable~.
+
+- Fix ~orgstrap-mode~ to use the universal argument.
+
+  Behavior is now correct when ~(orgstrap-mode t)~ is called.
 ** 1.2.4
 - Add ~orgstrap-clone~ and ~orgstrap-stamp~ commands.
 
@@ -2085,7 +2153,7 @@ There are a number of ways to contribute to =orgstrap=.
 1. Have an Org file that use =orgstrap=? Create an issue or a pull
    request to add it to the list of [[#examples-from-around-the-web][examples from around the web]].
 
-2. Encounter a bug? Please [[submit an issue][https://github.com/tgbugs/orgstrap/issues/new/choose]]!
+2. Encounter a bug? Please [[https://github.com/tgbugs/orgstrap/issues/new/choose][submit an issue]]!
 
 3. Feel like writing some elisp? Check out [[#future-work][future work]]
    for a list of potential projects (TODO status not visible on GitHub).
@@ -2150,6 +2218,14 @@ execution environment. If the user also wants to load their config
 then they would have to use ~-l~ as well. This is a pain, but without
 converting all of the variables into buffer local variables this is
 unlikely to work.
+
+Another major drawback of using ~emacs -q~ is that there are many
+more advanced features enabled by orgstrap.el that cannot be used
+without running ~emacs -q -l orgstrap.el~ or some equivalent. This
+adds significant complexity to the command line invocation. There
+is no easy way to work around this since the features of interest
+are ones that must be available before the orgstrap block is run.
+Another approach is to use ~emacs -q -f package-initialize~.
 
 There is also the issue of how to handle potential name collisions.
 # TODO orgstrap--- prefix is too long, but is one solution
@@ -2723,6 +2799,23 @@ validate all of them at once at the start of the orgstrap block. This might need
 additional machinery, not entirely sure, maybe just have =orgstrap-all-blocks-checksum=
 that can be used in cases like that. The advantage here is that the core of the process
 can be verified once and then the documentation around it can change and grow as needed.
+** Support for orgstrap blocks beyond elisp
+This is unlikely to be useful any time soon given that there aren't
+full implementations of org mode outside of Emacs. If some setup is
+written in another language the best approach is to call the other
+block using the orgstrap block.
+
+If at some point it becomes possible to use another language in the
+top level of org, then I imagine that such functionality will go in as
+a property or a file local variable or something like that. Early
+candidates for other languages that might be supportable are other
+lisp dialects. With such mechanisms in place, it would be relatively
+straight forward to lift the restriction on the language type, or
+rather, to include the normalized language name as part of the hash,
+or possibly to include it as a prop line local variable. More
+exploration would be required, but until there is some other
+implementation that has an extension language that is not elisp, this
+is a moot point.
 ** Remove defun docstrings from hashing
 One additional source of noise in addition to comments are defun and
 defmacro docstrings. These should be dropped from the tree if they are
@@ -2763,6 +2856,23 @@ function.
 (use-package org-ref)  ; for ref:
 (use-package ox-gfm)  ; simplify export of changelog for release
 #+end_src
+** Orgware run
+One potential way to simplify command line execution of orgstrapped
+files is to write a wrapper that is aware of the internal variables to
+control various aspects of orgstrap behavior, such as config, testing,
+tangling, setup, build/make, dependencies, exporting, publishing, etc.
+Essentially we wind up with a set of functionalities that are commonly
+needed and set conventions for how to run only the desired subset.
+
+Dealing with dependencies between functionalities is probably out of
+scope. The assumption is that Emacs and system packages are required
+for all further functionality, but beyond that it is not clear.
+
+# This is also related to the self describing nature of the orgstrap
+# approach which means that the diversity explosion steps, such as
+# dealing with the huge variety of package managers (discussed above),
+# will have to accumulate over time in the files themselves, or in a
+# portability layer that outside the files (e.g. via reval)
 ** TODO fix orgstrap--update-on-change hook so that it does not modify buffer fold state
 :PROPERTIES:
 :CREATED:  [2020-10-21 Wed 01:28]
@@ -2793,6 +2903,8 @@ What to do if we are in a buffer that has an orgstrap block?
 I think the answer is to check for the local variables, and if they
 are present, do nothing, if they are absent run the block?
 ** TODO resolve the issue with tabs in < 26                        :noexport:
+~prin1-to-string~ has inconsistent behavior when the string in question contains
+an escaped tab character ~\t~. This can make checksums inconsistent.
 ** TODO command to checksum the file local variables               :noexport:
 ** TODO ruby org so that github can render footnotes correctly     :noexport:
 [[file:~/git/NOFORK/org-ruby]]
