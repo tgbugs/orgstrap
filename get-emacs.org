@@ -47,10 +47,10 @@ Below is what appears to be nothing more than an Emacs lisp block with
 3 other blocks nowebed into the ... comments? What is going on here?!
 
 The quoted colons and comments are no-ops in both powershell and
-bash/zsh so we can include the shell functionality needed safely
+bash/zsh so we can include the required shell functionality safely
 hidden from elisp behind the comments.
 
-The three sections are implemented in the following sections.
+The three nowebbed blocks are implemented in the following sections.
 
 #+name: bootstrap-from-shell
 #+header: :shebang "#!/usr/bin/env bash"
