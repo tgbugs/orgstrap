@@ -33,7 +33,31 @@ tooling beyond the spec that simplifies common =orgstrap= workflows.
 
 Please see the [[#changelog][changelog]] for the latest updates.
 
+* Contents :noexport:
+:PROPERTIES:
+:TOC:      :include all :depth 1
+:END:
+:CONTENTS:
+- [[#getting-started][Getting started]]
+- [[#hello-orgstrap][Hello orgstrap]]
+- [[#inspiration][Inspiration]]
+- [[#use-cases][Use cases]]
+- [[#details][Details]]
+- [[#specification][Specification]]
+- [[#local-variables][Local Variables]]
+- [[#code][Code]]
+- [[#changelog][Changelog]]
+- [[#best-practices][Best practices]]
+- [[#bootstrapping-to-emacs-bootstrapping-to-org][Bootstrapping to Emacs, bootstrapping to Org]]
+- [[#examples][Examples]]
+- [[#background-file-local-variables-and-checksums][Background, file local variables, and checksums]]
+- [[#experience-reports][Experience reports]]
+- [[#future-work][Future work]]
+:END:
 * Getting started
+:PROPERTIES:
+:CUSTOM_ID: getting-started
+:END:
 Using =orgstrap= is easy.
 
 If you already have =orgstrap= installed you can enable it for any
@@ -94,6 +118,9 @@ The bare minimum needed to make an =org-mode= file executable (with a bit of saf
 # End:
 #+end_src
 * Inspiration
+:PROPERTIES:
+:CUSTOM_ID: inspiration
+:END:
 By default =org-mode= source block headers only take existing elisp functions as arguments.
 
 This means that header arguments can become extremely verbose.
@@ -110,6 +137,9 @@ Whether it is =(defun dir-tramp-sudo (host) (format "/ssh:%s|sudo:%s:" host host
 simplify a pattern for remote execution when using the =:dir= header argument, or a
 function to detect and set the right environment variables, =orgstrap= is there for you.
 * Use cases
+:PROPERTIES:
+:CUSTOM_ID: use-cases
+:END:
 =orgstrap= specifies what is essentially a plain-text executable file format.
 Thus, it can be used for nearly everything[fn::Now, whether it *should* be....].
 
@@ -138,7 +168,8 @@ named source block only when it matches the hash.
 # Actually I'm kind of hyped for though of describing the system used to version
 # control the code in the file itself. Not so simple to pull off though.
 # It only sort of works in this case because we have the rest of the file under
-# version control in another system.
+# version control in another system. Without git, developing this would have been
+# a complete nightmare.
 * Details
 :PROPERTIES:
 :CUSTOM_ID: details
@@ -374,6 +405,9 @@ normalization and hashing process again using a known-conforming implementation
 on a system that they control.
 #+end_quote
 * Local Variables
+:PROPERTIES:
+:CUSTOM_ID: local-variables
+:END:
 ** Overview
 Local variables must go at the end of a file must start less than 3000
 chars from the end of the file.
@@ -662,6 +696,9 @@ Here are the minimal local variables used in other example blocks and files.
 # End:
 #+end_src
 * Code
+:PROPERTIES:
+:CUSTOM_ID: code
+:END:
 ** =orgstrap= implementation
 This section contains the implementation of functions to calculate
 =orgstrap-block-checksum= and set it as a prop line local variable.
@@ -1745,8 +1782,10 @@ of Emacs you will be testing against.
 # XXX note that you cannot use append t with add-to-list for local variables
 # it puts any additional values in the wrong place, need to check other cases
 # reminder that you can't use bare bangs ! anywhere in bash scripts :/
+# XXX also reminder that unbound variables will break at export time
+# #+header: :var checksum=(identity orgstrap-block-checksum)
 #+name: test-matrix-run
-#+begin_src bash :var checksum=(identity orgstrap-block-checksum) :results drawer output
+#+begin_src bash :results drawer output
 versions=( 24 25 26 27 28-vcs )
 test_files=( test-no-lv-list.org test-lv-list-portable test-lv-list-minimal )
 for v in ${versions[@]}; do
@@ -2031,6 +2070,9 @@ Things that need to be done for a release.
   not modified. Note however that the orgstrap eval variable will
   always be placed first.
 * Best practices
+:PROPERTIES:
+:CUSTOM_ID: best-practices
+:END:
 ** Use the system package manager.
 There is a big difference between using a script to install a program directly
 from the internet and using a script to ask the host system to install a program.
@@ -2106,6 +2148,9 @@ globally via ~the-orgstrap-variable-name-to-be-determined~.
 :END:
 See [[file:./get-emacs.org]].
 * Examples
+:PROPERTIES:
+:CUSTOM_ID: examples
+:END:
 ** Installing a package
 With orgstrap in melpa I'm going to rule that, while a fun idea, the
 though of using the orgstrap block for this file to stick the
@@ -2404,6 +2449,9 @@ Files that do not match the checksum are quarantined."
   nil)
 #+end_src
 * Background, file local variables, and checksums
+:PROPERTIES:
+:CUSTOM_ID: background-file-local-variables-and-checksums
+:END:
 As mentioned above, the primary use case for =orgstrap= was that I was sick of having
 to work around the limitation that I had to do one of four things. I either one, had
 to remember to eval the source block containing defuns used later before I could
@@ -2479,6 +2527,9 @@ When running a file.
    (assuming no hash collisions).
 4. *Observe whether org-mode complains that the orgstrap block has changed.*
 * Experience reports
+:PROPERTIES:
+:CUSTOM_ID: experience-reports
+:END:
 ** First trial
 The first use case for ~orgstrap~ beyond personal use was to create a
 stand alone application that would allow a user to run, modify, and
