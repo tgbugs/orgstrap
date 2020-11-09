@@ -612,7 +612,7 @@ for calirty.  You cannot stamp an orgstrap block into its own buffer."
   (unless (eq major-mode 'org-mode)
     (user-error "`orgstrap-stamp' only works in org-mode buffers"))
   (unless orgstrap--clone-stamp-source-buffer-block
-    (user-error "No value to clone!  Use `orgstrap-clone' first."))
+    (user-error "No value to clone!  Use `orgstrap-clone' first"))
   (let ((overwrite (or overwrite (equal universal-argument '(16))))
         (source-buffer (car orgstrap--clone-stamp-source-buffer-block))
         (source-block-name (cdr orgstrap--clone-stamp-source-buffer-block))

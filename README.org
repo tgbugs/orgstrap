@@ -1,4 +1,4 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: a2f872728112636859f13ab1dc672f1d3f6f9ccbaa237458f872674753d52964; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: d3f0db9b631dd4cc95cb12354834c98512478b746b7652148f4bff589b7299d1; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Orgstrap: Executable Org files
 #+options: num:nil \n:nil
@@ -1257,7 +1257,7 @@ for calirty.  You cannot stamp an orgstrap block into its own buffer."
   (unless (eq major-mode 'org-mode)
     (user-error "`orgstrap-stamp' only works in org-mode buffers"))
   (unless orgstrap--clone-stamp-source-buffer-block
-    (user-error "No value to clone!  Use `orgstrap-clone' first."))
+    (user-error "No value to clone!  Use `orgstrap-clone' first"))
   (let ((overwrite (or overwrite (equal universal-argument '(16))))
         (source-buffer (car orgstrap--clone-stamp-source-buffer-block))
         (source-block-name (cdr orgstrap--clone-stamp-source-buffer-block))
@@ -1931,10 +1931,12 @@ do the following for each version of Emacs.
 3. switch to ~*scratch*~
 4. enable ~org-mode~
 5. ~orgstrap-init~
-6. undo
-7. ~orgstrap-stamp~
-8. check that the checksum matches the checksum for this file
-9. quit
+6. optional edit block
+7. optional ~orgstrap-add-block-checksum~ and test reload the saved file
+8. undo
+9. ~orgstrap-stamp~
+10. check that the checksum matches the checksum for this file
+11. quit
 
 #+call: test-portable()
 *** Final steps
