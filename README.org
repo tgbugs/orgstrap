@@ -47,6 +47,7 @@ Please see the [[#changelog][changelog]] for the latest updates.
 - [[#local-variables][Local Variables]]
 - [[#code][Code]]
 - [[#changelog][Changelog]]
+- [[#contributing][Contributing]]
 - [[#best-practices][Best practices]]
 - [[#bootstrapping-to-emacs-bootstrapping-to-org][Bootstrapping to Emacs, bootstrapping to Org]]
 - [[#examples][Examples]]
@@ -2071,6 +2072,21 @@ Things that need to be done for a release.
   removed and the latest version is added. Other =eval:= variables are
   not modified. Note however that the orgstrap eval variable will
   always be placed first.
+* Contributing
+:PROPERTIES:
+:CUSTOM_ID: contributing
+:END:
+The primary =orgstrap= repository lives at https://github.com/tgbugs/orgstrap.
+
+There are a number of ways to contribute to =orgstrap=.
+
+1. Have an Org file that use =orgstrap=? Create an issue or a pull
+   request to add it to the list of [[#examples-from-around-the-web][examples from around the web]].
+
+2. Encounter a bug? Please [[submit an issue][https://github.com/tgbugs/orgstrap/issues/new/choose]]!
+
+3. Feel like writing some elisp? Check out [[#future-work][future work]]
+   for a list of potential projects (TODO status not visible on GitHub).
 * Best practices
 :PROPERTIES:
 :CUSTOM_ID: best-practices
@@ -2153,6 +2169,11 @@ See [[file:./get-emacs.org]].
 :PROPERTIES:
 :CUSTOM_ID: examples
 :END:
+** Examples from around the web
+:PROPERTIES:
+:CUSTOM_ID: examples-from-around-the-web
+:END:
+Coming soon!
 ** Installing a package
 With orgstrap in melpa I'm going to rule that, while a fun idea, the
 though of using the orgstrap block for this file to stick the
@@ -2559,6 +2580,9 @@ take nearly 3 hours to complete and debug.
 :PROPERTIES:
 :CUSTOM_ID: future-work
 :END:
+** Tutorial videos for various workflows
+Record a series of short screen casts to illustrate common orgstrap
+authoring and consumption workflows.
 ** Display contents of orgstrap block in other window during confirm
 :PROPERTIES:
 :CREATED:  [2020-10-08 Thu 23:27]
