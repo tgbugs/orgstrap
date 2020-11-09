@@ -354,7 +354,7 @@ A conforming implementation must be able to reproduce the =orgstrap-block-checks
 using only the information contained in the =orgstrap-cypher= and
 =orgstrap-norm-func-name= =prop line local varaibles=, and information
 contained in the rest of the file explicitly excluding the contents of
-the =orgstrap-cypher= =prop line local varaible=. The most obvious
+the =orgstrap-block-checksum= =prop line local varaible=. The most obvious
 additional information required being the contents of the =orgstrap block= [fn::
 The reference implementation provided in the readme containing this specification
 uses an Emacs =eval:= local variable (elv) in the =local variables list=. Embedding
