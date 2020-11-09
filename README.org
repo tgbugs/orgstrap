@@ -1944,6 +1944,8 @@ do the following for each version of Emacs.
 Things that need to be done for a release.
 - Bump the version number in the [[(orgstrap.el-version)][orgstrap.el header comment]].
 - Update the [[#changelog][changelog]].
+- Convert the changelog entry to markdown for the GitHub release.
+  =C-c C-e C-s m M=.
 * Changelog
 :PROPERTIES:
 :CUSTOM_ID: changelog
