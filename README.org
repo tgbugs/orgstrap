@@ -1,8 +1,9 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: bbff0017fc930346a1c87de671f70afc1b0a1e7934b5e640528ecb2bec93601c; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 8b001890aa741d9e9acb2f553b8bbba2d7b87f5bfe78d2764eff3c63e473af84; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Orgstrap: Executable Org files
 #+options: num:nil \n:nil
 #+property: header-args :eval no-export
+#+link: yt https://youtu.be/
 #+latex_header: \usepackage[margin=0.8in]{geometry}
 #+latex_header: \setlength\parindent{0pt}
 
@@ -715,7 +716,7 @@ Here is the prop line from the first line of this file that
 includes the cypher and checksum of the =orgstrap= block.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: bbff0017fc930346a1c87de671f70afc1b0a1e7934b5e640528ecb2bec93601c; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 8b001890aa741d9e9acb2f553b8bbba2d7b87f5bfe78d2764eff3c63e473af84; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 #+end_src
 
 # BE VERY CAREFUL WITH MANUAL EDITS
@@ -1656,24 +1657,66 @@ the minimal local variables will be used if possible."
 # (orgstrap--dedoc '(defmacro lol (arg) "there" arg))
 # (orgstrap--dedoc '((defmacro lol (arg) "there" arg) (defvar lol 'hello "there")))
 *** Extras
+For the software life cycle see man:ebuild.
 #+caption: extra helpers
 #+name: orgstrap-extra-helper-defuns
 #+begin_src elisp :noweb yes
 ;;; extra helpers
 
-;; leaving out the -on-open from these vars to reduce typing
-;; since these will be used repeatedly
-(defvar orgstrap-tangle nil
+;; orgstrap-do-*
+
+;; variables to enable/disable certain functionality when an
+;; orgstrapped file is run from the command line, most of these are
+;; just dynamic variables, but some are custom variables since setting
+;; a default behavior globally may be desirable in most cases it is
+;; sufficient to make these dynamic variables since they are expected
+;; to be set in a fairly clean environment and all default to nil, and
+;; there are unlikely to be threading issues even in the future since
+;; it should be possible to wrap any call to open an orgstrapped file
+;; with a let to override without globally modifying the variable
+
+;; in all cases orgstrap blocks must use these variables intentionally
+;; and by convention, there is nothing that says that anyone has to
+;; follow these conventions, but they are provided here in hopes that
+;; their presence will guide common practice
+
+;; note that any file that uses these variables needs to define them
+;; in the orgstrap block
+(defcustom orgstrap-do-config nil "Run code that modifies the Emacs config")
+;(defcustom orgstrap-do-config-emacs nil "Run code that modifies the Emacs config")
+
+(defvar orgstrap-do-build/make nil ; FIXME clarify naming
+  ;; there is tangle -> make and there is build -> tangle or something?
+  "")
+
+(defvar orgstrap-do-tangle nil
   "Dynamic variable that by convention can be used inside orgstrap blocks.
 It makes it possible to run `org-babel-tangle' only when it is non-nil when set
 on the command line when launching Emacs with --batch.  Individual orgstrap
 blocks should also define (defvar orgstrap-on-tangle-open nil) if they want
 this functionality.")
+(define-obsolete-variable-alias 'orgstrap-tangle 'orgstrap-do-tangle)
 
-(defvar orgstrap-test nil
+(defvar orgstrap-do-test nil
   "Variable to control whether to run tests embedded in an orgstrap file.
 If non-nil then load the orgstrap block and run tests.")
 ;; Running tests via a batch process can be a bit tricky if the test code is also part of the orgstrap block.
+(define-obsolete-variable-alias 'orgstrap-test 'orgstrap-do-test)
+
+;(defvar orgstrap-do-deps nil "Install all packages.")
+;(defvar orgstrap-do-dependencies nil "Install all packages.")
+;(defvar orgstrap-do-install-dependencies nil "Install all packages.")
+;(defvar orgstrap-do-install-prerequisites nil "Install all packages.")
+(defcustom orgstrap-do-packages nil "Install all packages.")
+
+(defcustom orgstrap-do-packages-emacs nil "Install Emacs packages.")
+(defcustom orgstrap-do-packages-system nil "Install system packages.")
+
+;(defcustom orgstrap-do-setup nil "Run other setup steps.")  ; FIXME this is closer to emerge --config
+(defcustom orgstrap-do-services nil "Run services needed by file.")
+;; other parts of the software lifecycle
+(defcustom orgstrap-do-package nil "???")
+(defcustom orgstrap-do-release nil "???")
 
 (defun orgstrap-update-src-block (name content)
   "Set the content of source block named NAME to string CONTENT.
@@ -2318,48 +2361,103 @@ on the developer is too large to be practical.
   (package-install 'orgstrap))
 ;; TODO detect the use of quelpa/straight/borg/etc.
 #+end_src
+*** Some inspiration from protc
+:PROPERTIES:
+:CREATED:  [2020-11-10 Tue 01:17]
+:END:
+I think that the right way to do this is as follows.
+# I think I started prototyping this somewhere already?
+The test that must run to ensure that a package that we need is
+present is ~(require 'package-name)~.
+
+Thus, given a list of requires ~(requires 'package-1 'package-2 ...)~
+it ought to be possible to write the following.
+#+begin_src elisp
+(defun requires (&rest package-names)
+  (dolist (package-name package-names)
+    (condition-case err
+        (require package-name)
+      ;; car is file-missing it seems?
+      (error (orgstrap-install-package-from-require package-name)))))
+#+end_src
+
+~orgstrap-install-package-from-require~ encapsulates the explosion of
+complexity that is the Emacs package management ecosystem. Somewhere
+in there will be a function from the require name to the function that
+the user wants to use to install the package. It could be a function
+that wraps ~use-package~ it could be something else, like loading into
+a reval registry. The default function would be to print a message to
+please install that package and try again. Other prepackaged options
+could be ~package-install~, or it could be the process defined in the
+orgstrap block itself. It might make sense to have a custom variable
+to control the default behavior, and it could just be the name of the
+package manager if we can't figure out how to detect which one is in
+use. Then the user can write their recipe and either pr back to the
+source for the orgstrapped file or maybe to a central registry if they
+are not using one of the standard approaches.
+
+The full complexity solution here is to check all names individually.
+As per [[yt:oyLBGkS5ICk][Spec-ulation]], the test that must run to determine whether a
+_function_ that we need is present is minimally ~(fboundp 'function-name)~.
+For other free variables it is ~(boundp 'variable-name)~.
+
+In theory you can run a pass over an orgstrap block to see whether all
+the function names that are needed are defined (the orgstrap block has
+to do this to itself). Technically this is a bit simpler because many
+of the functions are builtin and because it is possible to run the
+byte compiler and collect warnings. Doing full dependency tree shaking
+is out of scope at the moment.
+
 ** Useful orgstrap blocks
 Include these in part or whole to simplify common orgstrap workflows.
-*** run-command
-Sometimes functionality needed during bootstrap is implemented outside
-of Emacs. In those cases it may be necessary to run commands.
-=run-command= provides a light wrapper around =call-process= to
-transform external errors into elisp errors and otherwise evaluates to
-the string output of the process.
-#+name: run-command
-#+begin_src elisp :results none
-(defun run-command (command &rest args)
-  "Run COMMAND with ARGS. Raise an error if the return code is not zero."
-  ;;(message "%S" (mapconcat #'identity (cons command args) " "))
-  (with-temp-buffer
-    (let* ((return-code (apply #'call-process command nil (current-buffer) nil args))
-           (string (buffer-string)))
-      (if (not (= 0 return-code))
-          (error "code: %s stdout: %S" return-code string)
-        string))))
-#+end_src
-*** +reval+ reload
-Remote +eval+ load. Ephemeral code reuse. Somewhere between load
+** reval.el
+Remote eval. Ephemeral code reuse. Somewhere between load
 eval, and securl then load. More auditable and stable curl pipe bash.
+
+There are some significant drawbacks, such as remote files not being
+able to resolve xrefs from remote files. It is also not clear whether
+to use reval and then save the buffer to disk and the load or whether
+it makes more sense to use reval to get securl and then use securl to
+get the sources. Unless securl is going to be used for something else
+it seems more practical to reval-into-reload, or even just reload to
+get the cache benifit in addition to being able to resolve xrefs.
 
 At the moment the serialization of the whole file is used rather than
 one of the normalized prp variants. This might be added in the future,
 but the objective of reval is to be small enough that it will fit in
 the remaining space in the orgstrap elv it probably won't happen.
+
+# FIXME we need some mechanism that can be used to notify/warn that a
+# particular checksum version of a file is bad ... I think that having
+# some way to retreive/compare to the latest version might work?  but
+# if we are slurping urls from github that have an embedded hash how
+# the heck can we detect and warn that the old code is bad?  this is a
+# fairly big issue :/ maybe &optional latest-url ?  this is all fine
+# until you have to figure out the upgrade paths for random calls to
+# reval embedded in a file somewhere then it looks like a really bad
+# idea ... this is another one of those things where there is a
+# strange tradeoff like package managers
 #+begin_src elisp :lexical yes
 (defvar reval-failed-buffer-list nil "List of failed reval buffers.")
+(defvar reval-evaled-buffer-list nil "List of evaled reval buffers.")
+
+(defmacro with-url-handler-mode (&rest body)
+  "Run BODY with `url-handler-mode' enabled."
+  (declare (indent defun))
+  `(let ((uhm url-handler-mode))
+     (unwind-protect
+         (progn
+           (url-handler-mode)
+           ,@body)
+       (unless uhm
+         (url-handler-mode 0)))))
 
 (defun id->buffer (path-or-url)
   "Given a PATH-OR-URL return a buffer of its contents."
   ;; We explicitly do not catch errors here since they need to
   ;; be caught by the human in the loop later.
-  (if url-handler-mode
-      (find-file-noselect path-or-url)
-    (unwind-protect
-        (progn
-          (url-handler-mode)
-          (find-file-noselect path-or-url))
-      (url-handler-mode))))
+  (with-url-handler-mode
+    (find-file-noselect path-or-url)))
 
 (defun resum-review (cypher buffer &optional review)
   "Return checksum under CYPHER for BUFFER.
@@ -2372,6 +2470,7 @@ is ok before continuing."
       (with-current-buffer buffer
         (when review
           (switch-to-buffer (current-buffer))
+          ;; FIXME `yes-or-no-p' breaks all keyboard input :/
           (unless (yes-or-no-p "Audit of file ok? ") ; not using `y-or-n-p' since it is too easy
             (error "Audit failed. Checksum will not be calculated for %s"
                    (buffer-file-name (current-buffer)))))
@@ -2389,42 +2488,93 @@ is ok before continuing."
           (error (error "Not an emacs lisp file!")))
         (intern (secure-hash cypher (current-buffer)))))))
 
-(defun resum (cypher buffer)
+(defun resum-minimal (cypher buffer)
   "Checksum of BUFFER under CYPHER." ; minimal for maximal porability
+  ;; not used since the expression takes up less space
   (intern (secure-hash cypher buffer)))
 
 (defalias 'resum #'resum-review)
 
-(defun make-reval (cypher path-or-url)
+(defun reval-make (cypher path-or-url)
   `(reval ',cypher ',(resum cypher (id->buffer path-or-url) t) ,path-or-url))
+
+(defun reval-audit ()
+  "Audit the reval under the cursor."
+  (interactive)
+  (save-excursion
+    (re-search-backward "(reval[[:space:]]")
+    (let ((begin (point)))
+      (forward-sexp)
+      (let* ((raw (read (buffer-substring-no-properties begin (point))))
+             ;;(sigh (message "%S" raw))
+             (buffer (with-url-handler-mode
+                       (find-file-noselect (elt raw 3))))
+             (checksum (resum (elt raw 1) buffer t)))
+        (eq (elt raw 2) checksum)))))
 
 (defun reval (cypher checksum path-or-url &rest alternates)
   "Open PATH-OR-URL, match CHECKSUM under CYPHER, then eval.
 If an error is encountered try ALTERNATES in order."
-  (let* ((buffer (id->buffer path-or-url))
-         (buffer-checksum (resum cypher buffer)))
+  (let (done)
+    (cl-loop for path-or-url in (cons path-or-url alternates)
+             do (let* ((buffer (id->buffer path-or-url))
+                       (buffer-checksum (resum cypher buffer)))
+                  (if (eq buffer-checksum checksum)
+                      (progn
+                        (eval-buffer buffer)
+                        (push buffer reval-evaled-buffer-list)
+                        (setq done t))
+                    (with-current-buffer buffer ; FIXME do this in both cases but change which list
+                      (push buffer reval-failed-buffer-list)
+                      ;; push first since it is better to have a dead buffer linger in a list
+                      ;; than it is to have an error happen during execution of `kill-buffer-hook'
+                      (add-hook 'kill-buffer-hook
+                                (lambda ()
+                                  ;; read the manual for sets and lists to see why we have to
+                                  ;; setq here ... essentially if our element is found in the
+                                  ;; car of the list then the underlying list is not modified
+                                  ;; and the cdr of the list is returned, therefore if you have
+                                  ;; a list of all zeros and try to delete zero from it the list
+                                  ;; will remain unchanged unless you also setq the name to the
+                                  ;; (now) cdr value
+                                  (setq reval-failed-buffer-list
+                                        (delete (current-buffer) reval-failed-buffer-list)))
+                                nil t))
+                    (if (with-url-handler-mode (file-exists-p path-or-url))
+                        ;; TODO probably need to signal something more specific
+                        (funcall (if alternates #'warn #'error)
+                                 ;; if alternates warn to prevent an early failure
+                                 ;; from blocking later potential successes otherwise
+                                 ;; signal an error
+                                 "reval checksum mismatch! %s" path-or-url)
+                      (warn "reval file does not exist! %s" path-or-url))))
+             until done))
+  nil)
+
+(defun reval-minimal (cypher checksum path-or-url)
+  "Simplified and compact implementation of reval."
+  ;; missing debug features and support for alternate sources
+  ;; the rationale is that 99% of the time this minimal reval is going
+  ;; to be used only once to open and eval a file that will also
+  ;; include the full version, if that first reval fails then
+  ;; something is wrong enough that users that don't have the full
+  ;; version installed already are unlikely to be able to debug the
+  ;; issue on their own
+  (let* ((buffer (let ((o url-handler-mode))
+                   (unwind-protect
+                       (progn
+                         (url-handler-mode)
+                         (find-file-noselect path-or-url))
+                     (unless o
+                       (url-handler-mode 0)))))
+         (buffer-checksum (intern (secure-hash cypher buffer))))
     (if (eq buffer-checksum checksum)
         (eval-buffer buffer)
-      (with-current-buffer buffer
-        (push buffer reval-failed-buffer-list)
-        ;; push first since it is better to have a dead buffer linger in a list
-        ;; than it is to have an error happen during execution of `kill-buffer-hook'
-        (add-hook 'kill-buffer-hook
-                  (lambda () 
-                    ;; read the manual for sets and lists to see why we have to
-                    ;; setq here ... essentially if our element is found in the
-                    ;; car of the list then the underlying list is not modified
-                    ;; and the cdr of the list is returned, therefore if you have
-                    ;; a list of all zeros and try to delete zero from it the list
-                    ;; will remain unchanged unless you also setq the name to the
-                    ;; (now) cdr value
-                    (setq reval-failed-buffer-list
-                          (delete (current-buffer) reval-failed-buffer-list)))
-                  nil t))
-      (error "checksum mismatch!"))))
+      (kill-buffer buffer) ; in the simple version kill so it is not accidentally evaled
+      (error "reval checksum mismatch! %s" path-or-url))))
 
-(defun reval-view-last-failed ()
-  "View last failed reval buffer and kill or keep."
+(defun reval-view-failed ()
+  "View top of failed reval buffer stack and kill or keep."
   (interactive)
   (when reval-failed-buffer-list
     (save-window-excursion
@@ -2432,7 +2582,13 @@ If an error is encountered try ALTERNATES in order."
         (switch-to-buffer (current-buffer))
         (when (y-or-n-p "Kill buffer? ")
           (kill-buffer))))))
+
+(defun reval-check-for-updates ()
+  "Check current buffer revals for updates."
+  (error "TODO not implemented"))
 #+end_src
+
+A little trick in =M-:= ~(insert (prin1-to-string (read (buffer-string))))~.
 
 The more complex version of this is ~reload~ which includes a cache
 where files are stored locally, and the ability to set a preferred
@@ -2460,29 +2616,46 @@ Testing
 ;; `eval-print-last-sexp'
 
 ;; bad since html not elisp
-(make-reval 'sha256 "https://github.com/tgbugs/orgstrap/blob/417b87304da27397d3ce1b79039119a9337be305/packages.el")
+(reval-make 'sha256 "https://github.com/tgbugs/orgstrap/blob/417b87304da27397d3ce1b79039119a9337be305/packages.el")
 
 ;; bad 404 file exists but cannot be read ... 404 error or something like that should just fail ?
-(make-reval 'sha256 "https://github.com/tgbugs/orgstrap/blob/does-no-exist/packages-does-not-exist.el")
+(reval-make 'sha256 "https://github.com/tgbugs/orgstrap/blob/does-no-exist/packages-does-not-exist.el")
 
-(make-reval 'sha256 "https://raw.githubusercontent.com/tgbugs/orgstrap/does-no-exist/packages-does-not-exist.el")
+(reval-make 'sha256 "https://raw.githubusercontent.com/tgbugs/orgstrap/does-no-exist/packages-does-not-exist.el")
 
 ;; connection error
-(make-reval 'sha256 "https://127.0.0.2/connection-error")
+(reval-make 'sha256 "https://127.0.0.2/connection-error")
 
-(make-reval 'sha256 "https://0.0.0.0/connection-error")
+(reval-make 'sha256 "https://0.0.0.0/connection-error")
 
 ;;(setq debug-on-message "File exists, but cannot be read")
 ;;(setq debug-on-message nil)
 
 ;; ok
-(make-reval 'sha256 "https://raw.githubusercontent.com/tgbugs/orgstrap/417b87304da27397d3ce1b79039119a9337be305/packages.el")
+(reval-make 'sha256 "https://raw.githubusercontent.com/tgbugs/orgstrap/417b87304da27397d3ce1b79039119a9337be305/packages.el")
 
 ;; checksum match
 (reval 'sha256 'aada229afa36ac1f3e9f26e1ec7c0c09214d75563adb62aa0fac2f1ae58496fe "https://raw.githubusercontent.com/tgbugs/orgstrap/417b87304da27397d3ce1b79039119a9337be305/packages.el")
 
 ;; checksum mismatch
 (reval 'sha256 'bada229afa36ac1f3e9f26e1ec7c0c09214d75563adb62aa0fac2f1ae58496fe "https://raw.githubusercontent.com/tgbugs/orgstrap/417b87304da27397d3ce1b79039119a9337be305/packages.el")
+
+;; checksum missing file then match
+(reval 'sha256 'aada229afa36ac1f3e9f26e1ec7c0c09214d75563adb62aa0fac2f1ae58496fe
+ "packages.el"
+ "https://raw.githubusercontent.com/tgbugs/orgstrap/417b87304da27397d3ce1b79039119a9337be305/packages.el")
+
+;; test whether Emacs can find xrefs in reval buffers
+
+;; local files are of course ok
+(reval-make 'sha256 "orgstrap.el")
+
+(reval 'sha256 'cbb890d65aa85180f26cb334ac3ca26880005584a1b7f3910f147762eef0196d "orgstrap.el")
+
+;; the default behavior for emacs does not work
+(reval-make 'sha256 "https://raw.githubusercontent.com/tgbugs/orgstrap/38a8c1688f81a54e39f93bf84b7d4907cf03442c/orgstrap.el")
+
+(reval 'sha256 'f25c7aa8c0e40afab8884a67f09e5a6629682bb6e6592c48025b87a7a05c4d98 "https://raw.githubusercontent.com/tgbugs/orgstrap/38a8c1688f81a54e39f93bf84b7d4907cf03442c/orgstrap.el")
 
 #+end_src
 
@@ -2502,6 +2675,204 @@ reval-failed-buffer-list
 (pop reval-failed-buffer-list)
 #+end_src
 
+** ow.el
+This hurts me, but worth it. Code bits that can be loaded via reval
+for bootstrap, or that can be reloaded, or installed as a package.
+#+begin_src elisp ./ow-utils.el
+<<run-command>>
+
+<<secure-elisp-curl>>
+#+end_src
+
+#+begin_src elisp ./ow.el
+<<ow-usability>>
+<<ow-buttons>>
+<<ow-configs>>
+#+end_src
+*** Usability
+The default for =org-cycle-hook= is what causes the position of headings
+to change when they are opened/closed. This is extremely undesirable when
+using a mouse to toggle headings. https://emacs.stackexchange.com/a/31277
+#+name: ow-usability
+#+begin_src elisp
+;; mouse behavior
+
+(defun ow--safe-cycle (event &optional promote-to-region)
+  "Bind this to mouse-1 for sane clickable cycling behavior."
+  (interactive "e\np")
+  (let ((face (get-char-property (point) 'face)))
+    (unless (and face (listp face) (memq 'org-block face))
+      (unwind-protect
+          (progn
+            (remove-hook 'org-cycle-hook #'org-optimize-window-after-visibility-change t)
+            (org-cycle))
+        (add-hook 'org-cycle-hook #'org-optimize-window-after-visibility-change nil t))))
+  ;; have to chain `mouse-set-point' otherwise double click to highlight words etc. fails
+  (mouse-set-point event promote-to-region))
+
+(defun ow-enable-mouse-cycle ()
+  "Allow left mouse to cycle org headings."
+  (interactive)
+  ;; reset `org-cycle-hook' as a local variable so that
+  ;; we can add/remove individual hooks without messing
+  ;; with the global behavior which might some day not
+  ;; be purely single threaded (heh)
+  (setq-local org-cycle-hook org-cycle-hook)
+  (local-unset-key [mouse-1])
+  (local-set-key [mouse-1] #'ow--safe-cycle))
+
+(defun ow-recenter-on-mouse ()
+  "Recenter the cursor line so that it is under the mouse."
+  ;; after much digging using `mouse-pixel-position' together
+  ;; with `pos-at-x-y' seems to be what we want, `mouse-position'
+  ;; and `window-edges' are decidedly NOT the right solution
+  ;; `pos-at-x-y' is able to call into the C code to get something
+  ;; much closer to what is produced by an actual mouse event
+  ;; https://emacs.stackexchange.com/questions/30852 has the wrong solution
+  (interactive)
+  (let* ((mpp (mouse-pixel-position))
+         (position-list (posn-at-x-y (cadr mpp)
+                                     (cddr mpp)
+                                     (selected-frame)
+                                     nil))
+         ;;(asdf (message "%s" hrm))
+         (mouse-line (cdr (posn-actual-col-row position-list)))
+         (cursor-line (- (line-number-at-pos)
+                         (line-number-at-pos (window-start))))
+         (offset (- mouse-line cursor-line)))
+    ;;(message "ml: %s cl: %s offset: %s" mouse-line cursor-line offset)
+    (scroll-down offset)))
+
+;; random useful functions
+
+(defun ow-fold-headline (&optional name)
+  "Set visibility property of headline with NAME or previous visible to folded."
+  ;; https://orgmode.org/manual/Using-the-Property-API.html
+  (save-excursion
+    (if name
+        (goto-char (org-find-exact-headline-in-buffer name))
+      (org-previous-visible-heading 0))
+    (org-entry-put nil "visibility" "folded")
+    (save-buffer)))
+#+end_src
+*** Config
+In the original implementation of the familiar config each of the
+settings could be enabled or disabled individually, however there was
+pretty much never an instance where this functionality was used, so in
+this variant everything can only be enabled together.
+
+#+name: ow-config
+#+begin_src elisp
+(defun ow--headline-faces ()
+  "Set face for all headline levels to be bold."
+  (mapcar (lambda (n) (set-face-attribute (intern (format "org-level-%s" n)) nil :bold t))
+          (number-sequence 1 8)))
+
+(defun ow-enable-config-familiar-1 ()
+  "Minimal config to achieve something more familiar for non-Emacs users.
+
+Uses `cua-mode' with additional tweak for undo bindings.
+NOTE: `undo-fu' is required for Emacs < 28."
+
+  ;; Enable familiar copy/paste keybindings
+  (cua-mode t)
+  ;; enable Cmd Shift Z for apple users Ctrl y for windows
+  (when (fboundp #'undo-redo)
+      (if (eq system-type 'darwin)
+          (local-set-key "C-Z" #'undo-redo)
+      (local-set-key "C-y" #'undo-redo)))
+
+  ;; Use left mouse to cycle
+  (ow-enable-mouse-cycle)
+
+  ;; default shift functionality is usually not needed in ow files and
+  ;; the message when you try to use it can be extremely confusing
+  (setq-local org-support-shift-select t)
+
+  ;; Enable tab-bar-mode
+  (tab-bar-mode t)
+
+  ;; Use the whiteboard theme
+  (load-theme 'whiteboard)
+
+  ;; Set headline faces, sligh improvements to the whiteboard defaults
+  (ow--headline-faces)
+  (set-face-attribute 'org-block-begin-line nil :extend t :foreground "black" :background "silver")
+  (set-face-attribute 'org-block-end-line nil :extend t :foreground "black" :background "silver")
+  (set-face-attribute 'org-block nil :extend t :background "white"))
+#+end_src
+*** Buttons
+#+name: ow-buttons
+#+begin_src elisp
+;; don't export buttons
+
+(defun ow-link-no-export (path desc format)
+  "Return nothing for export" ; FIXME broken ???
+  "")
+
+;; hide headline for future startups
+
+(org-link-set-parameters "FOLD-HEADLINE" :export #'orgstrap---nox :follow
+                         (lambda (&optional nothing)
+                           (ow-fold-headline)))
+
+;; run the next #+begin_src block
+
+(org-link-set-parameters "RUN" :export #'orgstrap---nox :follow
+                         (lambda (&optional nothing)
+                           (org-next-block nil)
+                           (org-babel-execute-src-block)))
+
+;; run the previous src block (doesn't work if there are results)
+
+(org-link-set-parameters "RUNPREV" :export #'orgstrap---nox :follow
+                         (lambda (&optional nothing)
+                           (org-previous-block nil)
+                           (org-babel-execute-src-block)))
+
+;; run the next #+call: TODO we should be able to do this with mouse-1?
+
+(org-link-set-parameters "RUNC" :export #'orgstrap---nox :follow
+                         (lambda (&optional nothing)
+                           (save-excursion
+                             (re-search-forward "#\\+call:")
+                             (org-ctrl-c-ctrl-c))))
+
+;; adjust font size for the current buffer
+
+(org-link-set-parameters "TEXT-LARGER" :export #'orsgrap--nox :follow
+                         (lambda (&optional nothing)
+                           (text-scale-adjust 1)
+                           (recenter-on-mouse)))
+
+(org-link-set-parameters "TEXT-SMALLER" :export #'orsgrap---nox :follow
+                         (lambda (&optional nothing)
+                           (text-scale-adjust -1)
+                           (recenter-on-mouse)))
+
+(org-link-set-parameters "TEXT-RESET" :export #'orsgrap---nox :follow
+                         (lambda (&optional nothing)
+                           (text-scale-adjust 0)
+                           (recenter-on-mouse)))
+#+end_src
+*** run-command
+Sometimes functionality needed during bootstrap is implemented outside
+of Emacs. In those cases it may be necessary to run commands.
+=run-command= provides a light wrapper around =call-process= to
+transform external errors into elisp errors and otherwise evaluates to
+the string output of the process.
+#+name: run-command
+#+begin_src elisp :results none
+(defun run-command (command &rest args)
+  "Run COMMAND with ARGS. Raise an error if the return code is not zero."
+  ;;(message "%S" (mapconcat #'identity (cons command args) " "))
+  (with-temp-buffer
+    (let* ((return-code (apply #'call-process command nil (current-buffer) nil args))
+           (string (buffer-string)))
+      (if (not (= 0 return-code))
+          (error "code: %s stdout: %S" return-code string)
+        string))))
+#+end_src
 *** securl
 An extremely common pattern when bootstrapping is to retrieve files
 from a remote location. This provides a pure elisp implementation that
