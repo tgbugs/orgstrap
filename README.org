@@ -4,6 +4,7 @@
 #+options: num:nil \n:nil
 #+property: header-args :eval no-export
 #+link: yt https://youtu.be/
+#+link: gh https://github.com/
 #+latex_header: \usepackage[margin=0.8in]{geometry}
 #+latex_header: \setlength\parindent{0pt}
 
@@ -1682,7 +1683,7 @@ For the software life cycle see man:ebuild.
 
 ;; note that any file that uses these variables needs to define them
 ;; in the orgstrap block
-(defcustom orgstrap-do-config nil "Run code that modifies the Emacs config")
+(defcustom orgstrap-do-config nil "Run code that modifies the Emacs config." :type 'boolean)
 ;(defcustom orgstrap-do-config-emacs nil "Run code that modifies the Emacs config")
 
 (defvar orgstrap-do-build/make nil ; FIXME clarify naming
@@ -1707,16 +1708,16 @@ If non-nil then load the orgstrap block and run tests.")
 ;(defvar orgstrap-do-dependencies nil "Install all packages.")
 ;(defvar orgstrap-do-install-dependencies nil "Install all packages.")
 ;(defvar orgstrap-do-install-prerequisites nil "Install all packages.")
-(defcustom orgstrap-do-packages nil "Install all packages.")
+(defcustom orgstrap-do-packages nil "Install all packages." :type 'boolean)
 
-(defcustom orgstrap-do-packages-emacs nil "Install Emacs packages.")
-(defcustom orgstrap-do-packages-system nil "Install system packages.")
+(defcustom orgstrap-do-packages-emacs nil "Install Emacs packages." :type 'boolean)
+(defcustom orgstrap-do-packages-system nil "Install system packages." :type 'boolean)
 
 ;(defcustom orgstrap-do-setup nil "Run other setup steps.")  ; FIXME this is closer to emerge --config
-(defcustom orgstrap-do-services nil "Run services needed by file.")
+(defcustom orgstrap-do-services nil "Run services needed by file." :type 'boolean)
 ;; other parts of the software lifecycle
-(defcustom orgstrap-do-package nil "???")
-(defcustom orgstrap-do-release nil "???")
+(defcustom orgstrap-do-package nil "???" :type 'boolean)
+(defcustom orgstrap-do-release nil "???" :type 'boolean)
 
 (defun orgstrap-update-src-block (name content)
   "Set the content of source block named NAME to string CONTENT.
@@ -2013,6 +2014,7 @@ done
 ** Release :noexport:
 *** Flycheck
 Use ~flycheck-mode~ on [[file:./orgstrap.el]] to checkdoc for melpa.
+Don't forget to run ~flycheck-package-setup~ to get better reports.
 *** Byte compile
 Before a release run the following block and fix any byte compile
 errors and warnings.
@@ -2437,6 +2439,37 @@ the remaining space in the orgstrap elv it probably won't happen.
 # reval embedded in a file somewhere then it looks like a really bad
 # idea ... this is another one of those things where there is a
 # strange tradeoff like package managers
+
+See [[info:elisp#Library Headers][Library Headers]] for details
+related to ~reval-update~.
+
+~reval-update~ functionality works by leveraging the builtin
+functionality of ~package-buffer-info~. To create a file that
+can be updated automatically by reval, use the URL: header to
+point to a url that resolves to the Latest-Version of the
+while it would be nice to use a Latest-Version: header directly
+using URL: simplifies the implementation immensely. Note that
+~pacakge-buffer-info~ only returns the first occurance of URL:
+or Homepage: so the Latest-Version url must come first. Other
+urls can be listed later but will not be included in the parse.
+
+Sadly this is not as simple as one might think. Listing the
+Latest-Version url is sufficient to detect that there has been a
+change, but then there is the multipath issue of how to obtain a
+static url to the exact (new) version of the resource. In addition
+to the Latest-Version url you need some url that either redirects
+to the static latest. For example the github latest releases url
+https://github.com/tgbugs/orgstrap/releases/latest has the desired
+redirection behavior. The equivalent for branch refs is
+https://api.github.com/repos/tgbugs/orgstrap/git/refs/heads/master.
+However you have to deal with the json response there which is the
+multipath issue discussed before.
+
+Depending on how far things like git-share go, mirrors could be listed
+Mirror-List: or something? If we do that then Latest-Version can be used
+this is useful only after a user has been able to resolve a copy
+after which a local mirrors list could be created.
+
 #+begin_src elisp :lexical yes
 (defvar reval-failed-buffer-list nil "List of failed reval buffers.")
 (defvar reval-evaled-buffer-list nil "List of evaled reval buffers.")
@@ -2459,7 +2492,7 @@ the remaining space in the orgstrap elv it probably won't happen.
   (with-url-handler-mode
     (find-file-noselect path-or-url)))
 
-(defun resum-review (cypher buffer &optional review)
+(defun reval-resum-review (cypher buffer &optional review)
   "Return checksum under CYPHER for BUFFER.
 If REVIEW is non-nil then switch to BUFFER and prompt asking if audit
 is ok before continuing."
@@ -2470,8 +2503,8 @@ is ok before continuing."
       (with-current-buffer buffer
         (when review
           (switch-to-buffer (current-buffer))
-          ;; FIXME `yes-or-no-p' breaks all keyboard input :/
-          (unless (yes-or-no-p "Audit of file ok? ") ; not using `y-or-n-p' since it is too easy
+          ;; FIXME `yes-or-no-p' still blocks the command loop in >= 27 emacsclient
+          (unless (yes-or-no-p "Audit of file ok? " nil) ; not using `y-or-n-p' since it is too easy
             (error "Audit failed. Checksum will not be calculated for %s"
                    (buffer-file-name (current-buffer)))))
         (unless (eq major-mode 'emacs-lisp-mode)
@@ -2488,15 +2521,15 @@ is ok before continuing."
           (error (error "Not an emacs lisp file!")))
         (intern (secure-hash cypher (current-buffer)))))))
 
-(defun resum-minimal (cypher buffer)
+(defun reval-resum-minimal (cypher buffer)
   "Checksum of BUFFER under CYPHER." ; minimal for maximal porability
   ;; not used since the expression takes up less space
   (intern (secure-hash cypher buffer)))
 
-(defalias 'resum #'resum-review)
+(defalias 'reval-resum #'reval-resum-review)
 
 (defun reval-make (cypher path-or-url)
-  `(reval ',cypher ',(resum cypher (id->buffer path-or-url) t) ,path-or-url))
+  `(reval ',cypher ',(reval-resum cypher (id->buffer path-or-url) t) ,path-or-url))
 
 (defun reval-audit ()
   "Audit the reval under the cursor."
@@ -2506,10 +2539,9 @@ is ok before continuing."
     (let ((begin (point)))
       (forward-sexp)
       (let* ((raw (read (buffer-substring-no-properties begin (point))))
-             ;;(sigh (message "%S" raw))
              (buffer (with-url-handler-mode
                        (find-file-noselect (elt raw 3))))
-             (checksum (resum (elt raw 1) buffer t)))
+             (checksum (reval-resum (elt raw 1) buffer t)))
         (eq (elt raw 2) checksum)))))
 
 (defun reval (cypher checksum path-or-url &rest alternates)
@@ -2518,7 +2550,7 @@ If an error is encountered try ALTERNATES in order."
   (let (done)
     (cl-loop for path-or-url in (cons path-or-url alternates)
              do (let* ((buffer (id->buffer path-or-url))
-                       (buffer-checksum (resum cypher buffer)))
+                       (buffer-checksum (reval-resum cypher buffer)))
                   (if (eq buffer-checksum checksum)
                       (progn
                         (eval-buffer buffer)
@@ -2551,7 +2583,8 @@ If an error is encountered try ALTERNATES in order."
              until done))
   nil)
 
-(defun reval-minimal (cypher checksum path-or-url)
+;; today we learn about & key key insert of digraphgs !? まとせれめはそらてどööて∃∀
+(defun reval-minimal (cypher checksum path-or-url &rest _alts)
   "Simplified and compact implementation of reval."
   ;; missing debug features and support for alternate sources
   ;; the rationale is that 99% of the time this minimal reval is going
@@ -2583,9 +2616,53 @@ If an error is encountered try ALTERNATES in order."
         (when (y-or-n-p "Kill buffer? ")
           (kill-buffer))))))
 
-(defun reval-check-for-updates ()
+(defun reval--check-buffer ()
+  (let* ((url-pair (assoc :url (package-desc-extras (package-buffer-info))))
+         (url (if url-pair (cadr url-pair) nil)))
+    (if url
+        )
+      (warn "No :url section was found for this package!")
+
+(require 'lisp-mnt)
+
+(defun reval-is-version-of (&optional file)
+  "Return the Is-Version-Of: header for FILE or current buffer."
+  ;; this was originally called Latest-Version but matching the
+  ;; datacite relationships seems to make more sense here esp.
+  ;; since this is literally the example from the documentation
+  (lm-with-file file
+    (lm-header "is-version-of")))
+
+(defun reval-get-immutable (&optional file)
+  "Return the Reval-Get-Immutable: header for File or current buffer.
+The value of this header should name the function in the current file
+that should be used to obtain an immutable name that points to the
+current remote version of the the current file."
+  ;; there isn't really a datacite relation we can use here
+  ;; because we would have to resolve the object of is-version-of
+  ;; Has-Redirect-To-Current-Immutable ?
+  ;; reval-current-immutable-version ... urg need better name for must-be-resolved
+  ;; actually, no, there will always have to get a function because
+  ;; we are in a situation where a remote can change so we have to have
+  ;; a rule for how to get the new immutable name so always a function
+  ;; or Reval-Get-Immutable: package--reval-update-imm
+  (lm-with-file file
+    (lm-header "reval-get-immutable")))
+
+(defun reval-check-for-updates () ; TODO reval-sync ?
   "Check current buffer revals for updates."
+  (interactive)
+  ;; search and collect all calls to reval in the current buffer? all org files? ???
+  ;; open the current reval in a buffer
+  ;; get the package info if avaiable
+  ;; warn about all revals that cannot be updated due to missing metadata?
+
+  (message "%S" )
   (error "TODO not implemented"))
+
+(defun reval-update ()
+  "Update to latest version."
+  )
 #+end_src
 
 A little trick in =M-:= ~(insert (prin1-to-string (read (buffer-string))))~.
@@ -2675,19 +2752,114 @@ reval-failed-buffer-list
 (pop reval-failed-buffer-list)
 #+end_src
 
+Thinking about whether there are reasonable ways we could enable more
+automated updates. It seems that without a redirect to current head
+url that provides known and specified behavior from the server side,
+we are stuck implementing all the usual insanity for each vcs, remote
+service, etc. I guess a ~Reval-Update:~ header could implement the
+processes needed to obtain the latest immutable url might work. Of
+course one could always use the prop line local variables for
+something like this rather than trying to stuff even more nonsense
+into the package metadata. ~setq-local~ only works if the file is
+loaded in a buffer though right ... ?
+
+#+begin_src elisp
+;; Latest-Version: https://raw.githubusercontent.com/tgbugs/orgstrap/master/ow-min.el
+;; Dereference: https://api.github.com/repos/tgbugs/orgstrap/git/refs/heads/master#/object/sha -> master
+;; Reval-Get-Imutable:
+;; Reval-Update: ow-reval-update-get-immutable-url
+
+(setq-local reval-update-get-immutable-url-function-name #'ow--update-url)
+(defun ow--update-url ()
+  (let ((branch "master")
+        (glvt "https://raw.githubusercontent.com/tgbugs/orgstrap/%s/ow-min.el")
+        (drvt "https://api.github.com/repos/tgbugs/orgstrap/git/refs/heads/%s"))
+    (format glvt (gethash "sha" (gethash "object" (url->json (format drvt branch)))))))
+#+end_src
 ** ow.el
 This hurts me, but worth it. Code bits that can be loaded via reval
 for bootstrap, or that can be reloaded, or installed as a package.
-#+begin_src elisp ./ow-utils.el
+#+begin_src elisp ./ow-min.el
+;;; ow-min.el --- Minimal utilties for orgstrap blocks. -*- lexical-binding: t -*-
+
+;; Author: Tom Gillespie
+;; Homepage: https://github.com/tgbugs/orgstrap
+;; Version: 9999
+;; Package-Requires: ((emacs "24.4"))
+;; Is-Version-Of: https://raw.githubusercontent.com/tgbugs/orgstrap/master/ow-min.el
+;; Reval-Get-Immutable: ow-min--reval-update
+
+;;;; License and Commentary
+
+;; License:
+;; SPDX-License-Identifier: GPL-3.0-or-later
+
+;;; Commentary:
+
+;; ow-min.el contains functionality needed by orgstrap blocks that are
+;; primarily used by developers, such as files that implement a
+;; release process where no end user interaction is expected.
+
+;; ow-min.el is compatible with `reval-update'.
+
+;;; Code:
+
 <<run-command>>
 
+(defalias 'run-command #'ow-run-command)
+
 <<secure-elisp-curl>>
+
+(provide 'ow-min)
+
+;;; ow-min.el ends here
+
 #+end_src
 
 #+begin_src elisp ./ow.el
+;;; ow.el --- Common functionality for Orgware files. -*- lexical-binding: t -*-
+
+;; Author: Tom Gillespie
+;; URL: https://raw.githubusercontent.com/tgbugs/orgstrap/master/ow.el
+;; Homepage: https://github.com/tgbugs/orgstrap
+;; Version: 9999
+;; Package-Requires: ((emacs "27.1"))
+
+;;;; License and Commentary
+
+;; License:
+;; SPDX-License-Identifier: GPL-3.0-or-later
+
+;;; Commentary:
+
+;; ow.el is the catch-all file that includes all the functionality
+;; that you might want to use in an orgstrap block in a single place
+;; including functions that are also packaged independently such as
+;; the reval-* and securl-* functionality. The normal way to use it
+;; is to use `reval-minimal' to obtain all the functionality, and then
+;; use `reval-reload-latest' to cache a persistent copy and reload from
+;; that file so that all xrefs can be resolved.
+
+;; ow.el is compatible with `reval-update'.
+
+;;; Code:
+
+<<reval>>
+
+<<run-command>>
+
+<<secure-elisp-curl>>
+
 <<ow-usability>>
+
 <<ow-buttons>>
+
 <<ow-configs>>
+
+(provide 'ow)
+
+;;; ow.el ends here
+
 #+end_src
 *** Usability
 The default for =org-cycle-hook= is what causes the position of headings
@@ -2863,8 +3035,11 @@ transform external errors into elisp errors and otherwise evaluates to
 the string output of the process.
 #+name: run-command
 #+begin_src elisp :results none
-(defun run-command (command &rest args)
+(defun ow-run-command (command &rest args)
   "Run COMMAND with ARGS. Raise an error if the return code is not zero."
+  ;; I'm being a good namespace citizen and prefixing this with ow- but
+  ;; 99% of the time I'm going to have (defalias 'run-command #'ow-run-command)
+  ;; in my orgstrap blocks that reval ow.el (since ow-min.el has it already)
   ;;(message "%S" (mapconcat #'identity (cons command args) " "))
   (with-temp-buffer
     (let* ((return-code (apply #'call-process command nil (current-buffer) nil args))
@@ -2887,12 +3062,12 @@ portable makes it significantly harder to understand and audit.
 
 #+name: secure-elisp-curl
 #+begin_src elisp :results none
-(defvar default-cypher 'sha256)  ; remember kids, always publish the cypher with the checksum
+(defvar securl-default-cypher 'sha256)  ; remember kids, always publish the cypher with the checksum
 
-(defun path-checksum (path &optional cypher)
+(defun securl-path-checksum (path &optional cypher)
   "not as fast as using sha256sum, but requires no dependencies
 1.4s vs .25s for ~60mb"
-  (let ((cypher (or cypher default-cypher)))
+  (let ((cypher (or cypher securl-default-cypher)))
     (with-temp-buffer
       (insert-file-contents-literally path)
       (secure-hash cypher (current-buffer)))))
@@ -2902,7 +3077,7 @@ portable makes it significantly harder to understand and audit.
 Files that do not match the checksum are quarantined."
   ;; unless the file exists or the checksum matches fetch and check
   (unless (and (file-exists-p path)
-               (let ((existing-checksum (path-checksum path cypher)))
+               (let ((existing-checksum (securl-path-checksum path cypher)))
                  (or (string= checksum existing-checksum)
                      ;; (not (message "checksum mismatch:\n%S\n%S" checksum existing-checksum))
                      (not (rename-file path
@@ -2910,7 +3085,7 @@ Files that do not match the checksum are quarantined."
                                        t)))))
     (let ((path-temp (make-temp-file (concat path "._fetching_."))))
       (url-copy-file url path-temp t)
-      (let ((new-checksum (path-checksum path-temp cypher)))
+      (let ((new-checksum (securl-path-checksum path-temp cypher)))
         (if (string= checksum new-checksum)
             (rename-file path-temp path)
           (let ((path-failure (make-temp-file (concat path "._checksum_failure_."))))
@@ -2919,6 +3094,29 @@ Files that do not match the checksum are quarantined."
   ;; return nil in all cases the calling scope has the path and
   ;; whatever is at that path must have passed the current checksum
   nil)
+#+end_src
+*** securl testing
+TODO there are a bunch of different pathological cases that I have
+already worked out but for which there are no explicit existing tests.
+The checksum of a non-existent file could be anything re all my
+mountain bikes go 66mph. The table below enumerates the most common
+cases, but cases such as rex no conflate 404, 500, and connection
+errors among others.
+
+| lex | lsum | rex | rsum | act                        | test? |
+|-----+------+-----+------+----------------------------+-------|
+| yes | yes  | ?   | ?    | done                       |       |
+| yes | bad  | yes | ok   | l -> existing-bad, r -> l  |       |
+| no  | ?    | yes | ok   | r -> l                     |       |
+| no  | ?    | no  | ?    | r no file error            |       |
+| no  | ?    | yes | bad  | r -> bad, r bad file error |       |
+
+#+name: securl-testing
+#+begin_src elisp
+(securl 'sha256
+        'aada229afa36ac1f3e9f26e1ec7c0c09214d75563adb62aa0fac2f1ae58496fe
+        "https://raw.githubusercontent.com/tgbugs/orgstrap/417b87304da27397/packages.el"
+        "packages-test-fetch.el")
 #+end_src
 * Background, file local variables, and checksums
 :PROPERTIES:
@@ -3226,6 +3424,7 @@ function.
 #+begin_src elisp
 (use-package org-ref)  ; for ref:
 (use-package ox-gfm)  ; simplify export of changelog for release
+(use-package flycheck-package) ; linting for melpa
 #+end_src
 ** Orgware run
 One potential way to simplify command line execution of orgstrapped
@@ -3326,6 +3525,7 @@ Before save hook and/or before commit hook to automatically update the block che
 ** DONE use orgstrap to automatically keep example blocks in sync  :noexport:
 ** DONE melpa                                                      :noexport:
 Woo! https://melpa.org/#/orgstrap
+gh:melpa/melpa/pull/7111
 ** DONE Determine whether to use minimal or portable based on the :noweb header
 This is essentially what is implemented via =orgstrap--have-min-org-version=.
 The choice to prefer the minimal local variables is left up to the user and
