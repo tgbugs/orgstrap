@@ -2470,7 +2470,7 @@ Mirror-List: or something? If we do that then Latest-Version can be used
 this is useful only after a user has been able to resolve a copy
 after which a local mirrors list could be created.
 
-#+begin_src elisp :lexical yes
+#+begin_src elisp :lexical yes :results none
 (defvar reval-failed-buffer-list nil "List of failed reval buffers.")
 (defvar reval-evaled-buffer-list nil "List of evaled reval buffers.")
 
@@ -2485,7 +2485,7 @@ after which a local mirrors list could be created.
        (unless uhm
          (url-handler-mode 0)))))
 
-(defun id->buffer (path-or-url)
+(defun reval-id->buffer (path-or-url)
   "Given a PATH-OR-URL return a buffer of its contents."
   ;; We explicitly do not catch errors here since they need to
   ;; be caught by the human in the loop later.
@@ -2501,10 +2501,13 @@ is ok before continuing."
   (let (enable-local-eval)
     (save-window-excursion
       (with-current-buffer buffer
+        (unless (file-exists-p (buffer-file-name))
+          ;; NOTE url-handler-mode must be set in the calling context
+          (error "reval-resum: file does not exist! %s" (buffer-file-name)))
         (when review
           (switch-to-buffer (current-buffer))
           ;; FIXME `yes-or-no-p' still blocks the command loop in >= 27 emacsclient
-          (unless (yes-or-no-p "Audit of file ok? " nil) ; not using `y-or-n-p' since it is too easy
+          (unless (yes-or-no-p "Audit of file ok? ") ; not using `y-or-n-p' since it is too easy
             (error "Audit failed. Checksum will not be calculated for %s"
                    (buffer-file-name (current-buffer)))))
         (unless (eq major-mode 'emacs-lisp-mode)
@@ -2529,7 +2532,7 @@ is ok before continuing."
 (defalias 'reval-resum #'reval-resum-review)
 
 (defun reval-make (cypher path-or-url)
-  `(reval ',cypher ',(reval-resum cypher (id->buffer path-or-url) t) ,path-or-url))
+  `(reval ',cypher ',(reval-resum cypher (reval-id->buffer path-or-url) t) ,path-or-url))
 
 (defun reval-audit ()
   "Audit the reval under the cursor."
@@ -2544,43 +2547,52 @@ is ok before continuing."
              (checksum (reval-resum (elt raw 1) buffer t)))
         (eq (elt raw 2) checksum)))))
 
+(defun reval--add-buffer-to-list (buffer buffer-list-name)
+  (with-current-buffer buffer ; FIXME do this in both cases but change which list
+    (push buffer buffer-list-name)
+    ;; push first since it is better to have a dead buffer linger in a list
+    ;; than it is to have an error happen during execution of `kill-buffer-hook'
+    (add-hook 'kill-buffer-hook
+              (lambda ()
+                ;; read the manual for sets and lists to see why we have to
+                ;; setq here ... essentially if our element is found in the
+                ;; car of the list then the underlying list is not modified
+                ;; and the cdr of the list is returned, therefore if you have
+                ;; a list of all zeros and try to delete zero from it the list
+                ;; will remain unchanged unless you also setq the name to the
+                ;; (now) cdr value
+                (set buffer-list-name
+                     (delete (current-buffer) reval-failed-buffer-list)))
+              nil t)))
+
 (defun reval (cypher checksum path-or-url &rest alternates)
   "Open PATH-OR-URL, match CHECKSUM under CYPHER, then eval.
 If an error is encountered try ALTERNATES in order."
   (let (done)
-    (cl-loop for path-or-url in (cons path-or-url alternates)
-             do (let* ((buffer (id->buffer path-or-url))
-                       (buffer-checksum (reval-resum cypher buffer)))
-                  (if (eq buffer-checksum checksum)
-                      (progn
-                        (eval-buffer buffer)
-                        (push buffer reval-evaled-buffer-list)
-                        (setq done t))
-                    (with-current-buffer buffer ; FIXME do this in both cases but change which list
-                      (push buffer reval-failed-buffer-list)
-                      ;; push first since it is better to have a dead buffer linger in a list
-                      ;; than it is to have an error happen during execution of `kill-buffer-hook'
-                      (add-hook 'kill-buffer-hook
-                                (lambda ()
-                                  ;; read the manual for sets and lists to see why we have to
-                                  ;; setq here ... essentially if our element is found in the
-                                  ;; car of the list then the underlying list is not modified
-                                  ;; and the cdr of the list is returned, therefore if you have
-                                  ;; a list of all zeros and try to delete zero from it the list
-                                  ;; will remain unchanged unless you also setq the name to the
-                                  ;; (now) cdr value
-                                  (setq reval-failed-buffer-list
-                                        (delete (current-buffer) reval-failed-buffer-list)))
-                                nil t))
-                    (if (with-url-handler-mode (file-exists-p path-or-url))
-                        ;; TODO probably need to signal something more specific
-                        (funcall (if alternates #'warn #'error)
-                                 ;; if alternates warn to prevent an early failure
-                                 ;; from blocking later potential successes otherwise
-                                 ;; signal an error
-                                 "reval checksum mismatch! %s" path-or-url)
-                      (warn "reval file does not exist! %s" path-or-url))))
-             until done))
+    (with-url-handler-mode
+      (cl-loop for path-or-url in (cons path-or-url alternates)
+               do (let* ((buffer (reval-id->buffer path-or-url))
+                         (buffer-checksum (condition-case err
+                                              (reval-resum cypher buffer)
+                                            (error (funcall (if alternates #'warn #'error) "%s" err)))))
+                    (if (and buffer-checksum
+                             (eq buffer-checksum checksum))
+                        (progn
+                          (eval-buffer buffer)
+                          (reval--add-buffer-to-list buffer 'reval-evaled-buffer-list)
+                          (setq done t))
+                      (reval--add-buffer-to-list buffer 'reval-failed-buffer-list)
+                      (if (file-exists-p path-or-url)
+                          ;; TODO probably need to signal something more specific
+                          (funcall (if alternates #'warn #'error)
+                                   ;; if alternates warn to prevent an early failure
+                                   ;; from blocking later potential successes otherwise
+                                   ;; signal an error
+                                   "reval: checksum mismatch! %s" path-or-url)
+                        (warn "reval: file does not exist! %s" path-or-url))))
+               until done))
+    (unless done
+      (error "reval: all paths failed!")))
   nil)
 
 ;; today we learn about & key key insert of digraphgs !? まとせれめはそらてどööて∃∀
@@ -2616,16 +2628,33 @@ If an error is encountered try ALTERNATES in order."
         (when (y-or-n-p "Kill buffer? ")
           (kill-buffer))))))
 
-(defun reval--check-buffer ()
-  (let* ((url-pair (assoc :url (package-desc-extras (package-buffer-info))))
-         (url (if url-pair (cadr url-pair) nil)))
-    (if url
-        )
-      (warn "No :url section was found for this package!")
-
 (require 'lisp-mnt)
 
-(defun reval-is-version-of (&optional file)
+(defvar url-http-end-of-headers)
+(defun reval-url->json (url)  ; see utils.el
+  "given a url string return json as a hash table"
+  (json-parse-string
+   (with-current-buffer (url-retrieve-synchronously url)
+     (buffer-substring url-http-end-of-headers (point-max)))))
+
+(defun reval--get-new-immutable-url ()
+  (let ((get-imm-name (reval-header-get-immutable)))
+    (if get-imm-name
+        (let ((get-imm (intern get-imm-name)))
+          (if (fboundp get-imm)
+              (funcall get-imm)
+            (warn "Function %s from Reval-Get-Immutable not found in %s" get-imm-name (buffer-file-name))
+            nil))
+      (warn "Reval-Get-Immutable: header not found in %s" (buffer-file-name))
+      nil)))
+
+(defun reval-get-imm-github (group repo path &optional branch)
+  (let* ((branch (or branch "master"))
+         (url (format "https://api.github.com/repos/%s/%s/git/refs/heads/%s" group repo branch))
+         (sha (gethash "sha" (gethash "object" (reval-url->json url)))))
+    (format "https://raw.githubusercontent.com/%s/%s/%s/%s" group repo branch path)))
+
+(defun reval-header-is-version-of (&optional file)
   "Return the Is-Version-Of: header for FILE or current buffer."
   ;; this was originally called Latest-Version but matching the
   ;; datacite relationships seems to make more sense here esp.
@@ -2633,19 +2662,23 @@ If an error is encountered try ALTERNATES in order."
   (lm-with-file file
     (lm-header "is-version-of")))
 
-(defun reval-get-immutable (&optional file)
+(defun reval-header-get-immutable (&optional file)
   "Return the Reval-Get-Immutable: header for File or current buffer.
-The value of this header should name the function in the current file
-that should be used to obtain an immutable name that points to the
-current remote version of the the current file."
-  ;; there isn't really a datacite relation we can use here
-  ;; because we would have to resolve the object of is-version-of
-  ;; Has-Redirect-To-Current-Immutable ?
-  ;; reval-current-immutable-version ... urg need better name for must-be-resolved
-  ;; actually, no, there will always have to get a function because
-  ;; we are in a situation where a remote can change so we have to have
-  ;; a rule for how to get the new immutable name so always a function
-  ;; or Reval-Get-Immutable: package--reval-update-imm
+
+The value of this header should name a function in the current
+file that returns an immutable name that points to the current
+remote version of the the current file.
+
+The implementation of the function may assume that the reval
+package is present on the system."
+  ;; there will always have to be a function because even if the
+  ;; remote does all the work for us we will still have to ask the
+  ;; remote to actually do the dereference operation, since we can't
+  ;; gurantee that all remotes even have endpoints that behave this
+  ;; way we can't implement this once in reval, so we ask individual
+  ;; files to implement this pattern themselves, or worst case, the
+  ;; update function can be supplied at update time if there is a
+  ;; useful remote file that doesn't know that it is being revaled
   (lm-with-file file
     (lm-header "reval-get-immutable")))
 
@@ -2722,6 +2755,11 @@ Testing
  "packages.el"
  "https://raw.githubusercontent.com/tgbugs/orgstrap/417b87304da27397d3ce1b79039119a9337be305/packages.el")
 
+;; missing file then missing url
+(reval 'sha256 'aada229afa36ac1f3e9f26e1ec7c0c09214d75563adb62aa0fac2f1ae58496fe
+ "packages.el"
+ "https://raw.githubusercontent.com/tgbugs/orgstrap/417b87304da27397d3ce1b79039119a9337be305/packages.el-oops")
+
 ;; test whether Emacs can find xrefs in reval buffers
 
 ;; local files are of course ok
@@ -2764,13 +2802,18 @@ into the package metadata. ~setq-local~ only works if the file is
 loaded in a buffer though right ... ?
 
 #+begin_src elisp
-;; Latest-Version: https://raw.githubusercontent.com/tgbugs/orgstrap/master/ow-min.el
+;; Is-Version-Of: https://raw.githubusercontent.com/tgbugs/orgstrap/master/ow-min.el
 ;; Dereference: https://api.github.com/repos/tgbugs/orgstrap/git/refs/heads/master#/object/sha -> master
-;; Reval-Get-Imutable:
-;; Reval-Update: ow-reval-update-get-immutable-url
+;; Reval-Get-Immutable: ow--update-url
+;; Reval-Update-Url-Func: ow-reval-update-get-immutable-url
 
 (setq-local reval-update-get-immutable-url-function-name #'ow--update-url)
+
 (defun ow--update-url ()
+  "Get the immutable url for the current remote version of this file."
+  (reval-get-imm-github "tgbugs" "orgstrap" "ow.el"))
+
+(defun ow--update-url-old ()
   (let ((branch "master")
         (glvt "https://raw.githubusercontent.com/tgbugs/orgstrap/%s/ow-min.el")
         (drvt "https://api.github.com/repos/tgbugs/orgstrap/git/refs/heads/%s"))
