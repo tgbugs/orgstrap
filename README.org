@@ -2470,6 +2470,17 @@ Mirror-List: or something? If we do that then Latest-Version can be used
 this is useful only after a user has been able to resolve a copy
 after which a local mirrors list could be created.
 
+| file-exists-p | checksum-match | multi | signal | buffer |
+|---------------+----------------+-------+--------+--------|
+| t             | t              | t     | warn   | evaled |
+| nil           | t              | t     | warn   | kill   |
+| t             | nil            | t     | warn   | failed |
+| nil           | nil            | t     | warn   | kill   |
+| t             | t              | nil   | error  | evaled |
+| nil           | t              | nil   | error  | kill   |
+| t             | nil            | nil   | error  | failed |
+| nil           | nil            | nil   | error  | kill   |
+
 #+begin_src elisp :lexical yes :results none
 (defvar reval-failed-buffer-list nil "List of failed reval buffers.")
 (defvar reval-evaled-buffer-list nil "List of evaled reval buffers.")
@@ -2503,6 +2514,7 @@ is ok before continuing."
       (with-current-buffer buffer
         (unless (file-exists-p (buffer-file-name))
           ;; NOTE url-handler-mode must be set in the calling context
+          ;; this case should not happen, only extant files should make it here
           (error "reval-resum: file does not exist! %s" (buffer-file-name)))
         (when review
           (switch-to-buffer (current-buffer))
@@ -2549,21 +2561,24 @@ is ok before continuing."
 
 (defun reval--add-buffer-to-list (buffer buffer-list-name)
   (with-current-buffer buffer ; FIXME do this in both cases but change which list
-    (push buffer buffer-list-name)
+    (push buffer (symbol-value buffer-list-name))
     ;; push first since it is better to have a dead buffer linger in a list
     ;; than it is to have an error happen during execution of `kill-buffer-hook'
-    (add-hook 'kill-buffer-hook
-              (lambda ()
-                ;; read the manual for sets and lists to see why we have to
-                ;; setq here ... essentially if our element is found in the
-                ;; car of the list then the underlying list is not modified
-                ;; and the cdr of the list is returned, therefore if you have
-                ;; a list of all zeros and try to delete zero from it the list
-                ;; will remain unchanged unless you also setq the name to the
-                ;; (now) cdr value
-                (set buffer-list-name
-                     (delete (current-buffer) reval-failed-buffer-list)))
-              nil t)))
+    (lexical-let ((buffer-list-name buffer-list-name))
+      ;; even with lexical t we still have to use `lexical-let' to get
+      ;; `buffer-list-name' to bind as expected
+      (add-hook 'kill-buffer-hook
+                (lambda ()
+                  ;; read the manual for sets and lists to see why we have to
+                  ;; setq here ... essentially if our element is found in the
+                  ;; car of the list then the underlying list is not modified
+                  ;; and the cdr of the list is returned, therefore if you have
+                  ;; a list of all zeros and try to delete zero from it the list
+                  ;; will remain unchanged unless you also setq the name to the
+                  ;; (now) cdr value
+                  (set buffer-list-name
+                       (delete (current-buffer) (symbol-value buffer-list-name))))
+                nil t))))
 
 (defun reval (cypher checksum path-or-url &rest alternates)
   "Open PATH-OR-URL, match CHECKSUM under CYPHER, then eval.
@@ -2571,25 +2586,24 @@ If an error is encountered try ALTERNATES in order."
   (let (done)
     (with-url-handler-mode
       (cl-loop for path-or-url in (cons path-or-url alternates)
-               do (let* ((buffer (reval-id->buffer path-or-url))
-                         (buffer-checksum (condition-case err
-                                              (reval-resum cypher buffer)
-                                            (error (funcall (if alternates #'warn #'error) "%s" err)))))
-                    (if (and buffer-checksum
-                             (eq buffer-checksum checksum))
+               do (let ((buffer (reval-id->buffer path-or-url)))
+                    (if (file-exists-p (buffer-file-name buffer))
+                        (let ((buffer-checksum (reval-resum cypher buffer)))
+                          (if (and buffer-checksum
+                                   (eq buffer-checksum checksum))
+                              (progn
+                                (eval-buffer buffer)
+                                (reval--add-buffer-to-list buffer 'reval-evaled-buffer-list)
+                                (setq done t))
+                            (reval--add-buffer-to-list buffer 'reval-failed-buffer-list)
+                            (funcall (if alternates #'warn #'error)
+                                     ;; if alternates warn to prevent an early failure
+                                     ;; from blocking later potential successes otherwise
+                                     ;; signal an error
+                                     "reval: checksum mismatch! %s" path-or-url)))
                         (progn
-                          (eval-buffer buffer)
-                          (reval--add-buffer-to-list buffer 'reval-evaled-buffer-list)
-                          (setq done t))
-                      (reval--add-buffer-to-list buffer 'reval-failed-buffer-list)
-                      (if (file-exists-p path-or-url)
-                          ;; TODO probably need to signal something more specific
-                          (funcall (if alternates #'warn #'error)
-                                   ;; if alternates warn to prevent an early failure
-                                   ;; from blocking later potential successes otherwise
-                                   ;; signal an error
-                                   "reval: checksum mismatch! %s" path-or-url)
-                        (warn "reval: file does not exist! %s" path-or-url))))
+                          (warn "reval: file does not exist! %s" path-or-url)
+                          (kill-buffer buffer))))
                until done))
     (unless done
       (error "reval: all paths failed!")))
