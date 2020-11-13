@@ -1,6 +1,7 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 8b001890aa741d9e9acb2f553b8bbba2d7b87f5bfe78d2764eff3c63e473af84; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 7f978e69bc708496d22a96797988cb14386514bb7050cac2626af083b0865d2e; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Orgstrap: Executable Org files
+#+startup: showall
 #+options: num:nil \n:nil
 #+property: header-args :eval no-export
 #+link: yt https://youtu.be/
@@ -38,6 +39,7 @@ Please see the [[#changelog][changelog]] for the latest updates.
 * Contents :noexport:
 :PROPERTIES:
 :TOC:      :include all :depth 1
+:visibility: folded
 :END:
 :CONTENTS:
 - [[#getting-started][Getting started]]
@@ -414,6 +416,7 @@ on a system that they control.
 ** Contents :noexport:
 :PROPERTIES:
 :TOC:      :include siblings :exclude this :depth 1
+:visibility: folded
 :END:
 :CONTENTS:
 - [[#overview][Overview]]
@@ -717,7 +720,7 @@ Here is the prop line from the first line of this file that
 includes the cypher and checksum of the =orgstrap= block.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 8b001890aa741d9e9acb2f553b8bbba2d7b87f5bfe78d2764eff3c63e473af84; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 7f978e69bc708496d22a96797988cb14386514bb7050cac2626af083b0865d2e; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 #+end_src
 
 # BE VERY CAREFUL WITH MANUAL EDITS
@@ -841,7 +844,9 @@ using `setq-default' since it will not change automatically.")
 
 (defvar-local orgstrap-block-checksum nil
   "Local variable for the expected checksum for the current orgstrap block.")
-(put 'orgstrap-cypher 'safe-local-variable (lambda (v) (ignore v) t))
+;; `orgstrap-block-checksum' is not a safe local variable, if it is set
+;; as safe then there will be no check and code will execute without a check
+;; it is also not risky, so we leave it unmarked
 
 (defconst orgstrap--internal-norm-funcs
   '(orgstrap-norm-func--prp-1.0
@@ -853,7 +858,7 @@ Used to determine which norm func names are safe local variables.")
   "Local variable for the name of the current orgstrap-norm-func.")
 (put 'orgstrap-norm-func-name 'safe-local-variable
      (lambda (value) (and orgstrap-mode (memq value orgstrap--internal-norm-funcs))))
-;; Unless orgstrap-mode is enabled and the name is in the list of
+;; Unless `orgstrap-mode' is enabled and the name is in the list of
 ;; functions that are implemented internally this is not safe
 
 (defvar orgstrap-norm-func #'orgstrap-norm-func--prp-1.1
@@ -1079,7 +1084,19 @@ universal prefix argument."
 
 (defun orgstrap--advise-no-eval-lv (command &rest args)
   "Advise COMMAND to disable elvs for files loaded inside it.
-ARGS will vary depending in which function was advised."
+ARGS vary by COMMAND.
+
+If the elvs are disabled then `orgstrap-block-checksum' is added
+to the `ignored-local-variables' list for files loaded inside
+COMMAND. This makes it possible to open orgstrapped files where
+the elvs will not run without having to accept the irrelevant
+variable for `orgstrap-block-checksum'."
+  ;; continually prompting users to accept a local variable when they
+  ;; cannot inspect the file and when accidentally accepting could
+  ;; allow unchecked execution at some point in the future is bad
+  ;; better to simply pretend that the elvs and the block checksum
+  ;; do not even exist unless the file is explicitly on a whitelist
+
   ;; orgstrapped files are just plain old org files in this context
   ;; since agenda doesn't use any babel functionality ... of course
   ;; I can totally imagine using orgstrap to automatically populate
@@ -1088,19 +1105,13 @@ ARGS will vary depending in which function was advised."
   ;; to control this
   (if orgstrap-always-eval
       (apply command args)
-    (let ((enable-local-eval (and args
-                                  orgstrap-always-eval-whitelist
-                                  (member (car args)
-                                          orgstrap-always-eval-whitelist)
-                                  enable-local-eval)))
-;; FIXME checksums are not correctly skipped here ? or do we not skip them ?
-;; (advice-add #'hack-local-variables-confirm :around #'orgstrap--hack-lv-confirm)
-;; doesn't realy do what we want because it will only fire once AND because those
-;; checksums that request confirmation should be accepted in a separate context
-;; the block itself will not evaluate, but I think we need a note to that effect?
-;; maybe we write a variant of `orgstrap--org-buffer' that strips all checksums or
-;; something like that? modifying `orgstrap--org-buffer' doesn't seem to be the
-;; right approach .... I've tried and it is really to run, not to not run things
+    (let* ((enable-local-eval (and args
+                                   orgstrap-always-eval-whitelist
+                                   (member (car args)
+                                           orgstrap-always-eval-whitelist)
+                                   enable-local-eval))
+           (ignored-local-variables (if enable-local-eval ignored-local-variables
+                                      (cons 'orgstrap-block-checksum ignored-local-variables))))
       (apply command args))))
 
 (advice-add #'org-get-agenda-file-buffer :around #'orgstrap--advise-no-eval-lv)
@@ -2053,6 +2064,13 @@ Things that need to be done for a release.
 :PROPERTIES:
 :CUSTOM_ID: changelog
 :END:
+** 1.2.6
+- Ignore ~orgstrap-block-checksum~ when loading ~org-agenda~.
+
+  If ~enable-local-eval~ is t (following the behavior described in the
+  [[#122][1.2.2]] changelog), then ~orgstrap-block-checksum~ is not
+  ignored and if the local variable value has not been added to the
+  safe list then the user will be prompted.
 ** 1.2.5
 - Improve behavior of ~orgstrap-blacklist-current-file~.
 
@@ -2097,6 +2115,9 @@ Things that need to be done for a release.
 
   The functionality only works if ~orgstrap-mode~ is enabled.
 ** 1.2.2
+:PROPERTIES:
+:CUSTOM_ID: 122
+:END:
 - Do not run eval local variables when loading org-agenda.
 
   ~orgstrap-always-eval~ can be set to ~t~ by users who want to
@@ -2470,16 +2491,26 @@ Mirror-List: or something? If we do that then Latest-Version can be used
 this is useful only after a user has been able to resolve a copy
 after which a local mirrors list could be created.
 
-| file-exists-p | checksum-match | multi | signal | buffer |
-|---------------+----------------+-------+--------+--------|
-| t             | t              | t     | warn   | evaled |
-| nil           | t              | t     | warn   | kill   |
-| t             | nil            | t     | warn   | failed |
-| nil           | nil            | t     | warn   | kill   |
-| t             | t              | nil   | error  | evaled |
-| nil           | t              | nil   | error  | kill   |
-| t             | nil            | nil   | error  | failed |
-| nil           | nil            | nil   | error  | kill   |
+| file-exists-p | checksum-match | multi | signal | elisp? | buffer   |
+|---------------+----------------+-------+--------+--------+----------|
+| t             | t              | t     | warn   | t      | evaled   |
+| nil           | t              | t     | warn   | t      | kill     |
+| t             | nil            | t     | warn   | t      | failed   |
+| nil           | nil            | t     | warn   | t      | kill     |
+| t             | t              | nil   | error  | t      | evaled   |
+| nil           | t              | nil   | error  | t      | kill     |
+| t             | nil            | nil   | error  | t      | failed   |
+| nil           | nil            | nil   | error  | t      | kill     |
+|---------------+----------------+-------+--------+--------+----------|
+| t             | t              | t     | warn   | nil    | *failed* |
+| nil           | t              | t     | warn   | nil    | kill     |
+| t             | nil            | t     | warn   | nil    | failed   |
+| nil           | nil            | t     | warn   | nil    | kill     |
+| t             | t              | nil   | error  | nil    | *failed* |
+| nil           | t              | nil   | error  | nil    | kill     |
+| t             | nil            | nil   | error  | nil    | failed   |
+| nil           | nil            | nil   | error  | nil    | kill     |
+
 
 #+begin_src elisp :lexical yes :results none
 (defvar reval-failed-buffer-list nil "List of failed reval buffers.")
@@ -2522,18 +2553,25 @@ is ok before continuing."
           (unless (yes-or-no-p "Audit of file ok? ") ; not using `y-or-n-p' since it is too easy
             (error "Audit failed. Checksum will not be calculated for %s"
                    (buffer-file-name (current-buffer)))))
-        (unless (eq major-mode 'emacs-lisp-mode)
-          (error "Not an emacs lisp file!"))
-        ;; need to ensure that it is actually elisp
+
+        ;; need to ensure that file is actually elisp
         ;; note that in some cases read can succeed
-        ;; even when a file is not elisp e.g. and html
+        ;; even when a file is not elisp e.g. an html
         ;; file can sometimes read without error but
         ;; will fail on eval
+
+        ;; elisp check by major mode
+        (unless (eq major-mode 'emacs-lisp-mode)
+          (error "Not an emacs lisp file!"))
+
+        ;; elisp check by read
         (condition-case nil
             (read (concat "(progn\n"
                           (buffer-substring-no-properties (point-min) (point-max))
                           "\n)"))
           (error (error "Not an emacs lisp file!")))
+
+        ;; return the checksum
         (intern (secure-hash cypher (current-buffer)))))))
 
 (defun reval-resum-minimal (cypher buffer)
@@ -2586,24 +2624,22 @@ If an error is encountered try ALTERNATES in order."
   (let (done)
     (with-url-handler-mode
       (cl-loop for path-or-url in (cons path-or-url alternates)
-               do (let ((buffer (reval-id->buffer path-or-url)))
-                    (if (file-exists-p (buffer-file-name buffer))
-                        (let ((buffer-checksum (reval-resum cypher buffer)))
-                          (if (and buffer-checksum
-                                   (eq buffer-checksum checksum))
-                              (progn
-                                (eval-buffer buffer)
-                                (reval--add-buffer-to-list buffer 'reval-evaled-buffer-list)
-                                (setq done t))
-                            (reval--add-buffer-to-list buffer 'reval-failed-buffer-list)
-                            (funcall (if alternates #'warn #'error)
-                                     ;; if alternates warn to prevent an early failure
-                                     ;; from blocking later potential successes otherwise
-                                     ;; signal an error
-                                     "reval: checksum mismatch! %s" path-or-url)))
-                        (progn
-                          (warn "reval: file does not exist! %s" path-or-url)
-                          (kill-buffer buffer))))
+               do (if (file-exists-p path-or-url)
+                      (let* ((buffer (reval-id->buffer path-or-url))
+                             ;; FIXME this is still not right ... can error due to not elisp
+                             (buffer-checksum (reval-resum cypher buffer)))
+                        (if (eq buffer-checksum checksum)
+                            (progn
+                              (eval-buffer buffer)
+                              (reval--add-buffer-to-list buffer 'reval-evaled-buffer-list)
+                              (setq done t))
+                          (reval--add-buffer-to-list buffer 'reval-failed-buffer-list)
+                          (funcall (if alternates #'warn #'error)
+                                   ;; if alternates warn to prevent an early failure
+                                   ;; from blocking later potential successes otherwise
+                                   ;; signal an error
+                                   "reval: checksum mismatch! %s" path-or-url)))
+                    (warn "reval: file does not exist! %s" path-or-url))
                until done))
     (unless done
       (error "reval: all paths failed!")))
@@ -2619,18 +2655,18 @@ If an error is encountered try ALTERNATES in order."
   ;; something is wrong enough that users that don't have the full
   ;; version installed already are unlikely to be able to debug the
   ;; issue on their own
-  (let* ((buffer (let ((o url-handler-mode))
-                   (unwind-protect
-                       (progn
-                         (url-handler-mode)
-                         (find-file-noselect path-or-url))
-                     (unless o
-                       (url-handler-mode 0)))))
-         (buffer-checksum (intern (secure-hash cypher buffer))))
-    (if (eq buffer-checksum checksum)
-        (eval-buffer buffer)
-      (kill-buffer buffer) ; in the simple version kill so it is not accidentally evaled
-      (error "reval checksum mismatch! %s" path-or-url))))
+  (let ((o url-handler-mode))
+    (url-handler-mode)
+    (unwind-protect
+        (when (file-exists-p path-or-url)
+          (let* ((buffer (find-file-noselect path-or-url))
+                 (buffer-checksum (intern (secure-hash cypher buffer))))
+            (if (eq buffer-checksum checksum)
+                (eval-buffer buffer)
+              (kill-buffer buffer) ; kill so cannot accidentally evaled
+              (error "reval: checksum mismatch! %s" path-or-url))))
+      (unless o
+        (url-handler-mode 0)))))
 
 (defun reval-view-failed ()
   "View top of failed reval buffer stack and kill or keep."
@@ -3029,6 +3065,29 @@ NOTE: `undo-fu' is required for Emacs < 28."
   (set-face-attribute 'org-block-begin-line nil :extend t :foreground "black" :background "silver")
   (set-face-attribute 'org-block-end-line nil :extend t :foreground "black" :background "silver")
   (set-face-attribute 'org-block nil :extend t :background "white"))
+#+end_src
+*** Tool bar
+See the ~isearch-tool-bar-map~ for an example of how to do this.
+# I can't believe how long it took to find a sane example of how
+# to implement this, I've been looking on and off for nearly 2 years
+# since I decided that drracket was a giant waste of time and that
+# all of the functionality needed was already present in Emacs >_<
+#+name: ow-toolbar
+#+begin_src elisp
+(defun ow-tool-bar-image (image-name)
+  "Return an image specification for IMAGE-NAME."
+  (eval (tool-bar--image-expression image-name)))
+
+;; run icon options gud/go.xmp mpc/play.xmp
+;; stop gud/stop.xmp
+(defvar ow-basic-tool-bar-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [ow-run-block]
+      (list 'menu-item "Run block" 'ow-run-block
+         :help "Run the next visible org src block"
+         :image '(ow-tool-bar-image "go")))
+    map))
+;;(setq-local tool-bar-map ow-tool-bar-map)
 #+end_src
 *** Buttons
 #+name: ow-buttons
@@ -3590,6 +3649,9 @@ is controlled via the =orgstrap-use-minimal-local-variables= custom variable.
 The only time when minimal is not used is if the version of org that is drafting
 the file is too old (i.e. < =9.3.8=).
 * Local Variables Footer :noexport:
+:PROPERTIES:
+:visibility: folded
+:END:
 
 # Local Variables:
 # eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((actual (org-version)) (need orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not need) (string< need actual) (string= need actual) (error "Your Org is too old! %s < %s" actual need))) (defun orgstrap-norm-func--prp-1\.1 (body) (let (print-quoted print-length print-level) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (unless (boundp 'orgstrap-norm-func) (defvar orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap-org-src-coderef-regexp (_fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))) (unless (fboundp #'org-src-coderef-regexp) (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp)) (defun orgstrap--expand-body (info) (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1)))) (defun orgstrap--confirm-eval-portable (lang _body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (orgstrap-norm body)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum))))) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable) (let ((ocbe org-confirm-babel-evaluate)) (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (unwind-protect (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block)) (setq-local org-confirm-babel-evaluate ocbe) (org-set-startup-visibility))))
