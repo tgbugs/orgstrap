@@ -1,4 +1,4 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 7f978e69bc708496d22a96797988cb14386514bb7050cac2626af083b0865d2e; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 88363c75735964c895a2d4b56f7ff0fae714c617dd94c98980df49d447c6f78f; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Orgstrap: Executable Org files
 #+startup: showall
@@ -720,7 +720,7 @@ Here is the prop line from the first line of this file that
 includes the cypher and checksum of the =orgstrap= block.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 7f978e69bc708496d22a96797988cb14386514bb7050cac2626af083b0865d2e; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 88363c75735964c895a2d4b56f7ff0fae714c617dd94c98980df49d447c6f78f; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 #+end_src
 
 # BE VERY CAREFUL WITH MANUAL EDITS
@@ -1670,6 +1670,99 @@ the minimal local variables will be used if possible."
 # (orgstrap--dedoc '((defmacro lol (arg) "there" arg) (defvar lol 'hello "there")))
 *** Extras
 For the software life cycle see man:ebuild.
+
+There are some steps that fall outside most sane uses for orgstrap but
+that could be made to work by putting [[file:./get-emacs.org]] functionality
+at the start of an org file. Maybe there is a use case, but it is
+simpler to have a separate step for the executor -- install Emacs.
+
+The mostly orthogonal phases and functionality that are recognized by
+orgstrap. Of course, the list here doesn't even begin to capture all
+the things that one might need to do, and there is plenty of code that
+falls well outside any of these categories of activities. Not all files
+need all phases.
+
+Short version.
+1. deps
+2. services
+3. setup
+4. configure
+5. defuns
+6. test
+7. run
+8. export
+9. publish
+10. tangle
+11. build
+12. package
+13. deploy
+14. deposit
+
+Long version.
+1. check for dependencies
+   this is fairly close to running =./configure= or similar
+   also involves checking that services are up and running
+2. dependencies
+   this includes installation, configuration, setup, etc.
+   there might be different dependency types depending on which
+   future functions are desired, e.g. deps for export to pdf might
+   be radically different than deps needed to run the blocks
+   1. system
+   2. elisp
+      - some package managers can run arbitrary setup commands here
+3. run services
+   if a file depends on an external service make sure it is up
+   and if not start it etc.
+4. setup fetch/tangle/arrange files/data/code
+   this might be called setup or something like that, but basically
+   things that fall outside a package manager such as configuring
+   the latex environment by tangling texmf/tex/latex/class-name or
+   retrieving a common setupfile from the internet.
+   this section could also recapitulate this entire list
+5. configure Emacs settings
+   1. buffer local
+   2. global
+6. defuns (and other top level things)
+   this one doesn't really need its own thing since function defs
+   are usually ok to run at the top level without restriction
+7. test
+   this covers testing the orgstrap block itself but could also cover
+   other testing needs such as testing the tangled/built output
+8. run (org babel evaluate all)
+   hah, another one that I forgot, which would be to run or recompute
+   all the blocks, tables, etc. in the file, for example lets say you
+   had a self preparing report that made a copy of itself from template
+   and then ran all the org babel blocks to generate the results
+9. export
+   C-c C-e
+10. publish
+    I have done this previously by tangling a publish.el file and
+    then calling ~org-publish-all~ but with orgstrap you can just
+    just batch load the org file with ~-f orgstrap-do-publish~.
+    Though for that you work you have to have orgstrap.el installed,
+    so ~--eval (setq orgstrap-do-publish)~ make more sense if you
+    don't have orgware.
+11. tangle
+    sometimes you need to tangle prior to publishing etc. sometimes
+    you need to tangle all the source code so that it can be built
+12. build (aka build release aka make)
+    note that building can include building software or could include
+    something like building documentation, orgstrap doesn't deal with
+    that level of granularity, if you need it, you can add your own
+    equivalent variable or specify [[info:elisp#Command-Line Arguments]]
+    that can provide more granular control if run in batch mode
+13. package produced artifacts
+    produce the armed and operational artifact that can be run in
+    production or something
+14. deploy/install
+    huh, I haven't had this one on the list, but tangling to a remote
+    target for run-once install behavior or something like that is
+    totally doable here, basically put the stuff where it goes either
+    locally or remotely
+15. deposit (publish artifact/push release, upload?)
+    push package or whatever to pypi, maven central, etc.
+    often this might be implemented by calling a separate block
+
 #+caption: extra helpers
 #+name: orgstrap-extra-helper-defuns
 #+begin_src elisp :noweb yes
@@ -1697,10 +1790,6 @@ For the software life cycle see man:ebuild.
 (defcustom orgstrap-do-config nil "Run code that modifies the Emacs config." :type 'boolean)
 ;(defcustom orgstrap-do-config-emacs nil "Run code that modifies the Emacs config")
 
-(defvar orgstrap-do-build/make nil ; FIXME clarify naming
-  ;; there is tangle -> make and there is build -> tangle or something?
-  "")
-
 (defvar orgstrap-do-tangle nil
   "Dynamic variable that by convention can be used inside orgstrap blocks.
 It makes it possible to run `org-babel-tangle' only when it is non-nil when set
@@ -1708,6 +1797,10 @@ on the command line when launching Emacs with --batch.  Individual orgstrap
 blocks should also define (defvar orgstrap-on-tangle-open nil) if they want
 this functionality.")
 (define-obsolete-variable-alias 'orgstrap-tangle 'orgstrap-do-tangle)
+
+(defvar orgstrap-do-build nil ; FIXME clarify naming
+  ;; there is tangle -> make and there is build -> tangle or something?
+  "")
 
 (defvar orgstrap-do-test nil
   "Variable to control whether to run tests embedded in an orgstrap file.
@@ -1720,7 +1813,6 @@ If non-nil then load the orgstrap block and run tests.")
 ;(defvar orgstrap-do-install-dependencies nil "Install all packages.")
 ;(defvar orgstrap-do-install-prerequisites nil "Install all packages.")
 (defcustom orgstrap-do-packages nil "Install all packages." :type 'boolean)
-
 (defcustom orgstrap-do-packages-emacs nil "Install Emacs packages." :type 'boolean)
 (defcustom orgstrap-do-packages-system nil "Install system packages." :type 'boolean)
 
@@ -1795,7 +1887,7 @@ minimal as possible is critical.
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.2.5                             (ref:orgstrap.el-version)
+;; Version: 1.2.6                             (ref:orgstrap.el-version)
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -2227,6 +2319,21 @@ There are a number of ways to contribute to =orgstrap=.
 :PROPERTIES:
 :CUSTOM_ID: best-practices
 :END:
+** Accepting local variables
+In short. If you use orgstrap.el don't accept the elvs.
+
+Suggestions for users.  If you run an orgstrapped file via -Q or
+similar, then you have to accept the file.  The elvs probably aren't
+going to include package initialize and require orgstrap, but maybe
+they could. Essentially, in -Q mode the user should know that they
+have to initialize it all themselves (orgware could do it for them).
+
+When you aren't running in -Q mode and you DO have orgstrap.el
+installed on your system then I strongly suggest that you should NOT
+accept, or even actively remove, any and all approved elvs and use
+orgstrap-mode since it has a number of features that can enhance the
+security of execution such as blacklists etc.
+
 ** Use the system package manager.
 There is a big difference between using a script to install a program directly
 from the internet and using a script to ask the host system to install a program.
