@@ -1,0 +1,598 @@
+# -*- orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; orgstrap-block-checksum: 4d51b7433c39407a7c9b09b016bbabbe37c043865db8a8fa7bd51fe86bb823b4; -*-
+# [[orgstrap][jump to the orgstrap block for this file]]
+#+title: Orgware: Tooling for interactive Org files
+
+* ow.el
+** tangles
+This hurts me, but worth it. Code bits that can be loaded via reval
+for bootstrap, or that can be reloaded, or installed as a package.
+#+begin_src elisp :noweb no-export :tangle ./ow-min.el :lexical yes
+;;; ow-min.el --- Minimal utilties for orgstrap blocks. -*- lexical-binding: t -*-
+
+;; Author: Tom Gillespie
+;; Homepage: https://github.com/tgbugs/orgstrap
+;; Version: 9999
+;; Package-Requires: ((emacs "24.4"))
+;; Is-Version-Of: https://raw.githubusercontent.com/tgbugs/orgstrap/master/ow-min.el
+;; Reval-Get-Immutable: ow-min--reval-update
+
+;;;; License and Commentary
+
+;; License:
+;; SPDX-License-Identifier: GPL-3.0-or-later
+
+;;; Commentary:
+
+;; ow-min.el contains functionality needed by orgstrap blocks that are
+;; primarily used by developers, such as files that implement a
+;; release process where no end user interaction is expected.
+
+;; ow-min.el is compatible with `reval-update'.
+
+;;; Code:
+
+<<run-command>>
+
+(defalias 'run-command #'ow-run-command)
+
+<<secure-elisp-curl>>
+
+<<ow-utils>>
+
+(defun ow--reval-update ()
+  "Get the immutable url for the current remote version of this file."
+  (reval-get-imm-github "tgbugs" "orgstrap" "ow-min.el"))
+
+(provide 'ow-min)
+
+;;; ow-min.el ends here
+
+#+end_src
+# <<ow-package>>
+
+#+begin_src elisp :noweb no-export :tangle ./ow.el :lexical yes
+;;; ow.el --- Common functionality for Orgware files. -*- lexical-binding: t -*-
+
+;; Author: Tom Gillespie
+;; Homepage: https://github.com/tgbugs/orgstrap
+;; Version: 9999
+;; Package-Requires: ((emacs "27.1"))
+;; Is-Version-Of: https://raw.githubusercontent.com/tgbugs/orgstrap/master/ow.el
+;; Reval-Get-Immutable: ow--reval-update
+
+;;;; License and Commentary
+
+;; License:
+;; SPDX-License-Identifier: GPL-3.0-or-later
+
+;;; Commentary:
+
+;; ow.el is the catch-all file that includes all the functionality
+;; that you might want to use in an orgstrap block in a single place
+;; including functions that are also packaged independently such as
+;; the reval-* and securl-* functionality. The normal way to use it
+;; is to use `reval-minimal' to obtain all the functionality, and then
+;; use `reval-reload-latest' to cache a persistent copy and reload from
+;; that file so that all xrefs can be resolved.
+
+;; ow.el is compatible with `reval-update'.
+
+;;; Code:
+
+<<reval-impl>>
+
+<<run-command>>
+
+<<secure-elisp-curl>>
+
+<<ow-utils>>
+
+<<ow-package>>
+
+<<ow-usability>>
+
+<<ow-buttons>>
+
+<<ow-config>>
+
+(defun ow--reval-update ()
+  "Get the immutable url for the current remote version of this file."
+  (reval-get-imm-github "tgbugs" "orgstrap" "ow.el"))
+
+(provide 'ow)
+
+;;; ow.el ends here
+
+#+end_src
+** Usability
+The default for =org-cycle-hook= is what causes the position of headings
+to change when they are opened/closed. This is extremely undesirable when
+using a mouse to toggle headings. https://emacs.stackexchange.com/a/31277
+#+name: ow-usability
+#+begin_src elisp
+;; mouse behavior
+
+(defun ow--safe-cycle (event &optional promote-to-region)
+  "Bind this to mouse-1 for sane clickable cycling behavior."
+  (interactive "e\np")
+  (let ((face (get-char-property (point) 'face)))
+    (unless (and face (listp face) (memq 'org-block face))
+      (unwind-protect
+          (progn
+            (remove-hook 'org-cycle-hook #'org-optimize-window-after-visibility-change t)
+            (org-cycle))
+        (add-hook 'org-cycle-hook #'org-optimize-window-after-visibility-change nil t))))
+  ;; have to chain `mouse-set-point' otherwise double click to highlight words etc. fails
+  (mouse-set-point event promote-to-region))
+
+(defun ow-enable-mouse-cycle ()
+  "Allow left mouse to cycle org headings."
+  (interactive)
+  ;; reset `org-cycle-hook' as a local variable so that
+  ;; we can add/remove individual hooks without messing
+  ;; with the global behavior which might some day not
+  ;; be purely single threaded (heh)
+  (setq-local org-cycle-hook org-cycle-hook)
+  (local-unset-key [mouse-1])
+  (local-set-key [mouse-1] #'ow--safe-cycle))
+
+(defun ow-recenter-on-mouse ()
+  "Recenter the cursor line so that it is under the mouse."
+  ;; after much digging using `mouse-pixel-position' together
+  ;; with `pos-at-x-y' seems to be what we want, `mouse-position'
+  ;; and `window-edges' are decidedly NOT the right solution
+  ;; `pos-at-x-y' is able to call into the C code to get something
+  ;; much closer to what is produced by an actual mouse event
+  ;; https://emacs.stackexchange.com/questions/30852 has the wrong solution
+  (interactive)
+  (let* ((mpp (mouse-pixel-position))
+         (position-list (posn-at-x-y (cadr mpp)
+                                     (cddr mpp)
+                                     (selected-frame)
+                                     nil))
+         ;;(asdf (message "%s" hrm))
+         (mouse-line (cdr (posn-actual-col-row position-list)))
+         (cursor-line (- (line-number-at-pos)
+                         (line-number-at-pos (window-start))))
+         (offset (- mouse-line cursor-line)))
+    ;;(message "ml: %s cl: %s offset: %s" mouse-line cursor-line offset)
+    (scroll-down offset)))
+
+;; random useful functions
+
+(defun ow-fold-headline (&optional name)
+  "Set visibility property of headline with NAME or previous visible to folded."
+  ;; https://orgmode.org/manual/Using-the-Property-API.html
+  (save-excursion
+    (if name
+        (goto-char (org-find-exact-headline-in-buffer name))
+      (org-previous-visible-heading 0))
+    (org-entry-put nil "visibility" "folded")
+    (save-buffer)))
+#+end_src
+** Config
+In the original implementation of the familiar config each of the
+settings could be enabled or disabled individually, however there was
+pretty much never an instance where this functionality was used, so in
+this variant everything can only be enabled together.
+
+#+name: ow-config
+#+begin_src elisp
+(defun ow--headline-faces ()
+  "Set face for all headline levels to be bold."
+  (mapcar (lambda (n) (set-face-attribute (intern (format "org-level-%s" n)) nil :bold t))
+          (number-sequence 1 8)))
+
+(defun ow-enable-config-familiar-1 ()
+  "Minimal config to achieve something more familiar for non-Emacs users.
+
+Uses `cua-mode' with additional tweak for undo bindings.
+NOTE: `undo-fu' is required for Emacs < 28."
+
+  ;; Enable familiar copy/paste keybindings
+  (cua-mode t)
+  ;; enable Cmd Shift Z for apple users Ctrl y for windows
+  (when (fboundp #'undo-redo)
+      (if (eq system-type 'darwin)
+          (local-set-key "C-Z" #'undo-redo)
+      (local-set-key "C-y" #'undo-redo)))
+
+  ;; Use left mouse to cycle
+  (ow-enable-mouse-cycle)
+
+  ;; default shift functionality is usually not needed in ow files and
+  ;; the message when you try to use it can be extremely confusing
+  (setq-local org-support-shift-select t)
+
+  ;; Enable tab-bar-mode
+  (tab-bar-mode t)
+
+  ;; Use the whiteboard theme
+  (load-theme 'whiteboard)
+
+  ;; Set headline faces, sligh improvements to the whiteboard defaults
+  (ow--headline-faces)
+  (set-face-attribute 'org-block-begin-line nil :extend t :foreground "black" :background "silver")
+  (set-face-attribute 'org-block-end-line nil :extend t :foreground "black" :background "silver")
+  (set-face-attribute 'org-block nil :extend t :background "white"))
+#+end_src
+** Tool bar
+See the ~isearch-tool-bar-map~ for an example of how to do this.
+# I can't believe how long it took to find a sane example of how
+# to implement this, I've been looking on and off for nearly 2 years
+# since I decided that drracket was a giant waste of time and that
+# all of the functionality needed was already present in Emacs >_<
+#+name: ow-toolbar
+#+begin_src elisp
+(defun ow-tool-bar-image (image-name)
+  "Return an image specification for IMAGE-NAME."
+  (eval (tool-bar--image-expression image-name)))
+
+;; run icon options gud/go.xmp mpc/play.xmp
+;; stop gud/stop.xmp
+(defvar ow-basic-tool-bar-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map [ow-run-block]
+      (list 'menu-item "Run block" 'ow-run-block
+         :help "Run the next visible org src block"
+         :image '(ow-tool-bar-image "go")))
+    map))
+;;(setq-local tool-bar-map ow-tool-bar-map)
+#+end_src
+** Buttons
+#+name: ow-buttons
+#+begin_src elisp
+;; don't export buttons
+
+(defun ow-link-no-export (path desc format)
+  "Return nothing for export" ; FIXME broken ???
+  "")
+
+(defun ow-button (link-name function)
+  "Create a new button type."
+  (org-link-set-parameters link-name :export #'ow-link-no-export :follow function))
+
+;; hide headline for future startups
+
+(org-link-set-parameters "FOLD-HEADLINE" :export #'ow-link-no-export :follow
+                         (lambda (&optional nothing)
+                           (ow-fold-headline)))
+
+;; run the next #+begin_src block
+
+(org-link-set-parameters "RUN" :export #'ow-link-no-export :follow
+                         (lambda (&optional nothing)
+                           (org-next-block nil)
+                           (org-babel-execute-src-block)))
+
+;; run the previous src block (doesn't work if there are results)
+
+(org-link-set-parameters "RUNPREV" :export #'ow-link-no-export :follow
+                         (lambda (&optional nothing)
+                           (org-previous-block nil)
+                           (org-babel-execute-src-block)))
+
+;; run the next #+call: TODO we should be able to do this with mouse-1?
+
+(org-link-set-parameters "RUNC" :export #'ow-link-no-export :follow
+                         (lambda (&optional nothing)
+                           (save-excursion
+                             (re-search-forward "#\\+call:")
+                             (org-ctrl-c-ctrl-c))))
+
+;; adjust font size for the current buffer
+
+(org-link-set-parameters "TEXT-LARGER" :export #'orsgrap--nox :follow
+                         (lambda (&optional nothing)
+                           (text-scale-adjust 1)
+                           (ow-recenter-on-mouse)))
+
+(org-link-set-parameters "TEXT-SMALLER" :export #'ow-link-no-export :follow
+                         (lambda (&optional nothing)
+                           (text-scale-adjust -1)
+                           (ow-recenter-on-mouse)))
+
+(org-link-set-parameters "TEXT-RESET" :export #'ow-link-no-export :follow
+                         (lambda (&optional nothing)
+                           (text-scale-adjust 0)
+                           (ow-recenter-on-mouse)))
+#+end_src
+** Packages
+#+name: ow-package
+#+begin_src elisp
+(defvar ow-package-archives '(("melpa" . "https://melpa.org/packages/")
+                              ("org" . "https://orgmode.org/elpa/")))
+
+(defun ow-enable-use-package ()
+  "Do all the setup needed `use-package'.
+This needs to be called with (eval-when-compile ...) to the top level prior
+to any use of `use-package' otherwise it will be missing and fail"
+  ;; package archives is not an argument to this function to ensure that
+  ;; there is only one place that needs to be updated if an archive location
+  ;; changes, namely this library, updating that is easier to get right using
+  ;; the `reval-update' machinery
+  (require 'package)
+  (dolist (pair ow-package-archives) (add-to-list 'package-archives pair t))
+  (unless package--initialized
+    (package-initialize))
+  (unless (package-installed-p 'use-package)
+    (package-refresh-contents)
+    (package-install 'use-package))
+  (require 'use-package)
+  (setq use-package-always-ensure t))
+
+(defmacro ow-use-packages (&rest names)
+  "enable multiple calls to `use-package' during bootstrap"
+  (cons 'progn (mapcar (lambda (name) `(use-package ,name)) names)))
+#+end_src
+*** too many special cases
+This is too much right now. Conditional requires and configuration
+already make this approach a special happy path at best. I think that
+the best compromise right now is my ~use-packages~ implementation from
+the original version of orgstrap.
+#+begin_src elisp
+(defun ow-requires (&rest features)
+  "A list of simple requires. Conditional requires more complex."
+  (let ((missing (cl-loop for feature in features
+                          unless (condition-case nil
+                                     (require feature)
+                                   (error nil))
+                          collect feature)))
+    (ow-install-requires missing)
+    ))
+
+(defun ow-install-requires (features)
+  "run once to install all missing features"
+  (cl-loop for pair in ow-package-archives do (add-to-list 'package-archives pair t))
+  (package-install feature)
+  )
+
+;; see this stinks, because there are other things we want to do
+;; in certain circumstances I guess multiple calls to ow-requires is ok?
+;; sigh
+(ow-requires (if (fboundp #'undo-redo) 'simple 'undo-fu))
+
+(unless (fboundp #'undo-redo)
+  (ow-requires 'undo-fu)
+  (defalias 'undo-redo #'undo-fu-only-undo "Backport `undo-redo'"))
+#+end_src
+*** Installing a package (early thoughts)
+**** Thoughts
+With orgstrap in melpa I'm going to rule that, while a fun idea, the
+though of using the orgstrap block for this file to stick the
+machinery in a users init.el somehow is not the best approach (to say
+the least) to providing the functionality contained in this file. The
+best approach is to include the following in your orgstrap block so
+that it is clear what the user is in for.  I'm not entirely sure how
+to make it possible to make handling optional dependencies possible
+... probably using a =:var= header option that doesn't get hashed?
+
+Installing missing packages dynamically is tricky. There is no good
+way to do it that works on every system. Having a dedicated macro that
+takes as arguments the names of the required packages and the required
+package archives seems like it would be the best way to isolate the
+dependencies in a single place so that users of alternative packaging
+systems could install them manually.  It also seems like implementing
+detection and support for additional package managers would be easier
+this way. Unfortunately this seems somewhat misguided.
+
+Package managers exist on a different time scale and in a different
+space than orgstrap. Leveraging package managers to do the right thing
+from orgstrap is desireable, but sometimes you just want to be able to
+reuse some bootstrapping code between files. In which case you aren't
+going to publish it to an elpa, you are likely going to use
+~url-handler-mode~ to open the elisp file in a buffer, make sure the
+checksum matches, and then eval it --- without using ~securl~ which is
+a much heavier solution for asset retrieval.
+
+Given that I am aware of nearly a dozen ways to install and manage
+elisp packages, and this means that I'm only going to support
+packages.el (and possibly use-package) and will make sure that users
+can modify/disable package installation if they are using a different
+package manager. In theory we should also be able to detect the use of
+alternate package managers or use of a starter kit so that we can prompt
+those users that package-install will run if require fails. Maybe there
+is a way to create a recipe generator that will work for all of these.
+Without something that can interpolate between all of these, the burden
+on the developer is too large to be practical.
+
+1. manual
+2. packages.el
+3. use-package
+4. straight
+5. borg
+6. el-get
+7. quelpa
+8. cask
+9. ebuild
+10. nix
+11. guix
+
+#+name: install-orgstrap
+#+begin_src elisp
+;; install `orgstrap'
+(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+
+;; so this section is a bit trickier than anticipanted ...
+(defmacro orgstrap-package (name)
+  ()
+)
+
+(if (fboundp #'use-package)
+    (use-package orgstrap)
+  (package-install 'orgstrap))
+;; TODO detect the use of quelpa/straight/borg/etc.
+#+end_src
+**** Some inspiration from protc
+:PROPERTIES:
+:CREATED:  [2020-11-10 Tue 01:17]
+:END:
+I think that the right way to do this is as follows.
+# I think I started prototyping this somewhere already?
+The test that must run to ensure that a package that we need is
+present is ~(require 'package-name)~.
+
+Thus, given a list of requires ~(requires 'package-1 'package-2 ...)~
+it ought to be possible to write the following.
+#+begin_src elisp
+(defun requires (&rest package-names)
+  (dolist (package-name package-names)
+    (condition-case err
+        (require package-name)
+      ;; car is file-missing it seems?
+      (error (orgstrap-install-package-from-require package-name)))))
+#+end_src
+
+~orgstrap-install-package-from-require~ encapsulates the explosion of
+complexity that is the Emacs package management ecosystem. Somewhere
+in there will be a function from the require name to the function that
+the user wants to use to install the package. It could be a function
+that wraps ~use-package~ it could be something else, like loading into
+a reval registry. The default function would be to print a message to
+please install that package and try again. Other prepackaged options
+could be ~package-install~, or it could be the process defined in the
+orgstrap block itself. It might make sense to have a custom variable
+to control the default behavior, and it could just be the name of the
+package manager if we can't figure out how to detect which one is in
+use. Then the user can write their recipe and either pr back to the
+source for the orgstrapped file or maybe to a central registry if they
+are not using one of the standard approaches.
+
+The full complexity solution here is to check all names individually.
+As per [[yt:oyLBGkS5ICk][Spec-ulation]], the test that must run to determine whether a
+_function_ that we need is present is minimally ~(fboundp 'function-name)~.
+For other free variables it is ~(boundp 'variable-name)~.
+
+In theory you can run a pass over an orgstrap block to see whether all
+the function names that are needed are defined (the orgstrap block has
+to do this to itself). Technically this is a bit simpler because many
+of the functions are builtin and because it is possible to run the
+byte compiler and collect warnings. Doing full dependency tree shaking
+is out of scope at the moment.
+** run-command
+:PROPERTIES:
+:CUSTOM_ID: run-command
+:END:
+Sometimes functionality needed during bootstrap is implemented outside
+of Emacs. In those cases it may be necessary to run commands.
+=run-command= provides a light wrapper around =call-process= to
+transform external errors into elisp errors and otherwise evaluates to
+the string output of the process.
+#+name: run-command
+#+begin_src elisp :results none
+(defun ow-run-command (command &rest args)
+  "Run COMMAND with ARGS. Raise an error if the return code is not zero."
+  ;; I'm being a good namespace citizen and prefixing this with ow- but
+  ;; 99% of the time I'm going to have (defalias 'run-command #'ow-run-command)
+  ;; in my orgstrap blocks that reval ow.el (since ow-min.el has it already)
+  ;;(message "%S" (mapconcat #'identity (cons command args) " "))
+  (with-temp-buffer
+    (let* ((return-code (apply #'call-process command nil (current-buffer) nil args))
+           (string (buffer-string)))
+      (if (not (= 0 return-code))
+          (error "code: %s stdout: %S" return-code string)
+        string))))
+#+end_src
+** securl
+:PROPERTIES:
+:CUSTOM_ID: securl
+:END:
+An extremely common pattern when bootstrapping is to retrieve files
+from a remote location. This provides a pure elisp implementation that
+retrieves a remote url to a local path ONLY if the hash of the remote
+resource matches the hash listed. Otherwise the file is not renamed to
+the path and is clearly marked that its checksum has failed to match.
+
+As a point of curiosity, it is possible to implement this using curl
+and sha256sum in a way that is quite a bit faster. However, the
+complexity of the code needed to implement it in a way that is
+portable makes it significantly harder to understand and audit.
+
+#+name: secure-elisp-curl
+#+begin_src elisp :results none
+(defvar securl-default-cypher 'sha256)  ; remember kids, always publish the cypher with the checksum
+
+(defun securl-path-checksum (path &optional cypher)
+  "not as fast as using sha256sum, but requires no dependencies
+1.4s vs .25s for ~60mb"
+  (let ((cypher (or cypher securl-default-cypher)))
+    (with-temp-buffer
+      (insert-file-contents-literally path)
+      (secure-hash cypher (current-buffer)))))
+
+(defun securl (cypher checksum url path)
+  "Securely fetch URL to PATH only if it matches CHECKSUM under CYPHER.
+Files that do not match the checksum are quarantined."
+  ;; unless the file exists or the checksum matches fetch and check
+  (unless (and (file-exists-p path)
+               (let ((existing-checksum (securl-path-checksum path cypher)))
+                 (or (string= checksum existing-checksum)
+                     ;; (not (message "checksum mismatch:\n%S\n%S" checksum existing-checksum))
+                     (not (rename-file path
+                                       (make-temp-file (concat path "._existing_failure_."))
+                                       t)))))
+    (let ((path-temp (make-temp-file (concat path "._fetching_."))))
+      (url-copy-file url path-temp t)
+      (let ((new-checksum (securl-path-checksum path-temp cypher)))
+        (if (string= checksum new-checksum)
+            (rename-file path-temp path)
+          (let ((path-failure (make-temp-file (concat path "._checksum_failure_."))))
+            (rename-file path-temp path-failure t)
+            (error "checksum FAILED for path! %s" path-failure))))))
+  ;; return nil in all cases the calling scope has the path and
+  ;; whatever is at that path must have passed the current checksum
+  nil)
+#+end_src
+** securl testing
+TODO there are a bunch of different pathological cases that I have
+already worked out but for which there are no explicit existing tests.
+The checksum of a non-existent file could be anything re all my
+mountain bikes go 66mph. The table below enumerates the most common
+cases, but cases such as rex no conflate 404, 500, and connection
+errors among others.
+
+| lex | lsum | rex | rsum | act                        | test? |
+|-----+------+-----+------+----------------------------+-------|
+| yes | yes  | ?   | ?    | done                       |       |
+| yes | bad  | yes | ok   | l -> existing-bad, r -> l  |       |
+| no  | ?    | yes | ok   | r -> l                     |       |
+| no  | ?    | no  | ?    | r no file error            |       |
+| no  | ?    | yes | bad  | r -> bad, r bad file error |       |
+
+#+name: securl-testing
+#+begin_src elisp
+(securl 'sha256
+        'aada229afa36ac1f3e9f26e1ec7c0c09214d75563adb62aa0fac2f1ae58496fe
+        "https://raw.githubusercontent.com/tgbugs/orgstrap/417b87304da27397/packages.el"
+        "packages-test-fetch.el")
+#+end_src
+** utils
+Random stuff that doesn't fit elsewhere.
+#+name: ow-utils
+#+begin_src elisp
+(defun ow-url-head-ok (url)
+  "Check if URL is up and OK using HTTP HEAD.
+All errors are silenced."
+  (let ((url-request-method "HEAD"))
+    (condition-case nil
+        (with-current-buffer (url-retrieve-synchronously url)
+          ;;(buffer-substring (point-min) url-http-end-of-headers)
+          (goto-char 0)
+          (re-search-forward "^HTTP.+OK$"))
+      (error nil))))
+#+end_src
+* Bootstrap :noexport:
+
+#+name: orgstrap
+#+begin_src elisp :results none :lexical yes
+(defun ow---pre-tangle ()
+  ;; ensure that reval has been ingested so we can tangle the reval-impl block
+  (org-babel-lob-ingest "./reval.org"))
+
+(add-hook 'org-babel-pre-tangle-hook #'ow---pre-tangle nil t)
+#+end_src
+
+** Local variables :ARCHIVE:
+# Local Variables:
+# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((actual (org-version)) (need orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not need) (string< need actual) (string= need actual) (error "Your Org is too old! %s < %s" actual need))) (defun orgstrap-norm-func--prp-1\.1 (body) (let (print-quoted print-length print-level) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (unless (boundp 'orgstrap-norm-func) (defvar orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap-org-src-coderef-regexp (_fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))) (unless (fboundp #'org-src-coderef-regexp) (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp)) (defun orgstrap--expand-body (info) (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1)))) (defun orgstrap--confirm-eval-portable (lang _body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (orgstrap-norm body)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum))))) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable) (let ((ocbe org-confirm-babel-evaluate)) (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (unwind-protect (save-excursion (org-babel-goto-named-src-block "orgstrap") (org-babel-execute-src-block)) (setq-local org-confirm-babel-evaluate ocbe) (org-set-startup-visibility))))
+# End:
