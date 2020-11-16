@@ -18,15 +18,13 @@
 # If you want to grow up to be a unicorn you're going to have to
 # pull yourself up by your own bootstraps!
 
-=orgstrap= turns Org files into full fledged software applications.
-
 =orgstrap= allows Org files to describe their own requirements and
 define their own functionality, making them self-contained standalone
 computational artifacts dependent only on Emacs or other
 implementations of the Org Babel protocol in the future.
 
-This file bootstraps itself to provide the functionality needed to use
-=orgstrap= in any Org file.
+This file bootstraps itself to provide the tools to use =orgstrap= in
+any Org file.
 
 =orgstrap= has a formal [[#specification][specification]] and this
 file contains 3 implementations that support 3 slightly different use
@@ -69,8 +67,11 @@ If you already have =orgstrap= installed you can enable it for any
 Org file by running =M-x= =orgstrap-init= which will add the basic
 =orgstrap= machinery to the current buffer.
 
-If you don't have =orgstrap=, it is available on [[https://melpa.org/#/orgstrap][melpa]],
-or if you are feeling adventurous you can get it using itself.
+=orgstrap= is available on [[https://melpa.org/#/orgstrap][melpa]]. You can install it via
+=M-x= =package-install= =orgstrap= or ~(use-package orgstrap)~.
+
+You can also try out =orgstrap= without installing just by opening
+this file in Emacs!
 
 1. Obtain the org mode source for this file. (e.g.
    [[https://raw.githubusercontent.com/tgbugs/orgstrap/master/orgstrap.org][from GitHub]]).
