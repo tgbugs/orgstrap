@@ -30,7 +30,7 @@ any Org file.
 file contains 3 implementations that support 3 slightly different use
 cases along with tooling for common =orgstrap= workflows.
 
-=orgstrap= works with all versions of Emacs since =24.4= and all versions of Org since =8.2.10=.
+=orgstrap= works with all versions of Emacs since =24.4= and Org since =8.2.10=.
 
 Please see the [[#changelog][changelog]] for the latest updates.
 
