@@ -469,9 +469,9 @@ to do this to itself). Technically this is a bit simpler because many
 of the functions are builtin and because it is possible to run the
 byte compiler and collect warnings. Doing full dependency tree shaking
 is out of scope at the moment.
-** run-command
+** Run process as command
 :PROPERTIES:
-:CUSTOM_ID: run-command
+:CUSTOM_ID: run-process-as-command
 :END:
 Sometimes functionality needed during bootstrap is implemented outside
 of Emacs. In those cases it may be necessary to run commands.

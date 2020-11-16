@@ -22,13 +22,6 @@
 
 ;;; Code:
 
-Sometimes functionality needed during bootstrap is implemented outside
-of Emacs. In those cases it may be necessary to run commands.
-=run-command= provides a light wrapper around =call-process= to
-transform external errors into elisp errors and otherwise evaluates to
-the string output of the process.
-#+name: run-command
-#+begin_src elisp :results none
 (defun ow-run-command (command &rest args)
   "Run COMMAND with ARGS. Raise an error if the return code is not zero."
   ;; I'm being a good namespace citizen and prefixing this with ow- but
@@ -41,7 +34,6 @@ the string output of the process.
       (if (not (= 0 return-code))
           (error "code: %s stdout: %S" return-code string)
         string))))
-#+end_src
 
 (defalias 'run-command #'ow-run-command)
 

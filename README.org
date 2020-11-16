@@ -2510,7 +2510,7 @@ Configurations for services that can be reused across orgstrap files.
 ** Useful orgstrap blocks
 Include these in part or whole to simplify common orgstrap workflows.
 - [[reval.org#minimal][reval-minimal]]
-# - [[orgware.org#run-command][run-command]]
+# - [[orgware.org#run-command][run-process-as-command]]
 # - [[orgware.org#securl][securl]]
 * Background, file local variables, and checksums
 :PROPERTIES:
