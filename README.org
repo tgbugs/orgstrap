@@ -1,4 +1,4 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 88363c75735964c895a2d4b56f7ff0fae714c617dd94c98980df49d447c6f78f; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: bc97e403b212ec423ef4c5c39b015063e14f268801c1438c3a43b3cb7c0605c1; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Orgstrap: Executable Org files
 #+startup: showall
@@ -105,6 +105,9 @@ the implementation of =orgstrap= along with discussion and commentary.
 
 If you are looking for examples of how to use =orgstrap= this files is a good place to start.
 * Hello =orgstrap=
+:PROPERTIES:
+:CUSTOM_ID: hello-orgstrap
+:END:
 The bare minimum needed to make an =org-mode= file executable (with a bit of safety).
 #+caption: [[file:./orgstrap-minimal.org]]
 #+begin_src org :tangle ./orgstrap-minimal.org
@@ -720,7 +723,7 @@ Here is the prop line from the first line of this file that
 includes the cypher and checksum of the =orgstrap= block.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 88363c75735964c895a2d4b56f7ff0fae714c617dd94c98980df49d447c6f78f; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: bc97e403b212ec423ef4c5c39b015063e14f268801c1438c3a43b3cb7c0605c1; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 #+end_src
 
 # BE VERY CAREFUL WITH MANUAL EDITS
@@ -1698,6 +1701,63 @@ Short version.
 13. deploy
 14. deposit
 
+Medium version.
+A reminder that these are things that we want to be able to do with a
+_static_ org file *not* everything that we might want to do. There is
+the whole interaction vocabulary that org-mode provides for doing far
+more complex things than what we list here and I strongly suggest not
+trying to force certain functionality into orgstrap that fits better
+as part of having a user execute certain blocks manually or capturing
+common workflows via a command line flag or similar. There is enormous
+complexity lurking behind every single thing that an org file can be
+transformed into and a flat list of global variables is laughably
+insufficient --- practically you need an entire language to describe it.
+Just use elisp until you get to a point where the most probable paths
+are well established and then give those cli flags or something.
+1. deps ON
+   1. code
+   2. data
+   3. services
+   4. configuration
+2. modifying Emacs config ON
+3. run OFF
+   ~org-babel-execute-buffer~
+4. test OFF
+   includes tests on any artifacts including the file itself
+5. export OFF
+   build but for documents instead of code
+6. publish OFF
+7. tangle OFF
+   (incidental tangling can happen in other phases)
+8. build OFF
+   this phase ends with whatever arbitrary local artifacts you want
+   having been created, of course with tramp they could also be remote
+9. deposit OFF
+   the equivalent of publish, but for code artifacts
+
+Other thoughts.
+
+Development setup is a specific case of the larger category of
+environment setup. These overlap heavily with run-once, with a note
+that run-once really needs to be implemented as a series of tests to
+see whether certain things need to be run.
+
+These are provided so that _if_ there is a confluence of one of the
+phases with a single entire org file, then you _can_ control it via
+batch. If you are in a situation where there are multiple things that
+could be published or built from a single org file then you probably
+should not try to use this extremely simplistic interface to control
+or configure the greater complexity of the process.  Just load the
+file in Emacs and interact with it to get what you need.
+
+install configure run
+
+put bits in the right place
+twiddle important bits
+flip the bits that make the bits flip themselves
+
+the results of +going+ run are completely open ended and arbitrary
+
 Long version.
 1. check for dependencies
    this is fairly close to running =./configure= or similar
@@ -1762,6 +1822,12 @@ Long version.
 15. deposit (publish artifact/push release, upload?)
     push package or whatever to pypi, maven central, etc.
     often this might be implemented by calling a separate block
+16. sync
+    this is a bit of a strange one that probably fits elsewhere, but
+    if you have an org file that may not be opened manually then being
+    able to batch sync contents of the file is useful, e.g.  I have
+    used a python script to pull the contents of google docs into an
+    org file.
 
 #+caption: extra helpers
 #+name: orgstrap-extra-helper-defuns
@@ -1787,26 +1853,15 @@ Long version.
 
 ;; note that any file that uses these variables needs to define them
 ;; in the orgstrap block
-(defcustom orgstrap-do-config nil "Run code that modifies the Emacs config." :type 'boolean)
-;(defcustom orgstrap-do-config-emacs nil "Run code that modifies the Emacs config")
 
-(defvar orgstrap-do-tangle nil
-  "Dynamic variable that by convention can be used inside orgstrap blocks.
+"Dynamic variable that by convention can be used inside orgstrap blocks.
 It makes it possible to run `org-babel-tangle' only when it is non-nil when set
 on the command line when launching Emacs with --batch.  Individual orgstrap
 blocks should also define (defvar orgstrap-on-tangle-open nil) if they want
-this functionality.")
-(define-obsolete-variable-alias 'orgstrap-tangle 'orgstrap-do-tangle)
-
-(defvar orgstrap-do-build nil ; FIXME clarify naming
-  ;; there is tangle -> make and there is build -> tangle or something?
-  "")
-
-(defvar orgstrap-do-test nil
-  "Variable to control whether to run tests embedded in an orgstrap file.
-If non-nil then load the orgstrap block and run tests.")
-;; Running tests via a batch process can be a bit tricky if the test code is also part of the orgstrap block.
-(define-obsolete-variable-alias 'orgstrap-test 'orgstrap-do-test)
+this functionality."
+"Main tangle step for the file.
+Other phases might also do some tangling, but they would be
+controlled separately."
 
 ;(defvar orgstrap-do-deps nil "Install all packages.")
 ;(defvar orgstrap-do-dependencies nil "Install all packages.")
@@ -1818,6 +1873,27 @@ If non-nil then load the orgstrap block and run tests.")
 
 ;(defcustom orgstrap-do-setup nil "Run other setup steps.")  ; FIXME this is closer to emerge --config
 (defcustom orgstrap-do-services nil "Run services needed by file." :type 'boolean)
+
+(defcustom orgstrap-do-config nil "Run code that modifies the Emacs config." :type 'boolean)
+;(defcustom orgstrap-do-config-emacs nil "Run code that modifies the Emacs config")
+
+(defvar orgstrap-do-run nil "`org-babel-execute-buffer'")
+
+(defvar orgstrap-do-export nil)
+(defvar orgstrap-do-publish nil)
+
+(defvar orgstrap-do-tangle nil)
+
+(defvar orgstrap-do-build nil
+  ;; build may imply tangle in cases where tangle is relevant
+  "produce one or more artifacts derived from the portions of the file with mechanical semantics")
+
+(defvar orgstrap-do-test nil "Run tests.")
+;; Running tests via a batch process can be a bit tricky if the test code is also part of the orgstrap block.
+;; tests may test any part of the org file, tangled output, documentation, build artifacts, etc.
+;; if you have an org file that itself specifies a set of tests for some larger system
+;; then that would be called as part of -do-run and -do-test would be used to test the tests
+
 ;; other parts of the software lifecycle
 (defcustom orgstrap-do-package nil "???" :type 'boolean)
 (defcustom orgstrap-do-release nil "???" :type 'boolean)
@@ -2541,6 +2617,42 @@ is out of scope at the moment.
 ** Useful orgstrap blocks
 Include these in part or whole to simplify common orgstrap workflows.
 ** reval.el
+*** tangles
+#+begin_src elisp :noweb no-export :tangle ./reval.el :lexical yes
+;;; reval.el --- Remote elisp eval. -*- lexical-binding: t -*-
+
+;; Author: Tom Gillespie
+;; Homepage: https://github.com/tgbugs/orgstrap
+;; Version: 9999
+;; Package-Requires: ((emacs "24.4"))
+;; Is-Version-Of: https://raw.githubusercontent.com/tgbugs/orgstrap/master/reval.el
+;; Reval-Get-Immutable: reval--reval-update
+
+;;;; License and Commentary
+
+;; License:
+;; SPDX-License-Identifier: GPL-3.0-or-later
+
+;;; Commentary:
+
+;; reval.el implements eval of remote elisp code. More accurately
+;; it implements local evaluation of remote elisp in a way that is
+;; somewhat secure.
+
+;;; Code:
+
+<<reval-impl>>
+
+(defun reval--reval-update ()
+  "Get the immutable url for the current remote version of this file."
+  (reval-get-imm-github "tgbugs" "orgstrap" "reval.el"))
+
+(provide 'reval)
+
+;;; reval.el ends here
+
+#+end_src
+*** code
 Remote eval. Ephemeral code reuse. Somewhere between load
 eval, and securl then load. More auditable and stable curl pipe bash.
 
@@ -2619,8 +2731,17 @@ after which a local mirrors list could be created.
 | nil           | nil            | nil   | error  | nil    | kill     |
 
 
+TODO need a way to ensure that reval maximal can run itself again on same
+inputs without having to invoke again, maybe a dynamic variable in minimal?
+#+name: reval-impl
 #+begin_src elisp :lexical yes :results none
+(defcustom reval-default-cypher 'sha256
+  "Default cypher to use to fill in a hole in `reval'."
+  :type 'symbol
+  :options (secure-hash-algorithms))
+
 (defvar reval-failed-buffer-list nil "List of failed reval buffers.")
+
 (defvar reval-evaled-buffer-list nil "List of evaled reval buffers.")
 
 (defmacro with-url-handler-mode (&rest body)
@@ -2688,8 +2809,17 @@ is ok before continuing."
 
 (defalias 'reval-resum #'reval-resum-review)
 
-(defun reval-make (cypher path-or-url)
-  `(reval ',cypher ',(reval-resum cypher (reval-id->buffer path-or-url) t) ,path-or-url))
+(defvar reval--make-audit t "Dynamic variable to control audit during `reval--make'")
+;; the control of audit behavior is intentionally excluded from the
+;; arguments of `reval--make' so that top level calls must audit
+(defun reval--make (cypher path-or-url)
+  "Make a `reval' expression from CYPHER and PATH-OR-URL.
+This should not be used directly at the top level see docs for `reval'
+for a better workflow."
+  (unless reval--make-audit
+    (warn "`reval--make' not auditing %S" path-or-url))
+  (let ((checksum (reval-resum cypher (reval-id->buffer path-or-url) reval--make-audit)))
+    `(reval ',cypher ',checksum ,path-or-url)))
 
 (defun reval-audit ()
   "Audit the reval under the cursor."
@@ -2705,13 +2835,12 @@ is ok before continuing."
         (eq (elt raw 2) checksum)))))
 
 (defun reval--add-buffer-to-list (buffer buffer-list-name)
+  "Add BUFFER to list at BUFFER-LIST-NAME."
   (with-current-buffer buffer ; FIXME do this in both cases but change which list
     (push buffer (symbol-value buffer-list-name))
     ;; push first since it is better to have a dead buffer linger in a list
     ;; than it is to have an error happen during execution of `kill-buffer-hook'
-    (lexical-let ((buffer-list-name buffer-list-name))
-      ;; even with lexical t we still have to use `lexical-let' to get
-      ;; `buffer-list-name' to bind as expected
+    (let ((buffer-list-name buffer-list-name))
       (add-hook 'kill-buffer-hook
                 (lambda ()
                   ;; read the manual for sets and lists to see why we have to
@@ -2727,7 +2856,13 @@ is ok before continuing."
 
 (defun reval (cypher checksum path-or-url &rest alternates)
   "Open PATH-OR-URL, match CHECKSUM under CYPHER, then eval.
-If an error is encountered try ALTERNATES in order."
+If an error is encountered try ALTERNATES in order.
+
+The simplest way to populate a `reval' expression starting from just
+PATH-OR-URL is to write out expression with CYPHER and CHECKSUM as a
+nonsense values. For example (reval ? ? \"path/to/file.el\"). Then run
+M-x `reval-update-simple' to populate CYPHER and CHECKSUM."
+
   (let (done)
     (with-url-handler-mode
       (cl-loop for path-or-url in (cons path-or-url alternates)
@@ -2853,6 +2988,43 @@ package is present on the system."
 (defun reval-update ()
   "Update to latest version."
   )
+
+(defun reval--dquote-symbolp (thing)
+  "Matches pattern ''THING.
+Useful when dealing with quoted symbols in the outpub or a `read'.
+For example elt 2 of '(reval 'sha256 ? \"file.el\")."
+  (and (consp thing)
+       (eq (car thing) 'quote)
+       (consp (cdr thing))
+       (symbolp (cadr thing))))
+
+(defun reval-update-simple (&optional universal-argument)
+  "Update the checksum for the reval sexp under the cursor or up the page.
+Useful when developing against a local path or a mutable remote id.
+If UNIVERSAL-ARGUMENT is non-nil then `reval-audit' is skipped, please use
+this functionality responsibly."
+  (interactive "P")
+  (save-excursion
+    (re-search-backward "(reval[[:space:]]")
+    (let ((begin (point)))
+      (forward-sexp)
+      (let ((raw (read (buffer-substring-no-properties begin (point)))))
+        ;;(message "aaaaa: %S %S %S" raw (symbolp (elt raw 1)) (type-of (elt raw 1)))
+        (let ((cypher (let ((cy (elt raw 1)))
+                        ;; '(sigh 'sigh) XXX the usual eval dangerzone >_<
+                        (if (reval--dquote-symbolp cy) (eval cy) reval-default-cypher)))
+              (checksum (let ((cs (elt raw 2)))
+                          (if (reval--dquote-symbolp cs) (eval cs) nil)))
+              (path-or-url (elt raw 3))
+              (reval--make-audit (not universal-argument)))
+          (unless (memq cypher (secure-hash-algorithms))
+            (error "%S is not a known member of `secure-hash-algorithms'" cypher))
+          (let ((new (reval--make cypher path-or-url))
+                (print-quoted t)
+                print-length
+                print-level)
+            (backward-kill-sexp)
+            (insert (prin1-to-string new))))))))
 #+end_src
 
 A little trick in =M-:= ~(insert (prin1-to-string (read (buffer-string))))~.
@@ -2877,29 +3049,29 @@ in the main block right now.
   ;; check default directory
   )
 #+end_src
-
-Testing
+**** reval testing
+***** basics
 #+begin_src elisp
 ;; `eval-print-last-sexp'
 
 ;; bad since html not elisp
-(reval-make 'sha256 "https://github.com/tgbugs/orgstrap/blob/417b87304da27397d3ce1b79039119a9337be305/packages.el")
+(reval--make 'sha256 "https://github.com/tgbugs/orgstrap/blob/417b87304da27397d3ce1b79039119a9337be305/packages.el")
 
 ;; bad 404 file exists but cannot be read ... 404 error or something like that should just fail ?
-(reval-make 'sha256 "https://github.com/tgbugs/orgstrap/blob/does-no-exist/packages-does-not-exist.el")
+(reval--make 'sha256 "https://github.com/tgbugs/orgstrap/blob/does-no-exist/packages-does-not-exist.el")
 
-(reval-make 'sha256 "https://raw.githubusercontent.com/tgbugs/orgstrap/does-no-exist/packages-does-not-exist.el")
+(reval--make 'sha256 "https://raw.githubusercontent.com/tgbugs/orgstrap/does-no-exist/packages-does-not-exist.el")
 
 ;; connection error
-(reval-make 'sha256 "https://127.0.0.2/connection-error")
+(reval--make 'sha256 "https://127.0.0.2/connection-error")
 
-(reval-make 'sha256 "https://0.0.0.0/connection-error")
+(reval--make 'sha256 "https://0.0.0.0/connection-error")
 
 ;;(setq debug-on-message "File exists, but cannot be read")
 ;;(setq debug-on-message nil)
 
 ;; ok
-(reval-make 'sha256 "https://raw.githubusercontent.com/tgbugs/orgstrap/417b87304da27397d3ce1b79039119a9337be305/packages.el")
+(reval--make 'sha256 "https://raw.githubusercontent.com/tgbugs/orgstrap/417b87304da27397d3ce1b79039119a9337be305/packages.el")
 
 ;; checksum match
 (reval 'sha256 'aada229afa36ac1f3e9f26e1ec7c0c09214d75563adb62aa0fac2f1ae58496fe "https://raw.githubusercontent.com/tgbugs/orgstrap/417b87304da27397d3ce1b79039119a9337be305/packages.el")
@@ -2920,12 +3092,12 @@ Testing
 ;; test whether Emacs can find xrefs in reval buffers
 
 ;; local files are of course ok
-(reval-make 'sha256 "orgstrap.el")
+(reval--make 'sha256 "orgstrap.el")
 
 (reval 'sha256 'cbb890d65aa85180f26cb334ac3ca26880005584a1b7f3910f147762eef0196d "orgstrap.el")
 
 ;; the default behavior for emacs does not work
-(reval-make 'sha256 "https://raw.githubusercontent.com/tgbugs/orgstrap/38a8c1688f81a54e39f93bf84b7d4907cf03442c/orgstrap.el")
+(reval--make 'sha256 "https://raw.githubusercontent.com/tgbugs/orgstrap/38a8c1688f81a54e39f93bf84b7d4907cf03442c/orgstrap.el")
 
 (reval 'sha256 'f25c7aa8c0e40afab8884a67f09e5a6629682bb6e6592c48025b87a7a05c4d98 "https://raw.githubusercontent.com/tgbugs/orgstrap/38a8c1688f81a54e39f93bf84b7d4907cf03442c/orgstrap.el")
 
@@ -2976,10 +3148,19 @@ loaded in a buffer though right ... ?
         (drvt "https://api.github.com/repos/tgbugs/orgstrap/git/refs/heads/%s"))
     (format glvt (gethash "sha" (gethash "object" (url->json (format drvt branch)))))))
 #+end_src
+***** update
+Run ~reval-update-simple~ on each of these.
+#+begin_src elisp
+(reval ? ? "orgstrap.el")
+(reval reval-default-cypher ? "orgstrap.el")
+(reval 'sha512 ? "orgstrap.el")
+(reval ? ? "orgstrap-lol-not-here.el") ; should fail
+#+end_src
 ** ow.el
+*** tangles
 This hurts me, but worth it. Code bits that can be loaded via reval
 for bootstrap, or that can be reloaded, or installed as a package.
-#+begin_src elisp ./ow-min.el
+#+begin_src elisp :noweb no-export :tangle ./ow-min.el :lexical yes
 ;;; ow-min.el --- Minimal utilties for orgstrap blocks. -*- lexical-binding: t -*-
 
 ;; Author: Tom Gillespie
@@ -3010,20 +3191,24 @@ for bootstrap, or that can be reloaded, or installed as a package.
 
 <<secure-elisp-curl>>
 
+<<ow-utils>>
+
 (provide 'ow-min)
 
 ;;; ow-min.el ends here
 
 #+end_src
+# <<ow-package>>
 
-#+begin_src elisp ./ow.el
+#+begin_src elisp :noweb no-export :tangle ./ow.el :lexical yes
 ;;; ow.el --- Common functionality for Orgware files. -*- lexical-binding: t -*-
 
 ;; Author: Tom Gillespie
-;; URL: https://raw.githubusercontent.com/tgbugs/orgstrap/master/ow.el
 ;; Homepage: https://github.com/tgbugs/orgstrap
 ;; Version: 9999
 ;; Package-Requires: ((emacs "27.1"))
+;; Is-Version-Of: https://raw.githubusercontent.com/tgbugs/orgstrap/master/ow.el
+;; Reval-Get-Immutable: ow--update-url
 
 ;;;; License and Commentary
 
@@ -3044,17 +3229,25 @@ for bootstrap, or that can be reloaded, or installed as a package.
 
 ;;; Code:
 
-<<reval>>
+<<reval-impl>>
 
 <<run-command>>
 
 <<secure-elisp-curl>>
 
+<<ow-utils>>
+
+<<ow-package>>
+
 <<ow-usability>>
 
 <<ow-buttons>>
 
-<<ow-configs>>
+<<ow-config>>
+
+(defun ow--update-url ()
+  "Get the immutable url for the current remote version of this file."
+  (reval-get-imm-github "tgbugs" "orgstrap" "ow.el"))
 
 (provide 'ow)
 
@@ -3205,29 +3398,33 @@ See the ~isearch-tool-bar-map~ for an example of how to do this.
   "Return nothing for export" ; FIXME broken ???
   "")
 
+(defun ow-button (link-name function)
+  "Create a new button type."
+  (org-link-set-parameters link-name :export #'ow-link-no-export :follow function))
+
 ;; hide headline for future startups
 
-(org-link-set-parameters "FOLD-HEADLINE" :export #'orgstrap---nox :follow
+(org-link-set-parameters "FOLD-HEADLINE" :export #'ow-link-no-export :follow
                          (lambda (&optional nothing)
                            (ow-fold-headline)))
 
 ;; run the next #+begin_src block
 
-(org-link-set-parameters "RUN" :export #'orgstrap---nox :follow
+(org-link-set-parameters "RUN" :export #'ow-link-no-export :follow
                          (lambda (&optional nothing)
                            (org-next-block nil)
                            (org-babel-execute-src-block)))
 
 ;; run the previous src block (doesn't work if there are results)
 
-(org-link-set-parameters "RUNPREV" :export #'orgstrap---nox :follow
+(org-link-set-parameters "RUNPREV" :export #'ow-link-no-export :follow
                          (lambda (&optional nothing)
                            (org-previous-block nil)
                            (org-babel-execute-src-block)))
 
 ;; run the next #+call: TODO we should be able to do this with mouse-1?
 
-(org-link-set-parameters "RUNC" :export #'orgstrap---nox :follow
+(org-link-set-parameters "RUNC" :export #'ow-link-no-export :follow
                          (lambda (&optional nothing)
                            (save-excursion
                              (re-search-forward "#\\+call:")
@@ -3238,17 +3435,76 @@ See the ~isearch-tool-bar-map~ for an example of how to do this.
 (org-link-set-parameters "TEXT-LARGER" :export #'orsgrap--nox :follow
                          (lambda (&optional nothing)
                            (text-scale-adjust 1)
-                           (recenter-on-mouse)))
+                           (ow-recenter-on-mouse)))
 
-(org-link-set-parameters "TEXT-SMALLER" :export #'orsgrap---nox :follow
+(org-link-set-parameters "TEXT-SMALLER" :export #'ow-link-no-export :follow
                          (lambda (&optional nothing)
                            (text-scale-adjust -1)
-                           (recenter-on-mouse)))
+                           (ow-recenter-on-mouse)))
 
-(org-link-set-parameters "TEXT-RESET" :export #'orsgrap---nox :follow
+(org-link-set-parameters "TEXT-RESET" :export #'ow-link-no-export :follow
                          (lambda (&optional nothing)
                            (text-scale-adjust 0)
-                           (recenter-on-mouse)))
+                           (ow-recenter-on-mouse)))
+#+end_src
+*** Packages
+#+name: ow-package
+#+begin_src elisp
+(defvar ow-package-archives '(("melpa" . "https://melpa.org/packages/")
+                              ("org" . "https://orgmode.org/elpa/")))
+
+(defun ow-enable-use-package ()
+  "Do all the setup needed `use-package'.
+This needs to be called with (eval-when-compile ...) to the top level prior
+to any use of `use-package' otherwise it will be missing and fail"
+  ;; package archives is not an argument to this function to ensure that
+  ;; there is only one place that needs to be updated if an archive location
+  ;; changes, namely this library, updating that is easier to get right using
+  ;; the `reval-update' machinery
+  (require 'package)
+  (dolist (pair ow-package-archives) (add-to-list 'package-archives pair t))
+  (unless package--initialized
+    (package-initialize))
+  (unless (package-installed-p 'use-package)
+    (package-refresh-contents)
+    (package-install 'use-package))
+  (require 'use-package)
+  (setq use-package-always-ensure t))
+
+(defmacro ow-use-packages (&rest names)
+  "enable multiple calls to `use-package' during bootstrap"
+  (cons 'progn (mapcar (lambda (name) `(use-package ,name)) names)))
+#+end_src
+**** too many special cases
+This is too much right now. Conditional requires and configuration
+already make this approach a special happy path at best. I think that
+the best compromise right now is my ~use-packages~ implementation from
+the original version of orgstrap.
+#+begin_src elisp
+(defun ow-requires (&rest features)
+  "A list of simple requires. Conditional requires more complex."
+  (let ((missing (cl-loop for feature in features
+                          unless (condition-case nil
+                                     (require feature)
+                                   (error nil))
+                          collect feature)))
+    (ow-install-requires missing)
+    ))
+
+(defun ow-install-requires (features)
+  "run once to install all missing features"
+  (cl-loop for pair in ow-package-archives do (add-to-list 'package-archives pair t))
+  (package-install feature)
+  )
+
+;; see this stinks, because there are other things we want to do
+;; in certain circumstances I guess multiple calls to ow-requires is ok?
+;; sigh
+(ow-requires (if (fboundp #'undo-redo) 'simple 'undo-fu))
+
+(unless (fboundp #'undo-redo)
+  (ow-requires 'undo-fu)
+  (defalias 'undo-redo #'undo-fu-only-undo "Backport `undo-redo'"))
 #+end_src
 *** run-command
 Sometimes functionality needed during bootstrap is implemented outside
@@ -3340,6 +3596,147 @@ errors among others.
         'aada229afa36ac1f3e9f26e1ec7c0c09214d75563adb62aa0fac2f1ae58496fe
         "https://raw.githubusercontent.com/tgbugs/orgstrap/417b87304da27397/packages.el"
         "packages-test-fetch.el")
+#+end_src
+*** utils
+Random stuff that doesn't fit elsewhere.
+#+name: ow-utils
+#+begin_src elisp
+(defun ow-url-head-ok (url)
+  "Check if URL is up and OK using HTTP HEAD.
+All errors are silenced."
+  (let ((url-request-method "HEAD"))
+    (condition-case nil
+        (with-current-buffer (url-retrieve-synchronously url)
+          ;;(buffer-substring (point-min) url-http-end-of-headers)
+          (goto-char 0)
+          (re-search-forward "^HTTP.+OK$"))
+      (error nil))))
+#+end_src
+** services
+Configurations for services that can be reused across orgstrap files.
+*** Blazegraph server
+
+#+begin_src elisp :noweb no-export :tangle ./services/blazegraph.el :mkdirp yes
+;;; blazegraph.el --- Run blazegraph as a subprocess. -*- lexical-binding: t -*-
+
+;; Author: Tom Gillespie
+;; Homepage: https://github.com/tgbugs/orgstrap
+;; Version: 9999
+;; Package-Requires: ((emacs "24.4"))
+;; Is-Version-Of: https://raw.githubusercontent.com/tgbugs/orgstrap/master/services/blazegraph.el
+;; Reval-Get-Immutable: blazegraph--reval-update
+
+;;;; License and Commentary
+
+;; License:
+;; SPDX-License-Identifier: GPL-3.0-or-later
+
+;;; Commentary:
+
+;; ???
+
+;;; Code:
+
+<<blazegraph-server>>
+
+(defun blazegraph--update-url ()
+  "Get the immutable url for the current remote version of this file."
+  (reval-get-imm-github "tgbugs" "orgstrap" "services/blazegraph.el"))
+
+(provide 'blazegraph)
+
+;;; blazegraph.el ends here
+
+#+end_src
+
+#+name: blazegraph-server
+#+begin_src elisp
+(defvar blazegraph-process-name "*blazegraph-server process*"
+  "Name of the process and buffer for blazegraph.")
+
+(defvar blazegraph-port 9999
+  "Default port for blazegraph sparql endpoint.")
+
+(defvar blazegraph-dir nil
+  "Root folder where the blazegraph")
+
+(defun blazegraph-options (&optional port prefixes journal)
+  "Generate alist of blazegraph server options."
+  (let ((port (or port blazegraph-port))
+        (prefixes (or prefixes "data/prefixes.conf"))
+        (journal (or journal "data/blazegraph.jnl")))
+    `((jetty.port . ,port)
+      ;; (log4j.logger.com.bigdata . INFO)
+      (com.bigdata.journal.AbstractJournal.file . ,journal)
+      (com.bigdata.rdf.sail.sparql.PrefixDeclProcessor.additionalDeclsFile . ,prefixes))))
+
+(defun blazegraph-server-process (&optional port prefixes journal)
+  "Start blazegraph server at port PORT."
+  (let* ((process-name blazegraph-process-name)
+         (buffer (generate-new-buffer process-name))
+         (options (blazegraph-options port prefixes journal))
+         (options-cli (mapcar (lambda (pair)
+                                (format "-D%s=%s" (car pair) (cdr pair)))
+                              options)))
+    (with-current-buffer buffer
+      (let ((argv `(,process-name
+                    ,(current-buffer)
+                    "java"
+                    "-server"
+                    "-Xmx4g"
+                    ,@options-cli
+                    "-jar"
+                    "opt/blazegraph.jar")))
+        ;;(message "%s" argv)
+        (apply #'start-process argv)))))
+
+(defun blazegraph-server-http-ok-p (&optional port)
+  "Returns t if if sparql endpoint is up on PORT."
+  (let ((port (or port blazegraph-port)))
+    (ow-url-head-ok (format "http://localhost:%s/blazegraph/sparql" port))))
+
+(defun blazegraph-server-running-p (&optional port)
+  "Returns t if server is running otherwise nil.
+Checks for child process, if no process checks sparql endpoint."
+  (let ((process (get-process blazegraph-process-name))
+        (port (or port blazegraph-port)))
+    (or (and process (process-live-p process))
+        (blazegraph-server-http-ok-p port))))
+
+(defun blazegraph-create-tab-with-buffer ()
+  "Create tab for blazegraph process buffer."
+  (when tab-bar-mode
+    (tab-bar-new-tab 1)
+    (switch-to-buffer blazegraph-process-name)
+    (tab-bar-switch-to-prev-tab)))
+
+(defun blazegraph-server-stop ()
+  "Stop the blazegraph server."
+  (let ((process (get-process blazegraph-process-name)))
+    (when process
+      (prog1
+          (interrupt-process process))
+      ;; spin block until the process is dead so that
+      ;; Emacs won't prompt when we try to exit
+      (while (process-live-p process)
+        (sleep-for 0 100)))))
+
+(defun blazegraph-server-start ()
+  "Start the blazegraph server."
+  (unless (blazegraph-server-running-p)
+    (let ((process (if blazegraph-dir
+                       (let ((default-directory blazegraph-dir))
+                         (blazegraph-server-process))
+                     (blazegraph-server-process))))
+      (message "Starting Blazegraph ...")
+      (while (let ((status (process-status (process-name process))))
+               (and (eq status 'run) (not (blazegraph-server-http-ok-p))))
+        (sleep-for 0 100)))))
+
+(defun blazegraph-server-restart ()
+  "Restart the blazegraph server."
+  (blazegraph-server-stop)
+  (blazegraph-server-start))
 #+end_src
 * Background, file local variables, and checksums
 :PROPERTIES:
