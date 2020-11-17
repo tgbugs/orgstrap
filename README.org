@@ -2392,6 +2392,46 @@ There are a number of ways to contribute to =orgstrap=.
 
 3. Feel like writing some elisp? Check out [[#future-work][future work]]
    for a list of potential projects (TODO status not visible on GitHub).
+* Guides
+** User guide
+This guide is for users of Org files that have =orgstrap= blocks.
+
+This includes Emacs users who have their own configs as well as users
+who might be encountering Emacs for the first time.
+
+** Developer guide
+This guide is for developers who want to use =orgstrap= in their own
+org files.
+
+It covers workflows for development, distribution, and maintenance of
+orgstrap files.
+
+It also covers best practices and effective strategies for making Org
+files accessible to users.
+*** There can be only one. Dealing with elisp's absent namespaces.
+A key issue that orgstrap must contend with is the fact that there is
+only one global namespace for all elisp functions. Variables are not
+an issue for orgstrap because buffer local variables provide
+sufficient separation.
+
+To this end there are two conventions that orgstrap and orgware follow.
+The ersatz namespaces ~orgstrap---~ and ~ow---~ may be used in any
+orgstrap block. Developers may assume that any such definitions will
+remain unchanged at least until another orgstrap block runs. Clearly it
+is impossible to know for sure that no one else will use a function
+with the same name ~ow---you-re-standing-on-my-toe-!~ that has different
+behavior. We can make an attempt to keep a record of all known ~ow---~
+function names, but ultimately it is up to the user to run a check.
+# TODO need to implement a local ow--- collision checker that searchers
+# all orgs files for ow--- usage and reports any collisions
+# TODO implement a way to report a name collision to upstream
+** Contributor guide
+This guide is for developers who want to contribute to the core
+=orgstrap= implementation or documentation.
+*** Setup
+*** Testing
+*** Making changes
+*** Submitting a pull request
 * Best practices
 :PROPERTIES:
 :CUSTOM_ID: best-practices
@@ -2621,6 +2661,7 @@ take nearly 3 hours to complete and debug.
 * Future work
 :PROPERTIES:
 :CUSTOM_ID: future-work
+:visibility: children
 :END:
 ** Tutorial videos for various workflows
 Record a series of short screen casts to illustrate common orgstrap
@@ -2838,6 +2879,117 @@ for all further functionality, but beyond that it is not clear.
 # dealing with the huge variety of package managers (discussed above),
 # will have to accumulate over time in the files themselves, or in a
 # portability layer that outside the files (e.g. via reval)
+** Testing and continuous integration
+Ideally would like to move toward using ert for testing in this file.
+Generally it would be good to have an established workflow for testing
+orgstrap files beyond just nowebbing into ~when orgstrap-do-test~.
+
+As those workflows become established it would be nice to have a set
+of minimal wrappers for the various CI systems that will be sufficient
+to kick off the testing. See https://github.com/purcell/nix-emacs-ci
+for one way we might approach this.
+** Buffer local functions
+The best way to avoid these issues is to upstream common functions
+into ~ow-~ directly, but orgstrap is designed to be completely
+distributed, so it does fall on the user.
+
+The other way around this issue is to run orgstrapped files in a
+separate Emacs process. This is suboptimal.
+
+There might be a way to implement buffer local functions using
+~advice-add :around~ and manually dispatching by buffer.
+[[info:elisp#Advice Combinators]]
+
+Internally ~defun~ uses ~defalias~ to bind the name so in theory we
+can replace that step with a check to see if a function is already
+bound to that name. If not we create a stub ~(lambda (&rest rest)
+nil)~ or something for the global name. Once the function exists
+advise it with ~has-local-defuns~ which can be used to handle the
+dispatch per buffer. Most of the time it will fall through.
+
+The other possibility would be to keep a list of all the functions as
+add a hook to switch buffer hook or something like that an have it
+advise to ~:override~ with the buffer local value on the way in, and
+then remove the override with leave buffer hook, but those hooks don't
+actually exist [[info:elisp#Standard Hooks]], so we are left with checking
+each time.
+
+The good news is actually that most of the time you don't actually have
+to do this. You just have to keep in place in case the name gets redefined?
+Then you dispatch? None if this is going to be performant. Especially in a
+tight loop.
+
+So after implementing ~defun-local~ I'm wondering whether it works as
+expected in org babel blocks. It would seem so. This won't work with
+reval unless reval-materialize is run since reval runs in a separate
+buffer, but most things in reval should conform to general elisp best
+practices so that is less of an issue.
+
+# TODO check what happens if the advised function is overwritten
+# TODO fmakunbound doesn't quite work as desired, may need to advise it
+#+name: local-defun-impl
+#+begin_src elisp :results none :lexical yes
+(defvar-local --local-defuns nil
+  "A hash table that maps global closures to local function symbols.
+Needed to dispatch on command passed to :around advice.")
+
+(defvar-local --local-defun-names nil
+  "A hash table that maps global function symbols to local function symbols.")
+
+(defun advice--has-local-defuns (command &rest args)
+  "Advise COMMAND with ARGS to check if there are buffer local defuns."
+  (let ((command (or (and --local-defuns (gethash command --local-defuns))
+                     command)))
+    (apply command args)))
+
+(defmacro defun-local (name arglist &optional docstring &rest body)
+  "Define a buffer local function."
+  (declare (doc-string 3) (indent 2))
+  (unless --local-defuns
+    (setq-local --local-defuns (make-hash-table :test #'equal)))
+  (unless --local-defun-names
+    (setq-local --local-defun-names (make-hash-table)))
+  (let ((docstring (if docstring (list docstring) docstring))
+        (local-name (or (gethash name --local-defun-names)
+                        (puthash name (cl-gentemp (format "%S-" name)) --local-defun-names))))
+    `(prog1
+         (defun ,local-name ,arglist ,@docstring ,@body)
+       (unless (fboundp ',name)
+         (defun ,name (&rest args) (error "global stub for defun-local %s" #',name))
+         (put ',name 'defun-local-stub t))
+       (puthash (symbol-function #',name) #',local-name --local-defuns) ; FIXME broken if the stub is overwritten
+       (advice-add #',name :around #'advice--has-local-defuns))))
+
+(defun advice--fmakunbound-local (command &rest args)
+  "Advise COMMAND `fmakunbound' to be aware of `defun-local' forms."
+  (if --local-defun-names
+      (let* ((name (car args))
+             (local-name (gethash name --local-defun-names)))
+        ;; FIXME hard to know when it is safe to remove the stubs
+        ;; without maintaining a list of local symbol names
+        ;; and we need that functionality to be able to sanely
+        ;; remove the has-local-defuns advice
+        ;; (if (get name 'defun-local-stub))
+        (if local-name
+            (progn
+              (apply command (list local-name))
+              ;; FIXME how to remove the value from --local-defuns ... it is advised
+              ;; so how to get the unadvised closure passed to :around?
+              ;; (remhash (symbol-function name) --local-defuns)
+              (remhash name --local-defun-names))
+          (apply command args)))
+    (apply command args)))
+
+;;(advice-add #'fmakunbound :around #'advice--fmakunbound-local)
+#+end_src
+
+#+begin_src elisp
+(defun-local hrm (a b c) 1 2 3 "OH YEAH")
+(hrm 1 2 3)
+(defun-local hrm (a b c d) 1 "OH NO")
+(hrm 1 2 3 4)
+;;(defun-local )
+#+end_src
 ** TODO fix orgstrap--update-on-change hook so that it does not modify buffer fold state
 :PROPERTIES:
 :CREATED:  [2020-10-21 Wed 01:28]
