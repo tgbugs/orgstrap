@@ -427,27 +427,28 @@ Useful when developing against a local path or a mutable remote id.
 If UNIVERSAL-ARGUMENT is non-nil then `reval-audit' is skipped, please use
 this functionality responsibly."
   (interactive "P")
-  (save-excursion
-    (re-search-backward "(reval[[:space:]]")
-    (let ((begin (point)))
-      (forward-sexp)
-      (let ((raw (read (buffer-substring-no-properties begin (point)))))
-        ;;(message "aaaaa: %S %S %S" raw (symbolp (elt raw 1)) (type-of (elt raw 1)))
-        (let ((cypher (let ((cy (elt raw 1)))
-                        ;; '(sigh 'sigh) XXX the usual eval dangerzone >_<
-                        (if (reval--dquote-symbolp cy) (eval cy) reval-default-cypher)))
-              (checksum (let ((cs (elt raw 2)))
-                          (if (reval--dquote-symbolp cs) (eval cs) nil)))
-              (path-or-url (elt raw 3))
-              (reval--make-audit (not universal-argument)))
-          (unless (memq cypher (secure-hash-algorithms))
-            (error "%S is not a known member of `secure-hash-algorithms'" cypher))
-          (let ((new (reval--make cypher path-or-url))
-                (print-quoted t)
-                print-length
-                print-level)
-            (backward-kill-sexp)
-            (insert (prin1-to-string new))))))))
+  (with-url-handler-mode
+    (save-excursion
+      (re-search-backward "(reval[[:space:]]")
+      (let ((begin (point)))
+        (forward-sexp)
+        (let ((raw (read (buffer-substring-no-properties begin (point)))))
+          ;;(message "aaaaa: %S %S %S" raw (symbolp (elt raw 1)) (type-of (elt raw 1)))
+          (let ((cypher (let ((cy (elt raw 1)))
+                          ;; '(sigh 'sigh) XXX the usual eval dangerzone >_<
+                          (if (reval--dquote-symbolp cy) (eval cy) reval-default-cypher)))
+                (checksum (let ((cs (elt raw 2)))
+                            (if (reval--dquote-symbolp cs) (eval cs) nil)))
+                (path-or-url (elt raw 3))
+                (reval--make-audit (not universal-argument)))
+            (unless (memq cypher (secure-hash-algorithms))
+              (error "%S is not a known member of `secure-hash-algorithms'" cypher))
+            (let ((new (reval--make cypher path-or-url))
+                  (print-quoted t)
+                  print-length
+                  print-level)
+              (backward-kill-sexp)
+              (insert (prin1-to-string new)))))))))
 #+end_src
 
 A little trick in =M-:= ~(insert (prin1-to-string (read (buffer-string))))~.
