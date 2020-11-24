@@ -211,6 +211,7 @@ This is the =orgstrap= block that is used for this file.
 <<orgstrap-edit-helper-defuns>>
 <<orgstrap-init-helper-defuns>>
 <<orgstrap-extra-helper-defuns>>
+<<orgstrap-do>>
 
 ;; helper functions to update examples
 (defun orgstrap--update-examples ()
@@ -1732,265 +1733,21 @@ orgstrap being portable to other platforms outside of Emacs at some point in the
 very distant future, so keeping the machinery outside of the org file itself as
 minimal as possible is critical.
 *** Do
-**** Thinking
-For the software life cycle see man:ebuild.
-
-There are some steps that fall outside most sane uses for orgstrap but
-that could be made to work by putting [[file:./get-emacs.org]] functionality
-at the start of an org file. Maybe there is a use case, but it is
-simpler to have a separate step for the executor -- install Emacs.
-
-The mostly orthogonal phases and functionality that are recognized by
-orgstrap. Of course, the list here doesn't even begin to capture all
-the things that one might need to do, and there is plenty of code that
-falls well outside any of these categories of activities. Not all files
-need all phases.
-
-Short version.
-1. deps
-2. services
-3. setup
-4. configure
-5. defuns
-6. test
-7. run
-8. export
-9. publish
-10. tangle
-11. build
-12. package
-13. deploy
-14. deposit
-
-Medium version.
-A reminder that these are things that we want to be able to do with a
-_static_ org file *not* everything that we might want to do. There is
-the whole interaction vocabulary that org-mode provides for doing far
-more complex things than what we list here and I strongly suggest not
-trying to force certain functionality into orgstrap that fits better
-as part of having a user execute certain blocks manually or capturing
-common workflows via a command line flag or similar. There is enormous
-complexity lurking behind every single thing that an org file can be
-transformed into and a flat list of global variables is laughably
-insufficient --- practically you need an entire language to describe it.
-Just use elisp until you get to a point where the most probable paths
-are well established and then give those cli flags or something.
-1. deps ON
-   1. code
-   2. data
-   3. services
-   4. configuration
-2. modifying Emacs config ON
-3. run OFF
-   ~org-babel-execute-buffer~
-4. test OFF
-   includes tests on any artifacts including the file itself
-5. export OFF
-   build but for documents instead of code
-6. publish OFF
-7. tangle OFF
-   (incidental tangling can happen in other phases)
-8. build OFF
-   this phase ends with whatever arbitrary local artifacts you want
-   having been created, of course with tramp they could also be remote
-9. deposit OFF
-   the equivalent of publish, but for code artifacts
-
-Other thoughts.
-
-Development setup is a specific case of the larger category of
-environment setup. These overlap heavily with run-once, with a note
-that run-once really needs to be implemented as a series of tests to
-see whether certain things need to be run.
-
-These are provided so that _if_ there is a confluence of one of the
-phases with a single entire org file, then you _can_ control it via
-batch. If you are in a situation where there are multiple things that
-could be published or built from a single org file then you probably
-should not try to use this extremely simplistic interface to control
-or configure the greater complexity of the process.  Just load the
-file in Emacs and interact with it to get what you need.
-
-install configure run
-
-put bits in the right place
-twiddle important bits
-flip the bits that make the bits flip themselves
-
-the results of +going+ run are completely open ended and arbitrary
-
-Long version.
-1. check for dependencies
-   this is fairly close to running =./configure= or similar
-   also involves checking that services are up and running
-2. dependencies
-   this includes installation, configuration, setup, etc.
-   there might be different dependency types depending on which
-   future functions are desired, e.g. deps for export to pdf might
-   be radically different than deps needed to run the blocks
-   1. system
-   2. elisp
-      - some package managers can run arbitrary setup commands here
-3. run services
-   if a file depends on an external service make sure it is up
-   and if not start it etc.
-4. setup fetch/tangle/arrange files/data/code
-   this might be called setup or something like that, but basically
-   things that fall outside a package manager such as configuring
-   the latex environment by tangling texmf/tex/latex/class-name or
-   retrieving a common setupfile from the internet.
-   this section could also recapitulate this entire list
-5. configure Emacs settings
-   1. buffer local
-   2. global
-6. defuns (and other top level things)
-   this one doesn't really need its own thing since function defs
-   are usually ok to run at the top level without restriction
-7. test
-   this covers testing the orgstrap block itself but could also cover
-   other testing needs such as testing the tangled/built output
-8. run (org babel evaluate all)
-   hah, another one that I forgot, which would be to run or recompute
-   all the blocks, tables, etc. in the file, for example lets say you
-   had a self preparing report that made a copy of itself from template
-   and then ran all the org babel blocks to generate the results
-9. export
-   C-c C-e
-10. publish
-    I have done this previously by tangling a publish.el file and
-    then calling ~org-publish-all~ but with orgstrap you can just
-    just batch load the org file with ~-f orgstrap-do-publish~.
-    Though for that you work you have to have orgstrap.el installed,
-    so ~--eval (setq orgstrap-do-publish)~ make more sense if you
-    don't have orgware.
-11. tangle
-    sometimes you need to tangle prior to publishing etc. sometimes
-    you need to tangle all the source code so that it can be built
-12. build (aka build release aka make)
-    note that building can include building software or could include
-    something like building documentation, orgstrap doesn't deal with
-    that level of granularity, if you need it, you can add your own
-    equivalent variable or specify [[info:elisp#Command-Line Arguments]]
-    that can provide more granular control if run in batch mode
-13. package produced artifacts
-    produce the armed and operational artifact that can be run in
-    production or something
-14. deploy/install
-    huh, I haven't had this one on the list, but tangling to a remote
-    target for run-once install behavior or something like that is
-    totally doable here, basically put the stuff where it goes either
-    locally or remotely
-15. deposit (publish artifact/push release, upload?)
-    push package or whatever to pypi, maven central, etc.
-    often this might be implemented by calling a separate block
-16. sync
-    this is a bit of a strange one that probably fits elsewhere, but
-    if you have an org file that may not be opened manually then being
-    able to batch sync contents of the file is useful, e.g.  I have
-    used a python script to pull the contents of google docs into an
-    org file.
-**** Funs
-#+begin_src elisp
-(defmacro orgstrap-do ()
-  "A mini language for describing what to run.")
-(defalias 'od #'orgstrap-do)
-#+end_src
-***** Examples/Tests
-Lots of things to think about in terms of how these statements would
-expand. Shadowing is a big deal, as well as implicit dependencies and
-how defaults are handled if things are not in an od expression. Maybe
-easier to implement this in Racket due to ~syntax-parse~?
-#+begin_src elisp
-(od all)
-(od (not all))
-(od (not all) (config services))
-(od (config services))
-(od deps) ; this is redundant
-(od (only deps))
-(od (only deps) tangle) ; should error? (od-only deps) avoids this?
-(od (not deps)) ; prevent any deps from installing
-(od deps tangle build deploy)
-(od (deps all) tangle build deploy)
-(od (deps build) tangle build deploy)
-(od (deps run) config)
-(od (deps services) (not (config emacs)))
-(od (deps services) (config (not emacs)))
-(od (deps all)
-    (export html pdf)
-    (build))
-(od tangle)
-(od run)
-(od (build html))
-(od (export html))
-(od export)
-(od (convert gfm))
-
-(od (run all))
-(od (run deposit))
-(od (only (run deposit)))
-(od (run deploy))
-(od (deps deploy) (run deploy))
-
-(setq orgstrap-do-defaults (od (not (config emacs))))
-#+end_src
-**** Vars
+See [[./do.org]] for more on what these are and how to use them.
 #+name: orgstrap-do
 #+begin_src elisp
 ;; orgstrap-do-*
 
-;; variables to enable/disable certain functionality when an
-;; orgstrapped file is run from the command line, most of these are
-;; just dynamic variables, but some are custom variables since setting
-;; a default behavior globally may be desirable in most cases it is
-;; sufficient to make these dynamic variables since they are expected
-;; to be set in a fairly clean environment and all default to nil, and
-;; there are unlikely to be threading issues even in the future since
-;; it should be possible to wrap any call to open an orgstrapped file
-;; with a let to override without globally modifying the variable
-
-;; in all cases orgstrap blocks must use these variables intentionally
-;; and by convention, there is nothing that says that anyone has to
-;; follow these conventions, but they are provided here in hopes that
-;; their presence will guide common practice
-
-;; note that any file that uses these variables needs to define them
-;; in the orgstrap block
-
-"Dynamic variable that by convention can be used inside orgstrap blocks.
-It makes it possible to run `org-babel-tangle' only when it is non-nil when set
-on the command line when launching Emacs with --batch.  Individual orgstrap
-blocks should also define (defvar orgstrap-on-tangle-open nil) if they want
-this functionality."
-"Main tangle step for the file.
-Other phases might also do some tangling, but they would be
-controlled separately."
-
-;; TODO consider whether using an enumerate value might make more sense
-;; e.g. orgstrap-deps '(nil :emacs :system) and then blocks could set
-;; their requirements?
-;(defvar orgstrap-do-deps nil "Install all packages.")
-;(defvar orgstrap-do-dependencies nil "Install all packages.")
-;(defvar orgstrap-do-install-dependencies nil "Install all packages.")
-;(defvar orgstrap-do-install-prerequisites nil "Install all packages.")
-;(defvar orgstrap-do-deps-code nil "")
-;(defvar orgstrap-do-deps-runtime nil "")
-;(defvar orgstrap-do-deps-toolchain nil "")
-;(defvar orgstrap-do-deps-data nil "")
+;(ref:do-deps)
 (defcustom orgstrap-do-packages nil "Install some packages." :type 'boolean)
 (defcustom orgstrap-do-packages-emacs nil "Install Emacs packages." :type 'boolean)
 (defcustom orgstrap-do-packages-system nil "Install system packages." :type 'boolean)
 
-(defcustom orgstrap-do-data nil "Retrieve external data needed by file.") ; TODO naming etc.
-;; note that external data here would be data that the process described by the org file
-;; needs _locally_ in order to function, there are also many cases where the workflow
-;; described by the file might simply bootstrap a local working environment and code
-;; that will be used to manage and run data that sits elsewhere
+(defcustom orgstrap-do-data nil "Retrieve external data needed by file." :type 'boolean) ; TODO naming etc. (ref:do-data)
 
-;(defcustom orgstrap-do-setup nil "Run other setup steps.")  ; FIXME this is closer to emerge --config
-(defcustom orgstrap-do-config nil "Run code that modifies some configuration." :type 'boolean)
+(defcustom orgstrap-do-config nil "Run code that modifies some configuration." :type 'boolean) ;(ref:do-config)
 (defcustom orgstrap-do-config-emacs nil "Run code that modifies the Emacs configuration." :type 'boolean)
 (defcustom orgstrap-do-config-system nil "Run code that modifies the system configuration." :type 'boolean)
-;(defcustom orgstrap-do-config-services nil "Run code that modifies the services configuration." :type 'boolean)
 
 (defcustom orgstrap-do-services nil "Run services needed by file." :type 'boolean)
 
@@ -2003,33 +1760,23 @@ controlled separately."
 
 (defvar orgstrap-do-tangle nil "`org-babel-tangle-file'.")
 
-(defvar orgstrap-do-build nil
-  ;; build may imply tangle in cases where tangle is relevant
-  "produce one or more artifacts derived from the portions of the file with mechanical semantics")
+(defvar orgstrap-do-build nil ; may imply tangle
+  "Produce one or more artifacts derived from the file.")
 
-(defvar orgstrap-do-test nil "Run tests.")
-;(defvar orgstrap-do-test-elisp nil "Run tests on elisp for the file.") ;  not clear we need this? XXX NAMING
-;(defvar orgstrap-do-test-tangle nil "Run tests on the output of tangle.") ;  not clear we need this?
-;(defvar orgstrap-do-test-build nil "Run tests on the output of build.") ;  not clear we need this?
-;; Running tests via a batch process can be a bit tricky if the test code is also part of the orgstrap block.
-;; tests may test any part of the org file, tangled output, documentation, build artifacts, etc.
-;; if you have an org file that itself specifies a set of tests for some larger system
-;; then that would be called as part of -do-run and -do-test would be used to test the tests
+(defvar orgstrap-do-test nil "Run tests.") ;(ref:do-test)
 
-;; dev stage prod passed some other way? in some cases a separate org file might make more sense?
-;; not if a single file defines multiple different blocks that enable different functionality
-;; as discussed elsewhere, trying to flatten a high dimensional workflow into boolean args is hard
-(defvar orgstrap-do-deploy nil "Deploy build artifacts somewhere.")
 (defvar orgstrap-do-deposit nil "Deposit build artifacts somewhere.")
-
-;; other
-(defvar orgstrap-do-sync nil "Have the file synchronize itself with some remote.")
-(defvar orgstrap-do-git-pull nil "Have the file synchronize itself with some remote.")
-(defvar orgstrap-do-git-commit nil "Have the file synchronize itself with some remote.")
-(defvar orgstrap-do-git-push nil "Have the file synchronize itself with some remote.")
-;(defcustom orgstrap-do-package nil "???" :type 'boolean) ; XXX superseded by build
-;(defcustom orgstrap-do-release nil "???" :type 'boolean) ; XXX superseded by deposit
 #+end_src
+**** Candidates and docs
+[[./README.org::(do-deps)]] [[./do.org::(do-deps-cands)]]
+[[./README.org::(do-config)]] [[./do.org::(do-config-cands)]]
+[[./README.org::(do-test)]] [[./do.org::(do-test-cands)]]
+
+[[./README.org::(do-data)]]
+note that external data here would be data that the process described by the org file
+needs _locally_ in order to function, there are also many cases where the workflow
+described by the file might simply bootstrap a local working environment and code
+that will be used to manage and run data that sits elsewhere
 ** orgstrap.el :noexport:
 # XXX TODO it would be a super cool feature if xref could resolve to elisp source
 # blocks in org-mode files, because then half the need for the .el file would go away
@@ -2093,6 +1840,8 @@ controlled separately."
 <<orgstrap-init-helper-defuns>>
 
 <<orgstrap-extra-helper-defuns>>
+
+<<orgstrap-do>>
 
 (provide 'orgstrap)
 
