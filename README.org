@@ -1,4 +1,4 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: bc97e403b212ec423ef4c5c39b015063e14f268801c1438c3a43b3cb7c0605c1; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: a22f3155e9742f2aaa1eb98d27ce545f557b6bdf6ab0614bf9b83bc8d58de95a; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Orgstrap: Executable Org files
 #+startup: showall
@@ -725,7 +725,7 @@ Here is the prop line from the first line of this file that
 includes the cypher and checksum of the =orgstrap= block.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: bc97e403b212ec423ef4c5c39b015063e14f268801c1438c3a43b3cb7c0605c1; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: a22f3155e9742f2aaa1eb98d27ce545f557b6bdf6ab0614bf9b83bc8d58de95a; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 #+end_src
 
 # BE VERY CAREFUL WITH MANUAL EDITS
@@ -1738,20 +1738,21 @@ See [[./do.org]] for more on what these are and how to use them.
 #+begin_src elisp
 ;; orgstrap-do-*
 
-;(ref:do-deps)
+;; dependencies (ref:do-deps)
 (defcustom orgstrap-do-packages nil "Install some packages." :type 'boolean)
 (defcustom orgstrap-do-packages-emacs nil "Install Emacs packages." :type 'boolean)
 (defcustom orgstrap-do-packages-system nil "Install system packages." :type 'boolean)
 
 (defcustom orgstrap-do-data nil "Retrieve external data needed by file." :type 'boolean) ; TODO naming etc. (ref:do-data)
 
+;; configuration
 (defcustom orgstrap-do-config nil "Run code that modifies some configuration." :type 'boolean) ;(ref:do-config)
 (defcustom orgstrap-do-config-emacs nil "Run code that modifies the Emacs configuration." :type 'boolean)
 (defcustom orgstrap-do-config-system nil "Run code that modifies the system configuration." :type 'boolean)
 
 (defcustom orgstrap-do-services nil "Run services needed by file." :type 'boolean)
 
-;; the great divide (after this comes batch functionality)
+;; batch functionality
 
 (defvar orgstrap-do-run nil "`org-babel-execute-buffer'")
 
@@ -2067,6 +2068,13 @@ Things that need to be done for a release.
   [[#122][1.2.2]] changelog), then ~orgstrap-block-checksum~ is not
   ignored and if the local variable value has not been added to the
   safe list then the user will be prompted.
+
+- Add ~orgstrap-do-*~ variables.
+
+  Boolean control variables that can be used enable/disable standard
+  functionality/steps needed by org files. See [[file:./do.org]] for
+  more details.
+
 ** 1.2.5
 - Improve behavior of ~orgstrap-blacklist-current-file~.
 

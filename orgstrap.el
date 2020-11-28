@@ -3,7 +3,7 @@
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.2.5
+;; Version: 1.2.6
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -70,7 +70,9 @@ using `setq-default' since it will not change automatically.")
 
 (defvar-local orgstrap-block-checksum nil
   "Local variable for the expected checksum for the current orgstrap block.")
-(put 'orgstrap-cypher 'safe-local-variable (lambda (v) (ignore v) t))
+;; `orgstrap-block-checksum' is not a safe local variable, if it is set
+;; as safe then there will be no check and code will execute without a check
+;; it is also not risky, so we leave it unmarked
 
 (defconst orgstrap--internal-norm-funcs
   '(orgstrap-norm-func--prp-1.0
@@ -82,7 +84,7 @@ Used to determine which norm func names are safe local variables.")
   "Local variable for the name of the current orgstrap-norm-func.")
 (put 'orgstrap-norm-func-name 'safe-local-variable
      (lambda (value) (and orgstrap-mode (memq value orgstrap--internal-norm-funcs))))
-;; Unless orgstrap-mode is enabled and the name is in the list of
+;; Unless `orgstrap-mode' is enabled and the name is in the list of
 ;; functions that are implemented internally this is not safe
 
 (defvar orgstrap-norm-func #'orgstrap-norm-func--prp-1.1
@@ -337,7 +339,19 @@ universal prefix argument."
 
 (defun orgstrap--advise-no-eval-lv (command &rest args)
   "Advise COMMAND to disable elvs for files loaded inside it.
-ARGS will vary depending in which function was advised."
+ARGS vary by COMMAND.
+
+If the elvs are disabled then `orgstrap-block-checksum' is added
+to the `ignored-local-variables' list for files loaded inside
+COMMAND. This makes it possible to open orgstrapped files where
+the elvs will not run without having to accept the irrelevant
+variable for `orgstrap-block-checksum'."
+  ;; continually prompting users to accept a local variable when they
+  ;; cannot inspect the file and when accidentally accepting could
+  ;; allow unchecked execution at some point in the future is bad
+  ;; better to simply pretend that the elvs and the block checksum
+  ;; do not even exist unless the file is explicitly on a whitelist
+
   ;; orgstrapped files are just plain old org files in this context
   ;; since agenda doesn't use any babel functionality ... of course
   ;; I can totally imagine using orgstrap to automatically populate
@@ -346,19 +360,13 @@ ARGS will vary depending in which function was advised."
   ;; to control this
   (if orgstrap-always-eval
       (apply command args)
-    (let ((enable-local-eval (and args
-                                  orgstrap-always-eval-whitelist
-                                  (member (car args)
-                                          orgstrap-always-eval-whitelist)
-                                  enable-local-eval)))
-;; FIXME checksums are not correctly skipped here ? or do we not skip them ?
-;; (advice-add #'hack-local-variables-confirm :around #'orgstrap--hack-lv-confirm)
-;; doesn't realy do what we want because it will only fire once AND because those
-;; checksums that request confirmation should be accepted in a separate context
-;; the block itself will not evaluate, but I think we need a note to that effect?
-;; maybe we write a variant of `orgstrap--org-buffer' that strips all checksums or
-;; something like that? modifying `orgstrap--org-buffer' doesn't seem to be the
-;; right approach .... I've tried and it is really to run, not to not run things
+    (let* ((enable-local-eval (and args
+                                   orgstrap-always-eval-whitelist
+                                   (member (car args)
+                                           orgstrap-always-eval-whitelist)
+                                   enable-local-eval))
+           (ignored-local-variables (if enable-local-eval ignored-local-variables
+                                      (cons 'orgstrap-block-checksum ignored-local-variables))))
       (apply command args))))
 
 (advice-add #'org-get-agenda-file-buffer :around #'orgstrap--advise-no-eval-lv)
@@ -1005,20 +1013,6 @@ the minimal local variables will be used if possible."
 
 ;;; extra helpers
 
-;; leaving out the -on-open from these vars to reduce typing
-;; since these will be used repeatedly
-(defvar orgstrap-tangle nil
-  "Dynamic variable that by convention can be used inside orgstrap blocks.
-It makes it possible to run `org-babel-tangle' only when it is non-nil when set
-on the command line when launching Emacs with --batch.  Individual orgstrap
-blocks should also define (defvar orgstrap-on-tangle-open nil) if they want
-this functionality.")
-
-(defvar orgstrap-test nil
-  "Variable to control whether to run tests embedded in an orgstrap file.
-If non-nil then load the orgstrap block and run tests.")
-;; Running tests via a batch process can be a bit tricky if the test code is also part of the orgstrap block.
-
 (defun orgstrap-update-src-block (name content)
   "Set the content of source block named NAME to string CONTENT.
 XXX NOTE THAT THIS CANNOT BE USED WITH #+BEGIN_EXAMPLE BLOCKS."
@@ -1060,6 +1054,38 @@ Do this by providing the name of the block and the checksum to be embedded
 in the orgstrap block as NAME-CHECKSUM pairs."
   (ignore name-checksum)
   (error "TODO"))
+
+;; orgstrap-do-*
+
+;; dependencies
+(defcustom orgstrap-do-packages nil "Install some packages." :type 'boolean)
+(defcustom orgstrap-do-packages-emacs nil "Install Emacs packages." :type 'boolean)
+(defcustom orgstrap-do-packages-system nil "Install system packages." :type 'boolean)
+
+(defcustom orgstrap-do-data nil "Retrieve external data needed by file." :type 'boolean) ; TODO naming etc.
+
+;; configuration
+(defcustom orgstrap-do-config nil "Run code that modifies some configuration." :type 'boolean)
+(defcustom orgstrap-do-config-emacs nil "Run code that modifies the Emacs configuration." :type 'boolean)
+(defcustom orgstrap-do-config-system nil "Run code that modifies the system configuration." :type 'boolean)
+
+(defcustom orgstrap-do-services nil "Run services needed by file." :type 'boolean)
+
+;; batch functionality
+
+(defvar orgstrap-do-run nil "`org-babel-execute-buffer'")
+
+(defvar orgstrap-do-export nil "Run export.") ; TODO format XXX -do-build-document ox-ssh being an odd one
+(defvar orgstrap-do-publish nil "Run publish workflow.")
+
+(defvar orgstrap-do-tangle nil "`org-babel-tangle-file'.")
+
+(defvar orgstrap-do-build nil ; may imply tangle
+  "Produce one or more artifacts derived from the file.")
+
+(defvar orgstrap-do-test nil "Run tests.")
+
+(defvar orgstrap-do-deposit nil "Deposit build artifacts somewhere.")
 
 (provide 'orgstrap)
 
