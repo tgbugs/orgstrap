@@ -31,6 +31,8 @@ for bootstrap, or that can be reloaded, or installed as a package.
 
 ;;; Code:
 
+<<defl-impl>>
+
 <<run-command>>
 
 (defalias 'run-command #'ow-run-command)
@@ -82,6 +84,8 @@ for bootstrap, or that can be reloaded, or installed as a package.
 <<reval-impl>>
 
 <<defl-impl>>
+
+<<defl-extra-impl>>
 
 <<run-command>>
 

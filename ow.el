@@ -333,6 +333,54 @@ then the current implementation will break."
 
 (defalias 'defun-local #'defl)
 
+(defun defl-defalias-local (symbol definition &optional docstring)
+  "Define a buffer local alias. NOTE only works for functions.
+It is not really needed for variables since `setq-local' covers
+nearly every use case. Note that the way this is defined uses
+`defun-local' so it probably does not behave like a real alias."
+  (if (symbol-function definition)
+      (defun-local symbol (&rest args)
+        docstring
+        (apply definition args))
+    (error "%S does not point to a function" definition)))
+
+(defun defl--raw-symbol-function (name)
+  "Return unadvised form of NAME. NOT THREAD SAFE."
+  (if (advice-member-p #'defl--has-local-defuns name)
+      (unwind-protect
+          (progn
+            (advice-remove name #'defl--has-local-defuns)
+            (symbol-function name))
+        ;; FIXME > assuming that name was previously advised
+        (advice-add name :around #'defl--has-local-defuns))
+    (symbol-function name)))
+
+(defun defl--fmakunbound-local (command &rest args)
+  "Advise COMMAND `fmakunbound' to be aware of `defun-local' forms."
+  (if defl--local-defun-names
+      (let* ((name (car args))
+             (local-name (gethash name defl--local-defun-names)))
+        ;; FIXME If we mimic the behavior of defvar-local then
+        ;; we should never remove the error stub, but this is
+        ;; a bit different because we can't change how defun works to
+        ;; mimic how setq works and then have defun-default that mimics
+        ;; how setq-default works, the behavior of local variables is
+        ;; already confusing enough without having to also deal with the
+        ;; the fact that defun and defvar have radically different behavior
+        ;; with regard to redefinition
+        ;; FIXME it would still be nice to be able to remove the advice
+        ;; from the global function when the last local function ceases
+        ;; to be defined but that can be for later
+        (if local-name
+            (progn
+              (apply command (list local-name))
+              (remhash (defl--raw-symbol-function name) defl--local-defuns)
+              (remhash name defl--local-defun-names))
+          (apply command args)))
+    (apply command args)))
+
+;;(advice-add #'fmakunbound :around #'defl--fmakunbound-local)
+
 (defun ow-run-command (command &rest args)
   "Run COMMAND with ARGS. Raise an error if the return code is not zero."
   ;; I'm being a good namespace citizen and prefixing this with ow- but
