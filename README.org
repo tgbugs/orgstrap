@@ -1,4 +1,4 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: a22f3155e9742f2aaa1eb98d27ce545f557b6bdf6ab0614bf9b83bc8d58de95a; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 217d1560cc61944ea2ad9d033a9bc074b1fa014f3ade630642f4f971c465cb9d; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Orgstrap: Executable Org files
 #+startup: showall
@@ -725,7 +725,7 @@ Here is the prop line from the first line of this file that
 includes the cypher and checksum of the =orgstrap= block.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: a22f3155e9742f2aaa1eb98d27ce545f557b6bdf6ab0614bf9b83bc8d58de95a; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 217d1560cc61944ea2ad9d033a9bc074b1fa014f3ade630642f4f971c465cb9d; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 #+end_src
 
 # BE VERY CAREFUL WITH MANUAL EDITS
@@ -1738,21 +1738,21 @@ See [[./do.org]] for more on what these are and how to use them.
 #+begin_src elisp
 ;; orgstrap-do-*
 
-;; dependencies (ref:do-deps)
-(defcustom orgstrap-do-packages nil "Install some packages." :type 'boolean)
-(defcustom orgstrap-do-packages-emacs nil "Install Emacs packages." :type 'boolean)
-(defcustom orgstrap-do-packages-system nil "Install system packages." :type 'boolean)
+;; dependencies (default on) (ref:do-deps)
+(defcustom orgstrap-do-packages t "Install some packages." :type 'boolean)
+(defcustom orgstrap-do-packages-emacs t "Install Emacs packages." :type 'boolean)
+(defcustom orgstrap-do-packages-system t "Install system packages." :type 'boolean)
 
-(defcustom orgstrap-do-data nil "Retrieve external data needed by file." :type 'boolean) ; TODO naming etc. (ref:do-data)
+(defcustom orgstrap-do-data t "Retrieve external data needed by file." :type 'boolean) ; TODO naming etc. (ref:do-data)
 
 ;; configuration
-(defcustom orgstrap-do-config nil "Run code that modifies some configuration." :type 'boolean) ;(ref:do-config)
-(defcustom orgstrap-do-config-emacs nil "Run code that modifies the Emacs configuration." :type 'boolean)
-(defcustom orgstrap-do-config-system nil "Run code that modifies the system configuration." :type 'boolean)
+(defcustom orgstrap-do-config t "Run code that modifies some configuration." :type 'boolean) ;(ref:do-config)
+(defcustom orgstrap-do-config-emacs t "Run code that modifies the Emacs configuration." :type 'boolean)
+(defcustom orgstrap-do-config-system t "Run code that modifies the system configuration." :type 'boolean)
 
-(defcustom orgstrap-do-services nil "Run services needed by file." :type 'boolean)
+(defcustom orgstrap-do-services t "Run services needed by file." :type 'boolean)
 
-;; batch functionality
+;; batch functionality (default off)
 
 (defvar orgstrap-do-run nil "`org-babel-execute-buffer'")
 
@@ -1790,7 +1790,7 @@ that will be used to manage and run data that sits elsewhere
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.2.6                             (ref:orgstrap.el-version)
+;; Version: 1.2.7                             (ref:orgstrap.el-version)
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -2061,6 +2061,13 @@ Things that need to be done for a release.
 :PROPERTIES:
 :CUSTOM_ID: changelog
 :END:
+** 1.2.7
+- Fix bad defaults on ~orgstrap-do-*~ custom variables.
+
+  If these are not set to t by default then it is impossible
+  individual blocks to know whether a nil value was intentional on the
+  part of the user or not. Users _must_ set values to nil in their
+  config if they do not want certain sections to run.
 ** 1.2.6
 - Ignore ~orgstrap-block-checksum~ when loading ~org-agenda~.
 
@@ -2074,7 +2081,6 @@ Things that need to be done for a release.
   Boolean control variables that can be used enable/disable standard
   functionality/steps needed by org files. See [[file:./do.org]] for
   more details.
-
 ** 1.2.5
 - Improve behavior of ~orgstrap-blacklist-current-file~.
 
@@ -2149,7 +2155,6 @@ Things that need to be done for a release.
   need a way to revoke eval local variables. There is no granular
   control. Use ~orgstrap-revoke-eval-local-variables~ to nuke all
   orgstrap eval local variables from orbit.
-
 ** 1.2.1
 - Fix bad startup visibility when using orgstrap.
 
@@ -2498,6 +2503,11 @@ take nearly 3 hours to complete and debug.
 :CUSTOM_ID: future-work
 :visibility: children
 :END:
+** FIXME orgstrap-edit-mode fails to active when orgstrap-mode is enabled
+:PROPERTIES:
+:CREATED:  [2020-11-29 Sun 00:10]
+:END:
+annoying
 ** Tutorial videos for various workflows
 Record a series of short screen casts to illustrate common orgstrap
 authoring and consumption workflows.

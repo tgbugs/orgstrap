@@ -3,7 +3,7 @@
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.2.6
+;; Version: 1.2.7
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -1057,21 +1057,21 @@ in the orgstrap block as NAME-CHECKSUM pairs."
 
 ;; orgstrap-do-*
 
-;; dependencies
-(defcustom orgstrap-do-packages nil "Install some packages." :type 'boolean)
-(defcustom orgstrap-do-packages-emacs nil "Install Emacs packages." :type 'boolean)
-(defcustom orgstrap-do-packages-system nil "Install system packages." :type 'boolean)
+;; dependencies (default on)
+(defcustom orgstrap-do-packages t "Install some packages." :type 'boolean)
+(defcustom orgstrap-do-packages-emacs t "Install Emacs packages." :type 'boolean)
+(defcustom orgstrap-do-packages-system t "Install system packages." :type 'boolean)
 
-(defcustom orgstrap-do-data nil "Retrieve external data needed by file." :type 'boolean) ; TODO naming etc.
+(defcustom orgstrap-do-data t "Retrieve external data needed by file." :type 'boolean) ; TODO naming etc.
 
 ;; configuration
-(defcustom orgstrap-do-config nil "Run code that modifies some configuration." :type 'boolean)
-(defcustom orgstrap-do-config-emacs nil "Run code that modifies the Emacs configuration." :type 'boolean)
-(defcustom orgstrap-do-config-system nil "Run code that modifies the system configuration." :type 'boolean)
+(defcustom orgstrap-do-config t "Run code that modifies some configuration." :type 'boolean)
+(defcustom orgstrap-do-config-emacs t "Run code that modifies the Emacs configuration." :type 'boolean)
+(defcustom orgstrap-do-config-system t "Run code that modifies the system configuration." :type 'boolean)
 
-(defcustom orgstrap-do-services nil "Run services needed by file." :type 'boolean)
+(defcustom orgstrap-do-services t "Run services needed by file." :type 'boolean)
 
-;; batch functionality
+;; batch functionality (default off)
 
 (defvar orgstrap-do-run nil "`org-babel-execute-buffer'")
 
