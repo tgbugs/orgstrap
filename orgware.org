@@ -39,7 +39,7 @@ for bootstrap, or that can be reloaded, or installed as a package.
 
 <<ow-utils>>
 
-(defun ow--reval-update ()
+(defun ow-min--reval-update ()
   "Get the immutable url for the current remote version of this file."
   (reval-get-imm-github "tgbugs" "orgstrap" "ow-min.el"))
 
@@ -80,6 +80,8 @@ for bootstrap, or that can be reloaded, or installed as a package.
 ;;; Code:
 
 <<reval-impl>>
+
+<<defl-impl>>
 
 <<run-command>>
 
@@ -586,6 +588,7 @@ All errors are silenced."
 #+name: orgstrap
 #+begin_src elisp :results none :lexical yes
 (defun ow---pre-tangle ()
+  (org-babel-lob-ingest "./defl.org")
   ;; ensure that reval has been ingested so we can tangle the reval-impl block
   (org-babel-lob-ingest "./reval.org"))
 

@@ -272,27 +272,66 @@ Useful when developing against a local path or a mutable remote id.
 If UNIVERSAL-ARGUMENT is non-nil then `reval-audit' is skipped, please use
 this functionality responsibly."
   (interactive "P")
-  (save-excursion
-    (re-search-backward "(reval[[:space:]]")
-    (let ((begin (point)))
-      (forward-sexp)
-      (let ((raw (read (buffer-substring-no-properties begin (point)))))
-        ;;(message "aaaaa: %S %S %S" raw (symbolp (elt raw 1)) (type-of (elt raw 1)))
-        (let ((cypher (let ((cy (elt raw 1)))
-                        ;; '(sigh 'sigh) XXX the usual eval dangerzone >_<
-                        (if (reval--dquote-symbolp cy) (eval cy) reval-default-cypher)))
-              (checksum (let ((cs (elt raw 2)))
-                          (if (reval--dquote-symbolp cs) (eval cs) nil)))
-              (path-or-url (elt raw 3))
-              (reval--make-audit (not universal-argument)))
-          (unless (memq cypher (secure-hash-algorithms))
-            (error "%S is not a known member of `secure-hash-algorithms'" cypher))
-          (let ((new (reval--make cypher path-or-url))
-                (print-quoted t)
-                print-length
-                print-level)
-            (backward-kill-sexp)
-            (insert (prin1-to-string new))))))))
+  (with-url-handler-mode
+    (save-excursion
+      (re-search-backward "(reval[[:space:]]")
+      (let ((begin (point)))
+        (forward-sexp)
+        (let ((raw (read (buffer-substring-no-properties begin (point)))))
+          ;;(message "aaaaa: %S %S %S" raw (symbolp (elt raw 1)) (type-of (elt raw 1)))
+          (let ((cypher (let ((cy (elt raw 1)))
+                          ;; '(sigh 'sigh) XXX the usual eval dangerzone >_<
+                          (if (reval--dquote-symbolp cy) (eval cy) reval-default-cypher)))
+                (checksum (let ((cs (elt raw 2)))
+                            (if (reval--dquote-symbolp cs) (eval cs) nil)))
+                (path-or-url (elt raw 3))
+                (reval--make-audit (not universal-argument)))
+            (unless (memq cypher (secure-hash-algorithms))
+              (error "%S is not a known member of `secure-hash-algorithms'" cypher))
+            (let ((new (reval--make cypher path-or-url))
+                  (print-quoted t)
+                  print-length
+                  print-level)
+              (backward-kill-sexp)
+              (insert (prin1-to-string new)))))))))
+
+(defvar-local defl--local-defuns nil
+  "A hash table that maps global closures to local function symbols.
+Needed to dispatch on command passed to :around advice.")
+
+(defvar-local defl--local-defun-names nil
+  "A hash table that maps global function symbols to local function symbols.")
+
+(defun defl--has-local-defuns (command &rest args)
+  "Advise COMMAND with ARGS to check if there are buffer local defuns."
+  (let ((command (or (and defl--local-defuns
+                          (gethash command defl--local-defuns))
+                     command)))
+    (apply command args)))
+
+(defmacro defl (name arglist &optional docstring &rest body)
+  "Define a buffer local function.
+ARGLIST, DOCSTRING, and BODY are passed unmodified to `defun'
+
+WARNING: If you redefine NAME with `defun' after using `defun-local'
+then the current implementation will break."
+  (declare (doc-string 3) (indent 2))
+  (unless defl--local-defuns
+    (setq-local defl--local-defuns (make-hash-table :test #'equal)))
+  (unless defl--local-defun-names
+    (setq-local defl--local-defun-names (make-hash-table)))
+  (let ((docstring (if docstring (list docstring) docstring))
+        (local-name (or (gethash name defl--local-defun-names)
+                        (puthash name (cl-gentemp (format "%S-" name)) defl--local-defun-names))))
+    `(prog1
+         (defun ,local-name ,arglist ,@docstring ,@body)
+       (unless (fboundp ',name)
+         (defun ,name (&rest args) (error "global stub for defun-local %s" #',name))
+         (put ',name 'defun-local-stub t))
+       (puthash (symbol-function #',name) #',local-name defl--local-defuns) ; XXX broken if the stub is overwritten
+       (advice-add #',name :around #'defl--has-local-defuns))))
+
+(defalias 'defun-local #'defl)
 
 (defun ow-run-command (command &rest args)
   "Run COMMAND with ARGS. Raise an error if the return code is not zero."

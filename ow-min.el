@@ -81,7 +81,7 @@ All errors are silenced."
           (re-search-forward "^HTTP.+OK$"))
       (error nil))))
 
-(defun ow--reval-update ()
+(defun ow-min--reval-update ()
   "Get the immutable url for the current remote version of this file."
   (reval-get-imm-github "tgbugs" "orgstrap" "ow-min.el"))
 
