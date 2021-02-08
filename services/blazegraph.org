@@ -48,6 +48,13 @@
   (let ((port (or port blazegraph-port))
         (prefixes (or prefixes "data/prefixes.conf"))
         (journal (or journal "data/blazegraph.jnl")))
+    ; this expects to be called with `default-directory' matching
+    ; the default directory for the blazegraph process
+    ; so it is safe to check relative paths
+    (when (and prefixes (not (file-exists-p prefixes)))
+      (warning "prefixes file does not exist: %s" prefixes))
+    (unless (file-exists-p journal)
+      (warning "journal file does not exist: %s" journal))
     `((jetty.port . ,port)
       ;; (log4j.logger.com.bigdata . INFO)
       (com.bigdata.journal.AbstractJournal.file . ,journal)

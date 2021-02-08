@@ -50,7 +50,7 @@ for bootstrap, or that can be reloaded, or installed as a package.
 ;;; ow-min.el ends here
 
 #+end_src
-# <<ow-package>>
+# <<&ow-package>>
 
 #+begin_src elisp :noweb no-export :tangle ./ow.el :lexical yes
 ;;; ow.el --- Common functionality for Orgware files. -*- lexical-binding: t -*-
@@ -93,7 +93,7 @@ for bootstrap, or that can be reloaded, or installed as a package.
 
 <<ow-utils>>
 
-<<ow-package>>
+<<&ow-package>>
 
 <<ow-usability>>
 
@@ -199,12 +199,21 @@ NOTE: `undo-fu' is required for Emacs < 28."
   (cua-mode t)
   ;; enable Cmd Shift Z for apple users Ctrl y for windows
   (when (fboundp #'undo-redo)
-      (if (eq system-type 'darwin)
-          (local-set-key "C-Z" #'undo-redo)
+    (if (eq system-type 'darwin)
+        (local-set-key "C-Z" #'undo-redo)
       (local-set-key "C-y" #'undo-redo)))
 
   ;; Use left mouse to cycle
   (ow-enable-mouse-cycle)
+
+  ;; Mouse wheel behavior
+  (setq-local mouse-wheel-progressive-speed nil)
+  (setq-local mouse-wheel-scroll-amount '(3 ((shift) . hscroll)))
+
+  ;; Mouse on scroll bar behavior
+  ;; TODO this is not quite right
+  (global-unset-key [vertical-scroll-bar mouse-1])
+  (global-set-key [vertical-scroll-bar down-mouse-1] 'scroll-bar-drag)
 
   ;; default shift functionality is usually not needed in ow files and
   ;; the message when you try to use it can be extremely confusing
@@ -258,6 +267,11 @@ See the ~isearch-tool-bar-map~ for an example of how to do this.
   "Create a new button type."
   (org-link-set-parameters link-name :export #'ow-link-no-export :follow function))
 
+(defmacro ow-defbutton (link-name &rest body)
+  `(ow-button ,link-name (lambda () ,@body)))
+
+;; TODO defalias defbutton ow-defbutton
+
 ;; hide headline for future startups
 
 (org-link-set-parameters "FOLD-HEADLINE" :export #'ow-link-no-export :follow
@@ -304,7 +318,7 @@ See the ~isearch-tool-bar-map~ for an example of how to do this.
                            (ow-recenter-on-mouse)))
 #+end_src
 ** Packages
-#+name: ow-package
+#+name: &ow-package
 #+begin_src elisp
 (defvar ow-package-archives '(("melpa" . "https://melpa.org/packages/")
                               ("org" . "https://orgmode.org/elpa/")))
@@ -475,6 +489,25 @@ to do this to itself). Technically this is a bit simpler because many
 of the functions are builtin and because it is possible to run the
 byte compiler and collect warnings. Doing full dependency tree shaking
 is out of scope at the moment.
+**** More thinking.
+:PROPERTIES:
+:CREATED:  [2020-11-29 Sun 01:47]
+:END:
+Having now implemented and used ~reval~ for a while the attraction of
+being able to pin to a stable git commit is extremely valuable for
+certain use cases. Thus using straight as a way to manage packages
+seems reasonable. I'm not sure we want to do it by default, but it is
+clear that it meets the single reproducible path criteria. Figuring
+out how to lift that single path into the more generic specification
+or vice versa seems consistent with the balance between reproducible
+and robust.
+
+Storing evidence and implementation of robustness is desirable, but
+having good established best practices for managing the stable path is
+equally important. Having =orgstrap-materialize-all-dependencies= or
+something similar would be another way to handle this. Here is a copy
+of a minimal chroot environment in which this runs. For example, base
+system, Emacs, and maybe git using the gentoo docker images.
 ** Run process as command
 :PROPERTIES:
 :CUSTOM_ID: run-process-as-command
@@ -587,12 +620,126 @@ All errors are silenced."
           (re-search-forward "^HTTP.+OK$"))
       (error nil))))
 #+end_src
+* Emacs sandbox
+Not quite a sandbox yet, but at least a clean slate.
+
+I think two side by side impls are probably better for this rather
+than replaying the insanity that is [[./get-emacs.org]]
+
+Today we learn about the WAT that is ~<<~. Apparently the way to
+prevent variables from being interpreted in the heredoc is to SINGLE
+QUOTE THE LIMIT STRING SPECIFICATION !?!?!?!?! WAT.
+https://stackoverflow.com/a/2954835. See also
+https://stackoverflow.com/a/23930212.
+#+begin_src bash :shebang "#!/usr/bin/env bash" :tangle ./orgware :noweb no-export
+#read -r -d '' OW_INIT << 'EOF'
+#<<&orgware-cli-init>>
+#EOF
+read -r -d '' OW_ELISP << 'EOF'
+<<&orgware-cli-elisp>>
+EOF
+# FIXME @ needs to be split for -Q -q and --no-init-file and --quick
+# everything else goes before the --
+# FIXME -Q seems that it will prevent persistence of save local variable values?
+
+# using mktemp is inefficient, but it is the simplest way to
+# get emacs to do something other than normal without using -Q or -q
+# and since -l won't accept a file descriptor <(echo 'asdf')
+#__el_path="$(mktemp -t orgware-init-XXXXXX.el)"
+#echo "${OW_INIT}" > "${__el_path}"
+#echo ${__el_path}
+#read
+#-l "${__el_path}" \
+emacs -q \
+--eval "${OW_ELISP}" \
+-- $@
+#CODE=$?
+#rm "${__el_path}"
+#exit $CODE
+#+end_src
+
+Ironically the approach that I ditched in favor of orgstrap which
+involved invoking emacs twice to tangle the files that were then
+passed to emacs via ~-l~ when it was invoked the second time was
+actually on to something >_<.
+# this is backward from how it should be, follow the doom patter here?
+# except for the fact that getting the last bits of the behavior to
+# mimic doom run is a pain because what doom/bin/doom actually does is
+# a bit crazier than I had appreciated due to the fact that I don't
+# use it as my primary emacs, there is an entire secondary process
+# that doom invokes after running the usual doom script by returning
+# 128 as a magic number and
+
+# lol just as with the org-mode grammar, to get emacs to start up
+# correctly with an alternate init file you have to prevent everything
+# from loading and then put back the stuff you want >_<
+
+#+name: &orgware-cli-init
+#+begin_src elisp :noweb no-export
+(setq user-emacs-directory (expand-file-name "~/.orgware.d/"))
+
+(let ((args (member "--" command-line-args)))
+  (if (member "-q" args) ; FIXME yeah, the old bad version actually has it right >_<
+      (delete "-q" args) ; should propagate since "--" is car ?
+    (setq user-init-file (expand-file-name "~/.orgware.d/init.el"))))
+
+; TODO probably add a custom.el file to avoid the usual init.el files
+<<&ow-package>>
+#+end_src
+put ow package in the init so that that way it will have a location on
+the file system in the event someone needs to resolve the function
+xref
+
+#+name: &orgware-cli-elisp
+#+begin_src elisp :noweb no-export
+(progn
+  <<&orgware-cli-init>>
+  (ow-enable-use-package)
+  (when (and user-init-file (file-exists-p user-init-file))
+    (load user-init-file))
+  (use-package orgstrap)
+  (orgstrap-mode 1))
+#+end_src
+
+old bad, or ... maybe not bad, emacs really really doesn't
+want you to be able to run it with an alternate configuration file
+and then have another config
+#+begin_src elisp :noweb no-export
+(let* ((args (member "--" command-line-args))
+       ;; FIXME or will terminate early before removing all of them
+       ;; I think there is a verions of or that hits all?
+       (no-init
+        (mapcar
+         ;; FIXME ugh this is so obvously broken
+         (lambda (flag)
+           (when (member flag args)
+             ;; XXX this is kind of dangerous, except that we know that "--" is always the car
+             (setq args (delete flag command-line-args))))
+         '("-q" "--no-init-file" "-Q" "--quick"))))
+   (message "%S" no-init)
+  ;;`normal-top-level' ; oh dear
+  ;;(setq user-emacs-directory (expand-file-name "~/.orgware.d/"))
+  (unless no-init
+    (setq user-init-file (expand-file-name "~/.orgware.d/init.el")))
+  <<&ow-package>>
+  (ow-enable-use-package)
+  (use-package orgstrap)
+  (orgstrap-mode 1))
+#+end_src
+** config file?
+There is a question of whether to default to the users init.el by
+running without -q, but it seems like it would be wiser to tell
+people to just use -l ~/.emacs.d/init.el and/or to load a potentially
+non-existent init-orgware.el config file or something like that?
+** persist known safe hashes to custom variables
+It is critical that known safe hashes be stored in a way that is
+persistent to prevent prompt fatigue.
 * Bootstrap :noexport:
 
 #+name: orgstrap
 #+begin_src elisp :results none :lexical yes
 (defun ow---pre-tangle ()
-  (org-babel-lob-ingest "./defl.org")
+  (org-babel-lob-ingest "./defl.org") ; chicken meet egg
   ;; ensure that reval has been ingested so we can tangle the reval-impl block
   (org-babel-lob-ingest "./reval.org"))
 

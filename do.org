@@ -71,6 +71,15 @@ environment setup. These overlap heavily with run-once, with a note
 that run-once really needs to be implemented as a series of tests to
 see whether certain things need to be run.
 
+As it turns out development setup actually involves a second set of
+issues which is that either files need to specify their own
+development setup, which seems bad, but is much easier, or orgware
+needs to have its own [[file:~/orgware.d/init.el]] or and/or
+[[file:~/orgware.d/dev.el]] that will only be loaded if orgware is
+launched with a command line flag or similar. If we have an init.el
+then we could provide common patterns without having to bake dev.el
+into the minimal setup. Hard to know.
+
 These are provided so that _if_ there is a confluence of one of the
 phases with a single entire org file, then you _can_ control it via
 batch. If you are in a situation where there are multiple things that
@@ -236,19 +245,19 @@ controlled separately."
 ;; their requirements?
 
 ;; (ref:do-deps-cands)
-(defvar orgstrap-do-deps nil "Install all packages.")
-(defvar orgstrap-do-dependencies nil "Install all packages.")
-(defvar orgstrap-do-install-dependencies nil "Install all packages.")
-(defvar orgstrap-do-install-prerequisites nil "Install all packages.")
+(defvar orgstrap-do-deps t "Install all packages.")
+(defvar orgstrap-do-dependencies t "Install all packages.")
+(defvar orgstrap-do-install-dependencies t "Install all packages.")
+(defvar orgstrap-do-install-prerequisites t "Install all packages.")
 ;; bads
-(defvar orgstrap-do-deps-code nil "")
-(defvar orgstrap-do-deps-runtime nil "")
-(defvar orgstrap-do-deps-toolchain nil "")
-(defvar orgstrap-do-deps-data nil "")
+(defvar orgstrap-do-deps-code t "")
+(defvar orgstrap-do-deps-runtime t "")
+(defvar orgstrap-do-deps-toolchain t "")
+(defvar orgstrap-do-deps-data t "")
 
 ;; (ref:do-config-cands)
-(defcustom orgstrap-do-setup nil "Run other setup steps.")  ; FIXME this is closer to emerge --config
-(defcustom orgstrap-do-config-services nil "Run code that modifies the services configuration." :type 'boolean)
+(defcustom orgstrap-do-setup t "Run other setup steps.")  ; FIXME this is closer to emerge --config
+(defcustom orgstrap-do-config-services t "Run code that modifies the services configuration." :type 'boolean)
 
 ;; (ref:do-test-cands)
 (defvar orgstrap-do-test-elisp nil "Run tests on elisp for the file.") ;  not clear we need this? XXX NAMING
@@ -263,6 +272,23 @@ controlled separately."
 ;; dev stage prod passed some other way? in some cases a separate org file might make more sense?
 ;; not if a single file defines multiple different blocks that enable different functionality
 ;; as discussed elsewhere, trying to flatten a high dimensional workflow into boolean args is hard
+
+;; development
+
+(defvar orgstrap-do-devel nil "Run development specific init code.")
+
+;; it is not at all clear that this is the right approach
+;; the primary issue that I'm struggling with is the need for some way
+;; to work around the consequences of emacs -q/emacs -Q and the lack
+;; of a dedicated orgware init.el file that could be used to implement
+;; whatever development setup code is needed completely orthognonal to
+;; to the od functionality here, in fact, having written this, it is
+;; now clear to me that orgstrap-do-devel is the complete wrong solution
+;; because the switch between development probably should to separate
+;; from the orgstrap block because development environments can be even
+;; more wildly divergent that other systems, the practice of checking
+;; featurep provides clear guidance for how to work around the issue
+;; via an init file
 
 ;; other
 (defvar orgstrap-do-sync nil "Have the file synchronize itself with some remote.")

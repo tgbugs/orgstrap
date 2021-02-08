@@ -533,6 +533,11 @@ to any use of `use-package' otherwise it will be missing and fail"
   "Create a new button type."
   (org-link-set-parameters link-name :export #'ow-link-no-export :follow function))
 
+(defmacro ow-defbutton (link-name &rest body)
+  `(ow-button ,link-name (lambda () ,@body)))
+
+;; TODO defalias defbutton ow-defbutton
+
 ;; hide headline for future startups
 
 (org-link-set-parameters "FOLD-HEADLINE" :export #'ow-link-no-export :follow
@@ -593,12 +598,21 @@ NOTE: `undo-fu' is required for Emacs < 28."
   (cua-mode t)
   ;; enable Cmd Shift Z for apple users Ctrl y for windows
   (when (fboundp #'undo-redo)
-      (if (eq system-type 'darwin)
-          (local-set-key "C-Z" #'undo-redo)
+    (if (eq system-type 'darwin)
+        (local-set-key "C-Z" #'undo-redo)
       (local-set-key "C-y" #'undo-redo)))
 
   ;; Use left mouse to cycle
   (ow-enable-mouse-cycle)
+
+  ;; Mouse wheel behavior
+  (setq-local mouse-wheel-progressive-speed nil)
+  (setq-local mouse-wheel-scroll-amount '(3 ((shift) . hscroll)))
+
+  ;; Mouse on scroll bar behavior
+  ;; TODO this is not quite right
+  (global-unset-key [vertical-scroll-bar mouse-1])
+  (global-set-key [vertical-scroll-bar down-mouse-1] 'scroll-bar-drag)
 
   ;; default shift functionality is usually not needed in ow files and
   ;; the message when you try to use it can be extremely confusing

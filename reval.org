@@ -102,6 +102,16 @@ be used compositionally in expressions like the following.
 #+begin_src elisp
 (unless (featurep 'file) (reval 'sha256 ? "https://example.org/file.el"))
 #+end_src
+* Issues
+** TODO Diff when updating
+:PROPERTIES:
+:CREATED:  [2020-11-28 Sat 22:56]
+:END:
+It is hard to audit a whole file every single time it is updated.
+When update is called and there is an existing immutable url or a
+cached version of the hash the new version should be diffed against
+the existing version and the changes should be displayed for easier
+review.
 * reval.el
 ** tangles
 #+begin_src elisp :noweb no-export :tangle ./reval.el :lexical yes

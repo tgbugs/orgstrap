@@ -2503,6 +2503,10 @@ take nearly 3 hours to complete and debug.
 :CUSTOM_ID: future-work
 :visibility: children
 :END:
+** Safe local variable values need backlinks.
+~orgstrap-block-checksum-sources~ alist as a custom variable so that it is
+easier for people to know what came from where in a summary even though
+we have the revoke functionality.
 ** FIXME orgstrap-edit-mode fails to active when orgstrap-mode is enabled
 :PROPERTIES:
 :CREATED:  [2020-11-29 Sun 00:10]

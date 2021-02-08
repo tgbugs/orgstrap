@@ -1,4 +1,5 @@
 #+title: defl: Buffer local functions
+#+property: header-args:elisp :lexical yes
 
 * Intro
 The best way to avoid these issues is to upstream common functions
