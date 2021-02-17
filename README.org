@@ -2594,7 +2594,7 @@ Therefore, since =:cache yes= by itself is a dead end for ensuring that function
 is always available any time a file is loaded there are a couple of options.
 1. Persist to =init.el=. This is evil.
 2. Request to tangle and install as package.
-   A variant of this is simply to use packages.el to install
+   A variant of this is simply to use package.el to install
    the desired functionality in a persistent way in combination
    with accept klobbering.
 3. Figure out how to transparently wrap an elisp block in =unless=.

@@ -225,38 +225,39 @@ is ok before continuing."
   ;; we don't need to check or review alternates here because they
   ;; must all be identical
   (let (enable-local-eval)
-    (save-window-excursion
-      (with-current-buffer buffer
-        (unless (file-exists-p (buffer-file-name))
-          ;; NOTE url-handler-mode must be set in the calling context
-          ;; this case should not happen, only extant files should make it here
-          (error "reval-resum: file does not exist! %s" (buffer-file-name)))
-        (when review
-          (switch-to-buffer (current-buffer))
-          ;; FIXME `yes-or-no-p' still blocks the command loop in >= 27 emacsclient
-          (unless (yes-or-no-p "Audit of file ok? ") ; not using `y-or-n-p' since it is too easy
-            (error "Audit failed. Checksum will not be calculated for %s"
-                   (buffer-file-name (current-buffer)))))
+    (save-excursion
+      (save-window-excursion
+        (with-current-buffer buffer
+          (unless (file-exists-p (buffer-file-name))
+            ;; NOTE url-handler-mode must be set in the calling context
+            ;; this case should not happen, only extant files should make it here
+            (error "reval-resum: file does not exist! %s" (buffer-file-name)))
+          (when review
+            (switch-to-buffer (current-buffer))
+            ;; FIXME `yes-or-no-p' still blocks the command loop in >= 27 emacsclient
+            (unless (yes-or-no-p "Audit of file ok? ") ; not using `y-or-n-p' since it is too easy
+              (error "Audit failed. Checksum will not be calculated for %s"
+                     (buffer-file-name (current-buffer)))))
 
-        ;; need to ensure that file is actually elisp
-        ;; note that in some cases read can succeed
-        ;; even when a file is not elisp e.g. an html
-        ;; file can sometimes read without error but
-        ;; will fail on eval
+          ;; need to ensure that file is actually elisp
+          ;; note that in some cases read can succeed
+          ;; even when a file is not elisp e.g. an html
+          ;; file can sometimes read without error but
+          ;; will fail on eval
 
-        ;; elisp check by major mode
-        (unless (eq major-mode 'emacs-lisp-mode)
-          (error "Not an emacs lisp file!"))
+          ;; elisp check by major mode
+          (unless (eq major-mode 'emacs-lisp-mode)
+            (error "Not an emacs lisp file!"))
 
-        ;; elisp check by read
-        (condition-case nil
-            (read (concat "(progn\n"
-                          (buffer-substring-no-properties (point-min) (point-max))
-                          "\n)"))
-          (error (error "Not an emacs lisp file!")))
+          ;; elisp check by read
+          (condition-case nil
+              (read (concat "(progn\n"
+                            (buffer-substring-no-properties (point-min) (point-max))
+                            "\n)"))
+            (error (error "Not an emacs lisp file!")))
 
-        ;; return the checksum
-        (intern (secure-hash cypher (current-buffer)))))))
+          ;; return the checksum
+          (intern (secure-hash cypher (current-buffer))))))))
 
 (defun reval-resum-minimal (cypher buffer)
   "Checksum of BUFFER under CYPHER." ; minimal for maximal porability
@@ -274,7 +275,7 @@ This should not be used directly at the top level see docs for `reval'
 for a better workflow."
   (unless reval--make-audit
     (warn "`reval--make' not auditing %S" path-or-url))
-  (let ((checksum (reval-resum cypher (reval-id->buffer path-or-url) reval--make-audit)))
+  (let ((checksum (reval-resum-review cypher (reval-id->buffer path-or-url) reval--make-audit)))
     `(reval ',cypher ',checksum ,path-or-url)))
 
 (defun reval-audit ()
@@ -590,3 +591,5 @@ Run ~reval-update-simple~ on each of these.
 (reval 'sha512 ? "orgstrap.el")
 (reval ? ? "orgstrap-lol-not-here.el") ; should fail
 #+end_src
+
+# FIXME if two buffers are open at the same time reval will sometimes select the wrong buffer to insert back into
