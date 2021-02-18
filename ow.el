@@ -213,7 +213,7 @@ M-x `reval-update-simple' to populate CYPHER and CHECKSUM."
   (let* ((branch (or branch "master"))
          (url (format "https://api.github.com/repos/%s/%s/git/refs/heads/%s" group repo branch))
          (sha (gethash "sha" (gethash "object" (reval-url->json url)))))
-    (format "https://raw.githubusercontent.com/%s/%s/%s/%s" group repo branch path)))
+    (format "https://raw.githubusercontent.com/%s/%s/%s/%s" group repo sha path)))
 
 (defun reval-header-is-version-of (&optional file)
   "Return the Is-Version-Of: header for FILE or current buffer."
