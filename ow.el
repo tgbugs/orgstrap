@@ -440,13 +440,14 @@ All errors are silenced."
       (error nil))))
 
 (defvar ow-package-archives '(("melpa" . "https://melpa.org/packages/")
+                              ("nongnu" . "https://elpa.nongnu.org/nongnu/")
                               ("org" . "https://orgmode.org/elpa/")))
 
 (defun ow-enable-use-package ()
   "Do all the setup needed `use-package'.
 This needs to be called with (eval-when-compile ...) to the top level prior
 to any use of `use-package' otherwise it will be missing and fail"
-  ;; package archives is not an argument to this function to ensure that
+  ;; package-archives is not an argument to this function to ensure that
   ;; there is only one place that needs to be updated if an archive location
   ;; changes, namely this library, updating that is easier to get right using
   ;; the `reval-update' machinery
@@ -525,6 +526,8 @@ to any use of `use-package' otherwise it will be missing and fail"
     (save-buffer)))
 
 ;; don't export buttons
+
+(require 'ol)
 
 (defun ow-link-no-export (path desc format)
   "Return nothing for export" ; FIXME broken ???
@@ -610,8 +613,8 @@ NOTE: `undo-fu' is required for Emacs < 28."
   (setq-local mouse-wheel-progressive-speed nil)
   (setq-local mouse-wheel-scroll-amount '(3 ((shift) . hscroll)))
 
-  ;; Mouse on scroll bar behavior
-  ;; TODO this is not quite right
+  ;; Mouse on scroll bar behavior TODO this is not quite right, but I
+  ;; have no idea how to get emacs to stop resizing the sliders
   (global-unset-key [vertical-scroll-bar mouse-1])
   (global-set-key [vertical-scroll-bar down-mouse-1] 'scroll-bar-drag)
 
