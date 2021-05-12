@@ -3,11 +3,14 @@
 #+title: Orgstrap: Executable Org files
 #+startup: showall
 #+options: num:nil \n:nil
+
 #+property: header-args :eval no-export
-#+link: yt https://youtu.be/
-#+link: gh https://github.com/
+
 #+latex_header: \usepackage[margin=0.8in]{geometry}
 #+latex_header: \setlength\parindent{0pt}
+
+#+link: yt https://youtu.be/
+#+link: gh https://github.com/
 
 # [[file:./README.pdf]]
 # [[file:./README.html]]
