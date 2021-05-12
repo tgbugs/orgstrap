@@ -29,7 +29,7 @@
 
 ;; user config dir when testing
 
-(setq init-simple-testing t)
+(defvar init-simple-testing nil)
 
 (when init-simple-testing
   (defconst working-dir (file-name-directory (or load-file-name (buffer-file-name)))
