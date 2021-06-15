@@ -25,6 +25,9 @@
   :type 'symbol
   :options (secure-hash-algorithms))
 
+(defvar reval-cache-directory (concat user-emacs-directory "reval/cache/")
+  "The directory where retrieved .el files are saved.")
+
 (defvar reval-failed-buffer-list nil "List of failed reval buffers.")
 
 (defvar reval-evaled-buffer-list nil "List of evaled reval buffers.")
@@ -107,18 +110,15 @@ for a better workflow."
   (let ((checksum (reval-resum-review cypher (reval-id->buffer path-or-url) reval--make-audit)))
     `(reval ',cypher ',checksum ,path-or-url)))
 
-(defun reval-audit ()
-  "Audit the reval under the cursor."
+(defun reval-audit (&optional universal-argument)
+  "Audit the reval under the cursor." ; FIXME this needs a LOT of work
   (interactive)
-  (save-excursion
-    (re-search-backward "(reval[[:space:]]")
-    (let ((begin (point)))
-      (forward-sexp)
-      (let* ((raw (read (buffer-substring-no-properties begin (point))))
-             (buffer (with-url-handler-mode
-                       (find-file-noselect (elt raw 3))))
-             (checksum (reval-resum (elt raw 1) buffer t)))
-        (eq (elt raw 2) checksum)))))
+  (cl-multiple-value-bind (cypher checksum path-or-url _alternates _b _e) ; FIXME probably loop here
+      (reval--form-at-point)
+    (let* ((buffer (with-url-handler-mode
+                     (find-file-noselect path-or-url)))
+           (buffer-checksum (reval-resum cypher buffer t)))
+      (eq buffer-checksum checksum))))
 
 (defun reval--add-buffer-to-list (buffer buffer-list-name)
   "Add BUFFER to list at BUFFER-LIST-NAME."
@@ -140,6 +140,40 @@ for a better workflow."
                        (delete (current-buffer) (symbol-value buffer-list-name))))
                 nil t))))
 
+(defun reval-cache-path (checksum &optional basename)
+  "Return the path to the local cache for a given checksum."
+  (let* ((name (symbol-name checksum))
+         (subdir (substring name 0 2))
+         (cache-path (concat reval-cache-directory subdir "/" name "-" (or basename "*"))))
+    (if basename
+        cache-path
+      (let ((expanded (file-expand-wildcards cache-path)))
+        (if expanded
+            ;; I guess a strict rename could hit a dupe but hitting a
+            ;; hash collision here would be ... astronimical odds
+            (car expanded)
+          nil)))))
+
+(defun reval--write-cache (buffer cache-path)
+  "Write BUFFER to CACHE-PATH. Create the parent if it doesn not exist."
+  (let ((parent-path (file-name-directory cache-path))
+        make-backup-files)
+    (unless (file-directory-p parent-path)
+      (make-directory parent-path t))
+    (with-current-buffer buffer
+      (write-file cache-path))))
+
+(defun reval-find-cache (&optional universal-argument)
+  (interactive)
+  (cl-multiple-value-bind (_cypher checksum path-or-url _alternates _b _e)
+      (reval--form-at-point)
+    (let ((cache-path (reval-cache-path checksum)))
+      (if (file-exists-p cache-path)
+          (let ((buffer (find-file-noselect cache-path)))
+            (with-current-buffer buffer (emacs-lisp-mode))
+            (pop-to-buffer-same-window buffer))
+        (error "No cache for %s" path-or-url)))))
+
 (defun reval (cypher checksum path-or-url &rest alternates)
   "Open PATH-OR-URL, match CHECKSUM under CYPHER, then eval.
 If an error is encountered try ALTERNATES in order.
@@ -148,16 +182,21 @@ The simplest way to populate a `reval' expression starting from just
 PATH-OR-URL is to write out expression with CYPHER and CHECKSUM as a
 nonsense values. For example (reval ? ? \"path/to/file.el\"). Then run
 M-x `reval-update-simple' to populate CYPHER and CHECKSUM."
-
-  (let (done)
+  (let (done
+        (cache-path (reval-cache-path checksum (file-name-nondirectory path-or-url))))
     (with-url-handler-mode
-      (cl-loop for path-or-url in (cons path-or-url alternates)
+      (cl-loop for path-or-url in (cons cache-path (cons path-or-url alternates))
                do (if (file-exists-p path-or-url)
                       (let* ((buffer (reval-id->buffer path-or-url))
+                             (_ (when (string= path-or-url cache-path)
+                                  (with-current-buffer buffer (emacs-lisp-mode))))
                              ;; FIXME this is still not right ... can error due to not elisp
                              (buffer-checksum (reval-resum cypher buffer)))
                         (if (eq buffer-checksum checksum)
                             (progn
+                              (unless (string= path-or-url cache-path)
+                                ;; save to cache before eval for xrefs
+                                (reval--write-cache buffer cache-path))
                               (eval-buffer buffer)
                               (reval--add-buffer-to-list buffer 'reval-evaled-buffer-list)
                               (setq done t))
@@ -261,6 +300,30 @@ For example elt 2 of '(reval 'sha256 ? \"file.el\")."
        (consp (cdr thing))
        (symbolp (cadr thing))))
 
+(defun reval--form-at-point ()
+  (save-excursion
+    (re-search-forward " ")
+    (re-search-backward "(reval[[:space:]]")
+    (let ((begin (point)))
+      (forward-sexp)
+      (let ((raw (read (buffer-substring-no-properties begin (point))))
+            (end (point)))
+        ;;(message "aaaaa: %S %S %S" raw (symbolp (elt raw 1)) (type-of (elt raw 1)))
+        (let ((cypher (let ((cy (elt raw 1)))
+                        ;; '(sigh 'sigh) XXX the usual eval dangerzone >_<
+                        (if (reval--dquote-symbolp cy) (eval cy) reval-default-cypher)))
+              (checksum (let ((cs (elt raw 2)))
+                          (if (reval--dquote-symbolp cs) (eval cs) nil)))
+              (path-or-url (elt raw 3))
+              (alternates (cddddr raw)))
+          (values cypher checksum path-or-url alternates begin end))))))
+
+(defun reval-checksum-at-point (&optional universal-argument)
+  (interactive)
+  (cl-multiple-value-bind (_cypher checksum _path-or-url _alternates _b _e)
+      (reval--form-at-point)
+    checksum))
+
 (defun reval-update-simple (&optional universal-argument)
   "Update the checksum for the reval sexp under the cursor or up the page.
 Useful when developing against a local path or a mutable remote id.
@@ -268,27 +331,22 @@ If UNIVERSAL-ARGUMENT is non-nil then `reval-audit' is skipped, please use
 this functionality responsibly."
   (interactive "P")
   (with-url-handler-mode
-    (save-excursion
-      (re-search-backward "(reval[[:space:]]")
-      (let ((begin (point)))
-        (forward-sexp)
-        (let ((raw (read (buffer-substring-no-properties begin (point)))))
-          ;;(message "aaaaa: %S %S %S" raw (symbolp (elt raw 1)) (type-of (elt raw 1)))
-          (let ((cypher (let ((cy (elt raw 1)))
-                          ;; '(sigh 'sigh) XXX the usual eval dangerzone >_<
-                          (if (reval--dquote-symbolp cy) (eval cy) reval-default-cypher)))
-                (checksum (let ((cs (elt raw 2)))
-                            (if (reval--dquote-symbolp cs) (eval cs) nil)))
-                (path-or-url (elt raw 3))
-                (reval--make-audit (not universal-argument)))
-            (unless (memq cypher (secure-hash-algorithms))
-              (error "%S is not a known member of `secure-hash-algorithms'" cypher))
-            (let ((new (reval--make cypher path-or-url))
-                  (print-quoted t)
-                  print-length
-                  print-level)
-              (backward-kill-sexp)
-              (insert (prin1-to-string new)))))))))
+    (let ((reval--make-audit (not universal-argument))
+          (sigh (point)))
+      (cl-multiple-value-bind (cypher checksum path-or-url alternates begin end)
+          (reval--form-at-point)
+        (unless (memq cypher (secure-hash-algorithms))
+          (error "%S is not a known member of `secure-hash-algorithms'" cypher))
+        (let ((new (reval--make cypher path-or-url))
+              (print-quoted t)
+              print-length
+              print-level)
+          (delete-region begin end)
+          (insert (prin1-to-string
+                   (if alternates ; don't cons the old checksum, repeated invocations grow
+                       (append new (cons ''OLD> alternates))
+                     new))))
+        (goto-char sigh)))))
 
 (defun reval--reval-update ()
   "Get the immutable url for the current remote version of this file."
