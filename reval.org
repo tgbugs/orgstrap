@@ -189,28 +189,29 @@ reduced complexity everywhere else.
 #+begin_src elisp
 (defun reval-minimal (cypher checksum path-or-url &rest alternates)
   "Simplified and compact implementation of reval."
-  (let* ((o url-handler-mode)
-         (csn (symbol-name checksum))
-         (cache-path (concat reval-cache-directory (substring csn 0 2) "/" csn)))
+  (let* (done (o url-handler-mode) (csn (symbol-name checksum))
+         (cache-path (concat reval-cache-directory (substring csn 0 2) "/" csn
+                             "-" (file-name-nondirectory path-or-url))))
     (url-handler-mode)
     (unwind-protect
         (cl-loop for path-or-url in (cons cache-path (cons path-or-url alternates))
                  do (when (file-exists-p path-or-url)
                       (let* ((buffer (find-file-noselect path-or-url))
-                             (_ (when (string= path-or-url cache-path)
-                                  (with-current-buffer buffer (emacs-lisp-mode))))
                              (buffer-checksum (intern (secure-hash cypher buffer))))
                         (if (eq buffer-checksum checksum)
                             (progn
                               (unless (string= path-or-url cache-path)
-                                (let ((parent-path (file-name-directory cache-path)))
+                                (let ((parent-path (file-name-directory cache-path))
+                                      make-backup-files)
                                   (unless (file-directory-p parent-path)
                                     (make-directory parent-path t))
                                   (with-current-buffer buffer
                                     (write-file cache-path))))
-                              (eval-buffer buffer))
+                              (eval-buffer buffer)
+                              (setq done t))
                           (kill-buffer buffer) ; kill so cannot accidentally evaled
-                          (error "reval: checksum mismatch! %s" path-or-url)))))
+                          (error "reval: checksum mismatch! %s" path-or-url))))
+                 until done)
       (unless o
         (url-handler-mode 0)))))
 #+end_src
@@ -337,15 +338,24 @@ for a better workflow."
                        (delete (current-buffer) (symbol-value buffer-list-name))))
                 nil t))))
 
-(defun reval-cache-path (checksum)
+(defun reval-cache-path (checksum &optional basename)
   "Return the path to the local cache for a given checksum."
   (let* ((name (symbol-name checksum))
-         (subdir (substring name 0 2)))
-    (concat reval-cache-directory subdir "/" name)))
+         (subdir (substring name 0 2))
+         (cache-path (concat reval-cache-directory subdir "/" name "-" (or basename "*"))))
+    (if basename
+        cache-path
+      (let ((expanded (file-expand-wildcards cache-path)))
+        (if expanded
+            ;; I guess a strict rename could hit a dupe but hitting a
+            ;; hash collision here would be ... astronimical odds
+            (car expanded)
+          nil)))))
 
 (defun reval--write-cache (buffer cache-path)
   "Write BUFFER to CACHE-PATH. Create the parent if it doesn not exist."
-  (let ((parent-path (file-name-directory cache-path)))
+  (let ((parent-path (file-name-directory cache-path))
+        make-backup-files)
     (unless (file-directory-p parent-path)
       (make-directory parent-path t))
     (with-current-buffer buffer
@@ -370,9 +380,8 @@ The simplest way to populate a `reval' expression starting from just
 PATH-OR-URL is to write out expression with CYPHER and CHECKSUM as a
 nonsense values. For example (reval ? ? \"path/to/file.el\"). Then run
 M-x `reval-update-simple' to populate CYPHER and CHECKSUM."
-
   (let (done
-        (cache-path (reval-cache-path checksum)))
+        (cache-path (reval-cache-path checksum (file-name-nondirectory path-or-url))))
     (with-url-handler-mode
       (cl-loop for path-or-url in (cons cache-path (cons path-or-url alternates))
                do (if (file-exists-p path-or-url)
