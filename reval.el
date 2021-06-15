@@ -316,7 +316,7 @@ For example elt 2 of '(reval 'sha256 ? \"file.el\")."
                           (if (reval--dquote-symbolp cs) (eval cs) nil)))
               (path-or-url (elt raw 3))
               (alternates (cddddr raw)))
-          (values cypher checksum path-or-url alternates begin end))))))
+          (cl-values cypher checksum path-or-url alternates begin end))))))
 
 (defun reval-checksum-at-point (&optional universal-argument)
   (interactive)
