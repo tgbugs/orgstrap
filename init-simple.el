@@ -49,27 +49,47 @@
 ;;; load remote code
 
 (unless (featurep 'reval)
-  (defun reval-minimal (cypher checksum path-or-url &rest _alts)
-    (let ((o url-handler-mode))
+  (defvar reval-cache-directory (concat user-emacs-directory "reval/cache/"))
+  (defun reval-minimal (cypher checksum path-or-url &rest alternates)
+    "Simplified and compact implementation of reval."
+    (let* (done (o url-handler-mode) (csn (symbol-name checksum))
+           (cache-path (concat reval-cache-directory (substring csn 0 2) "/" csn
+                               "-" (file-name-nondirectory path-or-url))))
       (url-handler-mode)
       (unwind-protect
-          (when (file-exists-p path-or-url)
-            (let* ((buffer (find-file-noselect path-or-url))
-                   (buffer-checksum (intern (secure-hash cypher buffer))))
-              (if (eq buffer-checksum checksum)
-                  (eval-buffer buffer)
-                (kill-buffer buffer)
-                (error "reval: checksum mismatch! %s" path-or-url))))
+          (cl-loop for path-or-url in (cons cache-path (cons path-or-url alternates))
+                   do (when (file-exists-p path-or-url)
+                        (let* ((buffer (find-file-noselect path-or-url))
+                               (buffer-checksum (intern (secure-hash cypher buffer))))
+                          (if (eq buffer-checksum checksum)
+                              (progn
+                                (unless (string= path-or-url cache-path)
+                                  (let ((parent-path (file-name-directory cache-path))
+                                        make-backup-files)
+                                    (unless (file-directory-p parent-path)
+                                      (make-directory parent-path t))
+                                    (with-current-buffer buffer
+                                      (write-file cache-path))))
+                                (eval-buffer buffer)
+                                (setq done t))
+                            (kill-buffer buffer) ; kill so cannot accidentally evaled
+                            (error "reval: checksum mismatch! %s" path-or-url))))
+                   until done)
         (unless o
           (url-handler-mode 0)))))
-  (defalias 'reval #'reval-minimal))
+  (defalias 'reval #'reval-minimal)
+  (reval 'sha256 'f978168b5c0fc0ce43f69c748847e693acc545df9a3ff1d9def57bdb1fc63c4a
+         ;; "~/git/orgstrap/reval.el"
+         "https://raw.githubusercontent.com/tgbugs/orgstrap/649fd0cdcb831dcd840c66ee324005165ce970ca/reval.el"))
 
 (let ((ghost "https://raw.githubusercontent.com/tgbugs/orgstrap/"))
   ;; FIXME ghost breaks the reval helper code
   (unless (featurep 'ow)
-    (reval 'sha256 '586295a1a0f3722370570d229a84d704460eb4e819448a725780448d95a29a73
-           (concat ghost "97fd4f64a7c54572e405ce3084efc0456a28c4d2" "/ow.el")))
-  (reval 'sha256 'cdf6f4ea37efb50ba75033fd3b0f44e2f99e04e6bd47ba6df2880e8633ac3500
-         (concat ghost "c987f7c38a6080018b414c0d866a2ccaf28afa8c" "/init-content.el")))
+    (reval 'sha256 'a90b12c386d60882cadeb6b6557f7eb05378bfcf94f68f7f8512a9edfeb34d6c
+           ;; "~/git/orgstrap/ow.el"
+           (concat ghost "98350dc97b6a079d35c94b1798501a62cbbdf176" "/ow.el")))
+  (reval 'sha256 'ee8dbe9b2d25e193fc874ae9859d726ec1ba2857225c63d278653927afc10a54
+         ;; "~/git/orgstrap/init-content.el"
+         (concat ghost "a938d5ba6e34198e7a7bbbe465e3d5eaa1907a0e" "/init-content.el")))
 
 ;;;; init-simple.el ends here

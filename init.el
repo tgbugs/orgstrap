@@ -14,7 +14,7 @@
 instead of creating one in the same folder as this init.el file")
 
 (unless orgstrap-use-default-package-dir
-  (setq package-user-dir (expand-file-name "elpa"  working-dir)))
+  (setq package-user-dir (expand-file-name "elpa" working-dir)))
 
 (require 'package)
 
