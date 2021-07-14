@@ -1,4 +1,4 @@
-#+title: Reval: Evaluate remote elisp code 
+#+title: Reval: Evaluate remote elisp code
 
 * Introduction
 Remote eval. Ephemeral code reuse. Somewhere between load

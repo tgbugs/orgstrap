@@ -81,11 +81,15 @@ for bootstrap, or that can be reloaded, or installed as a package.
 
 ;;; Code:
 
-<<reval-impl>>
+(unless (featurep 'reval)
+  <<reval-impl>>
+  )
 
-<<defl-impl>>
+(unless (featurep 'defl)
+  <<defl-impl>>
 
-<<defl-extra-impl>>
+  <<defl-extra-impl>>
+  )
 
 <<run-command>>
 
@@ -327,7 +331,7 @@ See the ~isearch-tool-bar-map~ for an example of how to do this.
                               ("org" . "https://orgmode.org/elpa/")))
 
 (defun ow-enable-use-package ()
-  "Do all the setup needed `use-package'.
+  "Do all the setup needed for `use-package'.
 This needs to be called with (eval-when-compile ...) to the top level prior
 to any use of `use-package' otherwise it will be missing and fail"
   ;; package-archives is not an argument to this function to ensure that
@@ -345,8 +349,16 @@ to any use of `use-package' otherwise it will be missing and fail"
   (setq use-package-always-ensure t))
 
 (defmacro ow-use-packages (&rest names)
-  "enable multiple calls to `use-package' during bootstrap"
-  (cons 'progn (mapcar (lambda (name) `(use-package ,name)) names)))
+  "enable multiple calls to `use-package' during bootstrap
+additional configuration can be provided by converting the symbol
+into a list (name body ...)"
+  (cons
+   'progn
+   (mapcar (lambda (name)
+             (cond ((symbolp name) `(use-package ,name))
+                   ((listp name) `(use-package ,@name))
+                   ((t (error "unhandled type %s" (type-of name))))))
+           names)))
 #+end_src
 *** too many special cases
 This is too much right now. Conditional requires and configuration
