@@ -27,9 +27,17 @@
 
 (set-language-environment "UTF-8")
 
+;;; os specific fixes
+
+(cond ((eq system-type 'darwin)
+       (setq exec-path (cons "/usr/local/bin" exec-path))))
+
 ;;; usability
 
 (setq inhibit-startup-screen t)
+
+(setq history-length t)
+(savehist-mode t)
 
 (setq mouse-yank-at-point t)
 (setq select-enable-primary t) ; yank to middle mouse
@@ -62,11 +70,12 @@
 
 (use-package evil
   :custom
+  (evil-want-Y-yank-to-eol t)
   (evil-symbol-word-search t)
   (evil-undo-system 'undo-tree)
   :bind (:map evil-normal-state-map
               ("M-.")
-              ("Y" . "y$")
+              ("Y" . "y$") ; still needed because `evil-want-Y-yank-to-eol' is broken in some cases
               ("<return>" . evil-ex-nohighlight))
   :init
   (require 'evil)
