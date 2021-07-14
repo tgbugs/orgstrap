@@ -26,259 +26,295 @@
 
 ;;; Code:
 
-(defcustom reval-default-cypher 'sha256
-  "Default cypher to use to fill in a hole in `reval'."
-  :type 'symbol
-  :options (secure-hash-algorithms))
+(unless (featurep 'reval)
+  (defcustom reval-default-cypher 'sha256
+    "Default cypher to use to fill in a hole in `reval'."
+    :type 'symbol
+    :options (secure-hash-algorithms))
 
-(defvar reval-failed-buffer-list nil "List of failed reval buffers.")
+  (defvar reval-cache-directory (concat user-emacs-directory "reval/cache/")
+    "The directory where retrieved .el files are saved.")
 
-(defvar reval-evaled-buffer-list nil "List of evaled reval buffers.")
+  (defvar reval-failed-buffer-list nil "List of failed reval buffers.")
 
-(defmacro with-url-handler-mode (&rest body)
-  "Run BODY with `url-handler-mode' enabled."
-  (declare (indent defun))
-  `(let ((uhm url-handler-mode))
-     (unwind-protect
-         (progn
-           (url-handler-mode)
-           ,@body)
-       (unless uhm
-         (url-handler-mode 0)))))
+  (defvar reval-evaled-buffer-list nil "List of evaled reval buffers.")
 
-(defun reval-id->buffer (path-or-url)
-  "Given a PATH-OR-URL return a buffer of its contents."
-  ;; We explicitly do not catch errors here since they need to
-  ;; be caught by the human in the loop later.
-  (with-url-handler-mode
-    (find-file-noselect path-or-url)))
+  (defmacro with-url-handler-mode (&rest body)
+    "Run BODY with `url-handler-mode' enabled."
+    (declare (indent defun))
+    `(let ((uhm url-handler-mode))
+       (unwind-protect
+           (progn
+             (url-handler-mode)
+             ,@body)
+         (unless uhm
+           (url-handler-mode 0)))))
 
-(defun reval-resum-review (cypher buffer &optional review)
-  "Return checksum under CYPHER for BUFFER.
-If REVIEW is non-nil then switch to BUFFER and prompt asking if audit
-is ok before continuing."
-  ;; we don't need to check or review alternates here because they
-  ;; must all be identical
-  (let (enable-local-eval)
-    (save-excursion
-      (save-window-excursion
-        (with-current-buffer buffer
-          (unless (file-exists-p (buffer-file-name))
-            ;; NOTE url-handler-mode must be set in the calling context
-            ;; this case should not happen, only extant files should make it here
-            (error "reval-resum: file does not exist! %s" (buffer-file-name)))
-          (when review
-            (switch-to-buffer (current-buffer))
-            ;; FIXME `yes-or-no-p' still blocks the command loop in >= 27 emacsclient
-            (unless (yes-or-no-p "Audit of file ok? ") ; not using `y-or-n-p' since it is too easy
-              (error "Audit failed. Checksum will not be calculated for %s"
-                     (buffer-file-name (current-buffer)))))
-
-          ;; need to ensure that file is actually elisp
-          ;; note that in some cases read can succeed
-          ;; even when a file is not elisp e.g. an html
-          ;; file can sometimes read without error but
-          ;; will fail on eval
-
-          ;; elisp check by major mode
-          (unless (eq major-mode 'emacs-lisp-mode)
-            (error "Not an emacs lisp file!"))
-
-          ;; elisp check by read
-          (condition-case nil
-              (read (concat "(progn\n"
-                            (buffer-substring-no-properties (point-min) (point-max))
-                            "\n)"))
-            (error (error "Not an emacs lisp file!")))
-
-          ;; return the checksum
-          (intern (secure-hash cypher (current-buffer))))))))
-
-(defun reval-resum-minimal (cypher buffer)
-  "Checksum of BUFFER under CYPHER." ; minimal for maximal porability
-  ;; not used since the expression takes up less space
-  (intern (secure-hash cypher buffer)))
-
-(defalias 'reval-resum #'reval-resum-review)
-
-(defvar reval--make-audit t "Dynamic variable to control audit during `reval--make'")
-;; the control of audit behavior is intentionally excluded from the
-;; arguments of `reval--make' so that top level calls must audit
-(defun reval--make (cypher path-or-url)
-  "Make a `reval' expression from CYPHER and PATH-OR-URL.
-This should not be used directly at the top level see docs for `reval'
-for a better workflow."
-  (unless reval--make-audit
-    (warn "`reval--make' not auditing %S" path-or-url))
-  (let ((checksum (reval-resum-review cypher (reval-id->buffer path-or-url) reval--make-audit)))
-    `(reval ',cypher ',checksum ,path-or-url)))
-
-(defun reval-audit ()
-  "Audit the reval under the cursor."
-  (interactive)
-  (save-excursion
-    (re-search-backward "(reval[[:space:]]")
-    (let ((begin (point)))
-      (forward-sexp)
-      (let* ((raw (read (buffer-substring-no-properties begin (point))))
-             (buffer (with-url-handler-mode
-                       (find-file-noselect (elt raw 3))))
-             (checksum (reval-resum (elt raw 1) buffer t)))
-        (eq (elt raw 2) checksum)))))
-
-(defun reval--add-buffer-to-list (buffer buffer-list-name)
-  "Add BUFFER to list at BUFFER-LIST-NAME."
-  (with-current-buffer buffer ; FIXME do this in both cases but change which list
-    (push buffer (symbol-value buffer-list-name))
-    ;; push first since it is better to have a dead buffer linger in a list
-    ;; than it is to have an error happen during execution of `kill-buffer-hook'
-    (let ((buffer-list-name buffer-list-name))
-      (add-hook 'kill-buffer-hook
-                (lambda ()
-                  ;; read the manual for sets and lists to see why we have to
-                  ;; setq here ... essentially if our element is found in the
-                  ;; car of the list then the underlying list is not modified
-                  ;; and the cdr of the list is returned, therefore if you have
-                  ;; a list of all zeros and try to delete zero from it the list
-                  ;; will remain unchanged unless you also setq the name to the
-                  ;; (now) cdr value
-                  (set buffer-list-name
-                       (delete (current-buffer) (symbol-value buffer-list-name))))
-                nil t))))
-
-(defun reval (cypher checksum path-or-url &rest alternates)
-  "Open PATH-OR-URL, match CHECKSUM under CYPHER, then eval.
-If an error is encountered try ALTERNATES in order.
-
-The simplest way to populate a `reval' expression starting from just
-PATH-OR-URL is to write out expression with CYPHER and CHECKSUM as a
-nonsense values. For example (reval ? ? \"path/to/file.el\"). Then run
-M-x `reval-update-simple' to populate CYPHER and CHECKSUM."
-
-  (let (done)
+  (defun reval-id->buffer (path-or-url)
+    "Given a PATH-OR-URL return a buffer of its contents."
+    ;; We explicitly do not catch errors here since they need to
+    ;; be caught by the human in the loop later.
     (with-url-handler-mode
-      (cl-loop for path-or-url in (cons path-or-url alternates)
-               do (if (file-exists-p path-or-url)
-                      (let* ((buffer (reval-id->buffer path-or-url))
-                             ;; FIXME this is still not right ... can error due to not elisp
-                             (buffer-checksum (reval-resum cypher buffer)))
-                        (if (eq buffer-checksum checksum)
-                            (progn
-                              (eval-buffer buffer)
-                              (reval--add-buffer-to-list buffer 'reval-evaled-buffer-list)
-                              (setq done t))
-                          (reval--add-buffer-to-list buffer 'reval-failed-buffer-list)
-                          (funcall (if alternates #'warn #'error)
-                                   ;; if alternates warn to prevent an early failure
-                                   ;; from blocking later potential successes otherwise
-                                   ;; signal an error
-                                   "reval: checksum mismatch! %s" path-or-url)))
-                    (warn "reval: file does not exist! %s" path-or-url))
-               until done))
-    (unless done
-      (error "reval: all paths failed!")))
-  nil)
+      (find-file-noselect path-or-url)))
 
-(defun reval-view-failed ()
-  "View top of failed reval buffer stack and kill or keep."
-  (interactive)
-  (when reval-failed-buffer-list
-    (save-window-excursion
-      (with-current-buffer (car reval-failed-buffer-list)
-        (switch-to-buffer (current-buffer))
-        (when (y-or-n-p "Kill buffer? ")
-          (kill-buffer))))))
+  (defun reval-resum-review (cypher buffer &optional review)
+    "Return checksum under CYPHER for BUFFER.
+  If REVIEW is non-nil then switch to BUFFER and prompt asking if audit
+  is ok before continuing."
+    ;; we don't need to check or review alternates here because they
+    ;; must all be identical
+    (let (enable-local-eval)
+      (save-excursion
+        (save-window-excursion
+          (with-current-buffer buffer
+            (unless (file-exists-p (buffer-file-name))
+              ;; NOTE url-handler-mode must be set in the calling context
+              ;; this case should not happen, only extant files should make it here
+              (error "reval-resum: file does not exist! %s" (buffer-file-name)))
+            (when review
+              (switch-to-buffer (current-buffer))
+              ;; FIXME `yes-or-no-p' still blocks the command loop in >= 27 emacsclient
+              (unless (yes-or-no-p "Audit of file ok? ") ; not using `y-or-n-p' since it is too easy
+                (error "Audit failed. Checksum will not be calculated for %s"
+                       (buffer-file-name (current-buffer)))))
 
-(require 'lisp-mnt)
+            ;; need to ensure that file is actually elisp
+            ;; note that in some cases read can succeed
+            ;; even when a file is not elisp e.g. an html
+            ;; file can sometimes read without error but
+            ;; will fail on eval
 
-(defvar url-http-end-of-headers)
-(defun reval-url->json (url)  ; see utils.el
-  "given a url string return json as a hash table"
-  (json-parse-string
-   (with-current-buffer (url-retrieve-synchronously url)
-     (buffer-substring url-http-end-of-headers (point-max)))))
+            ;; elisp check by major mode
+            (unless (eq major-mode 'emacs-lisp-mode)
+              (error "Not an emacs lisp file!"))
 
-(defun reval--get-new-immutable-url ()
-  (let ((get-imm-name (reval-header-get-immutable)))
-    (if get-imm-name
-        (let ((get-imm (intern get-imm-name)))
-          (if (fboundp get-imm)
-              (funcall get-imm)
-            (warn "Function %s from Reval-Get-Immutable not found in %s" get-imm-name (buffer-file-name))
-            nil))
-      (warn "Reval-Get-Immutable: header not found in %s" (buffer-file-name))
-      nil)))
+            ;; elisp check by read
+            (condition-case nil
+                (read (concat "(progn\n"
+                              (buffer-substring-no-properties (point-min) (point-max))
+                              "\n)"))
+              (error (error "Not an emacs lisp file!")))
 
-(defun reval-get-imm-github (group repo path &optional branch)
-  (let* ((branch (or branch "master"))
-         (url (format "https://api.github.com/repos/%s/%s/git/refs/heads/%s" group repo branch))
-         (sha (gethash "sha" (gethash "object" (reval-url->json url)))))
-    (format "https://raw.githubusercontent.com/%s/%s/%s/%s" group repo sha path)))
+            ;; return the checksum
+            (intern (secure-hash cypher (current-buffer))))))))
 
-(defun reval-header-is-version-of (&optional file)
-  "Return the Is-Version-Of: header for FILE or current buffer."
-  ;; this was originally called Latest-Version but matching the
-  ;; datacite relationships seems to make more sense here esp.
-  ;; since this is literally the example from the documentation
-  (lm-with-file file
-    (lm-header "is-version-of")))
+  (defun reval-resum-minimal (cypher buffer)
+    "Checksum of BUFFER under CYPHER." ; minimal for maximal porability
+    ;; not used since the expression takes up less space
+    (intern (secure-hash cypher buffer)))
 
-(defun reval-header-get-immutable (&optional file)
-  "Return the Reval-Get-Immutable: header for File or current buffer.
+  (defalias 'reval-resum #'reval-resum-review)
 
-The value of this header should name a function in the current
-file that returns an immutable name that points to the current
-remote version of the the current file.
+  (defvar reval--make-audit t "Dynamic variable to control audit during `reval--make'")
+  ;; the control of audit behavior is intentionally excluded from the
+  ;; arguments of `reval--make' so that top level calls must audit
+  (defun reval--make (cypher path-or-url)
+    "Make a `reval' expression from CYPHER and PATH-OR-URL.
+  This should not be used directly at the top level see docs for `reval'
+  for a better workflow."
+    (unless reval--make-audit
+      (warn "`reval--make' not auditing %S" path-or-url))
+    (let ((checksum (reval-resum-review cypher (reval-id->buffer path-or-url) reval--make-audit)))
+      `(reval ',cypher ',checksum ,path-or-url)))
 
-The implementation of the function may assume that the reval
-package is present on the system."
-  ;; there will always have to be a function because even if the
-  ;; remote does all the work for us we will still have to ask the
-  ;; remote to actually do the dereference operation, since we can't
-  ;; gurantee that all remotes even have endpoints that behave this
-  ;; way we can't implement this once in reval, so we ask individual
-  ;; files to implement this pattern themselves, or worst case, the
-  ;; update function can be supplied at update time if there is a
-  ;; useful remote file that doesn't know that it is being revaled
-  (lm-with-file file
-    (lm-header "reval-get-immutable")))
+  (defun reval-audit (&optional universal-argument)
+    "Audit the reval under the cursor." ; FIXME this needs a LOT of work
+    (interactive)
+    (cl-multiple-value-bind (cypher checksum path-or-url _alternates _b _e) ; FIXME probably loop here
+        (reval--form-at-point)
+      (let* ((buffer (with-url-handler-mode
+                       (find-file-noselect path-or-url)))
+             (buffer-checksum (reval-resum cypher buffer t)))
+        (eq buffer-checksum checksum))))
 
-(defun reval-check-for-updates () ; TODO reval-sync ?
-  "Check current buffer revals for updates."
-  (interactive)
-  ;; search and collect all calls to reval in the current buffer? all org files? ???
-  ;; open the current reval in a buffer
-  ;; get the package info if avaiable
-  ;; warn about all revals that cannot be updated due to missing metadata?
+  (defun reval--add-buffer-to-list (buffer buffer-list-name)
+    "Add BUFFER to list at BUFFER-LIST-NAME."
+    (with-current-buffer buffer ; FIXME do this in both cases but change which list
+      (push buffer (symbol-value buffer-list-name))
+      ;; push first since it is better to have a dead buffer linger in a list
+      ;; than it is to have an error happen during execution of `kill-buffer-hook'
+      (let ((buffer-list-name buffer-list-name))
+        (add-hook 'kill-buffer-hook
+                  (lambda ()
+                    ;; read the manual for sets and lists to see why we have to
+                    ;; setq here ... essentially if our element is found in the
+                    ;; car of the list then the underlying list is not modified
+                    ;; and the cdr of the list is returned, therefore if you have
+                    ;; a list of all zeros and try to delete zero from it the list
+                    ;; will remain unchanged unless you also setq the name to the
+                    ;; (now) cdr value
+                    (set buffer-list-name
+                         (delete (current-buffer) (symbol-value buffer-list-name))))
+                  nil t))))
 
-  (message "%S" )
-  (error "TODO not implemented"))
+  (defun reval-cache-path (checksum &optional basename)
+    "Return the path to the local cache for a given checksum."
+    (let* ((name (symbol-name checksum))
+           (subdir (substring name 0 2))
+           (cache-path (concat reval-cache-directory subdir "/" name "-" (or basename "*"))))
+      (if basename
+          cache-path
+        (let ((expanded (file-expand-wildcards cache-path)))
+          (if expanded
+              ;; I guess a strict rename could hit a dupe but hitting a
+              ;; hash collision here would be ... astronimical odds
+              (car expanded)
+            nil)))))
 
-(defun reval-update ()
-  "Update to latest version."
-  )
+  (defun reval--write-cache (buffer cache-path)
+    "Write BUFFER to CACHE-PATH. Create the parent if it doesn not exist."
+    (let ((parent-path (file-name-directory cache-path))
+          make-backup-files)
+      (unless (file-directory-p parent-path)
+        (make-directory parent-path t))
+      (with-current-buffer buffer
+        (write-file cache-path))))
 
-(defun reval--dquote-symbolp (thing)
-  "Matches pattern ''THING.
-Useful when dealing with quoted symbols in the outpub or a `read'.
-For example elt 2 of '(reval 'sha256 ? \"file.el\")."
-  (and (consp thing)
-       (eq (car thing) 'quote)
-       (consp (cdr thing))
-       (symbolp (cadr thing))))
+  (defun reval-find-cache (&optional universal-argument)
+    (interactive)
+    (cl-multiple-value-bind (_cypher checksum path-or-url _alternates _b _e)
+        (reval--form-at-point)
+      (let ((cache-path (reval-cache-path checksum)))
+        (if (file-exists-p cache-path)
+            (let ((buffer (find-file-noselect cache-path)))
+              (with-current-buffer buffer (emacs-lisp-mode))
+              (pop-to-buffer-same-window buffer))
+          (error "No cache for %s" path-or-url)))))
 
-(defun reval-update-simple (&optional universal-argument)
-  "Update the checksum for the reval sexp under the cursor or up the page.
-Useful when developing against a local path or a mutable remote id.
-If UNIVERSAL-ARGUMENT is non-nil then `reval-audit' is skipped, please use
-this functionality responsibly."
-  (interactive "P")
-  (with-url-handler-mode
+  (defun reval (cypher checksum path-or-url &rest alternates)
+    "Open PATH-OR-URL, match CHECKSUM under CYPHER, then eval.
+  If an error is encountered try ALTERNATES in order.
+
+  The simplest way to populate a `reval' expression starting from just
+  PATH-OR-URL is to write out expression with CYPHER and CHECKSUM as a
+  nonsense values. For example (reval ? ? \"path/to/file.el\"). Then run
+  M-x `reval-update-simple' to populate CYPHER and CHECKSUM."
+    (let (done
+          (cache-path (reval-cache-path checksum (file-name-nondirectory path-or-url))))
+      (with-url-handler-mode
+        (cl-loop for path-or-url in (cons cache-path (cons path-or-url alternates))
+                 do (if (file-exists-p path-or-url)
+                        (let* ((buffer (reval-id->buffer path-or-url))
+                               (_ (when (string= path-or-url cache-path)
+                                    (with-current-buffer buffer (emacs-lisp-mode))))
+                               ;; FIXME this is still not right ... can error due to not elisp
+                               (buffer-checksum (reval-resum cypher buffer)))
+                          (if (eq buffer-checksum checksum)
+                              (progn
+                                (unless (string= path-or-url cache-path)
+                                  ;; save to cache before eval for xrefs
+                                  (reval--write-cache buffer cache-path))
+                                (eval-buffer buffer)
+                                (reval--add-buffer-to-list buffer 'reval-evaled-buffer-list)
+                                (setq done t))
+                            (reval--add-buffer-to-list buffer 'reval-failed-buffer-list)
+                            (funcall (if alternates #'warn #'error)
+                                     ;; if alternates warn to prevent an early failure
+                                     ;; from blocking later potential successes otherwise
+                                     ;; signal an error
+                                     "reval: checksum mismatch! %s" path-or-url)))
+                      (warn "reval: file does not exist! %s" path-or-url))
+                 until done))
+      (unless done
+        (error "reval: all paths failed!")))
+    nil)
+
+  (defun reval-view-failed ()
+    "View top of failed reval buffer stack and kill or keep."
+    (interactive)
+    (when reval-failed-buffer-list
+      (save-window-excursion
+        (with-current-buffer (car reval-failed-buffer-list)
+          (switch-to-buffer (current-buffer))
+          (when (y-or-n-p "Kill buffer? ")
+            (kill-buffer))))))
+
+  (require 'lisp-mnt)
+
+  (defvar url-http-end-of-headers)
+  (defun reval-url->json (url)  ; see utils.el
+    "given a url string return json as a hash table"
+    (json-parse-string
+     (with-current-buffer (url-retrieve-synchronously url)
+       (buffer-substring url-http-end-of-headers (point-max)))))
+
+  (defun reval--get-new-immutable-url ()
+    (let ((get-imm-name (reval-header-get-immutable)))
+      (if get-imm-name
+          (let ((get-imm (intern get-imm-name)))
+            (if (fboundp get-imm)
+                (funcall get-imm)
+              (warn "Function %s from Reval-Get-Immutable not found in %s" get-imm-name (buffer-file-name))
+              nil))
+        (warn "Reval-Get-Immutable: header not found in %s" (buffer-file-name))
+        nil)))
+
+  (defun reval-get-imm-github (group repo path &optional branch)
+    (let* ((branch (or branch "master"))
+           (url (format "https://api.github.com/repos/%s/%s/git/refs/heads/%s" group repo branch))
+           (sha (gethash "sha" (gethash "object" (reval-url->json url)))))
+      (format "https://raw.githubusercontent.com/%s/%s/%s/%s" group repo sha path)))
+
+  (defun reval-header-is-version-of (&optional file)
+    "Return the Is-Version-Of: header for FILE or current buffer."
+    ;; this was originally called Latest-Version but matching the
+    ;; datacite relationships seems to make more sense here esp.
+    ;; since this is literally the example from the documentation
+    (lm-with-file file
+      (lm-header "is-version-of")))
+
+  (defun reval-header-get-immutable (&optional file)
+    "Return the Reval-Get-Immutable: header for File or current buffer.
+
+  The value of this header should name a function in the current
+  file that returns an immutable name that points to the current
+  remote version of the the current file.
+
+  The implementation of the function may assume that the reval
+  package is present on the system."
+    ;; there will always have to be a function because even if the
+    ;; remote does all the work for us we will still have to ask the
+    ;; remote to actually do the dereference operation, since we can't
+    ;; gurantee that all remotes even have endpoints that behave this
+    ;; way we can't implement this once in reval, so we ask individual
+    ;; files to implement this pattern themselves, or worst case, the
+    ;; update function can be supplied at update time if there is a
+    ;; useful remote file that doesn't know that it is being revaled
+    (lm-with-file file
+      (lm-header "reval-get-immutable")))
+
+  (defun reval-check-for-updates () ; TODO reval-sync ?
+    "Check current buffer revals for updates."
+    (interactive)
+    ;; search and collect all calls to reval in the current buffer? all org files? ???
+    ;; open the current reval in a buffer
+    ;; get the package info if avaiable
+    ;; warn about all revals that cannot be updated due to missing metadata?
+
+    (message "%S" )
+    (error "TODO not implemented"))
+
+  (defun reval-update ()
+    "Update to latest version."
+    )
+
+  (defun reval--dquote-symbolp (thing)
+    "Matches pattern ''THING.
+  Useful when dealing with quoted symbols in the outpub or a `read'.
+  For example elt 2 of '(reval 'sha256 ? \"file.el\")."
+    (and (consp thing)
+         (eq (car thing) 'quote)
+         (consp (cdr thing))
+         (symbolp (cadr thing))))
+
+  (defun reval--form-at-point ()
     (save-excursion
+      (re-search-forward " ")
       (re-search-backward "(reval[[:space:]]")
       (let ((begin (point)))
         (forward-sexp)
-        (let ((raw (read (buffer-substring-no-properties begin (point)))))
+        (let ((raw (read (buffer-substring-no-properties begin (point))))
+              (end (point)))
           ;;(message "aaaaa: %S %S %S" raw (symbolp (elt raw 1)) (type-of (elt raw 1)))
           (let ((cypher (let ((cy (elt raw 1)))
                           ;; '(sigh 'sigh) XXX the usual eval dangerzone >_<
@@ -286,101 +322,127 @@ this functionality responsibly."
                 (checksum (let ((cs (elt raw 2)))
                             (if (reval--dquote-symbolp cs) (eval cs) nil)))
                 (path-or-url (elt raw 3))
-                (reval--make-audit (not universal-argument)))
-            (unless (memq cypher (secure-hash-algorithms))
-              (error "%S is not a known member of `secure-hash-algorithms'" cypher))
-            (let ((new (reval--make cypher path-or-url))
-                  (print-quoted t)
-                  print-length
-                  print-level)
-              (backward-kill-sexp)
-              (insert (prin1-to-string new)))))))))
+                (alternates (cddddr raw)))
+            (cl-values cypher checksum path-or-url alternates begin end))))))
 
-(defvar-local defl--local-defuns nil
-  "A hash table that maps global closures to local function symbols.
-Needed to dispatch on command passed to :around advice.")
+  (defun reval-checksum-at-point (&optional universal-argument)
+    (interactive)
+    (cl-multiple-value-bind (_cypher checksum _path-or-url _alternates _b _e)
+        (reval--form-at-point)
+      checksum))
 
-(defvar-local defl--local-defun-names nil
-  "A hash table that maps global function symbols to local function symbols.")
+  (defun reval-update-simple (&optional universal-argument)
+    "Update the checksum for the reval sexp under the cursor or up the page.
+  Useful when developing against a local path or a mutable remote id.
+  If UNIVERSAL-ARGUMENT is non-nil then `reval-audit' is skipped, please use
+  this functionality responsibly."
+    (interactive "P")
+    (with-url-handler-mode
+      (let ((reval--make-audit (not universal-argument))
+            (sigh (point)))
+        (cl-multiple-value-bind (cypher checksum path-or-url alternates begin end)
+            (reval--form-at-point)
+          (unless (memq cypher (secure-hash-algorithms))
+            (error "%S is not a known member of `secure-hash-algorithms'" cypher))
+          (let ((new (reval--make cypher path-or-url))
+                (print-quoted t)
+                print-length
+                print-level)
+            (delete-region begin end)
+            (insert (prin1-to-string
+                     (if alternates ; don't cons the old checksum, repeated invocations grow
+                         (append new (cons ''OLD> alternates))
+                       new))))
+          (goto-char sigh)))))
+  )
 
-(defun defl--has-local-defuns (command &rest args)
-  "Advise COMMAND with ARGS to check if there are buffer local defuns."
-  (let ((command (or (and defl--local-defuns
-                          (gethash command defl--local-defuns))
-                     command)))
-    (apply command args)))
+(unless (featurep 'defl)
+  (defvar-local defl--local-defuns nil
+    "A hash table that maps global closures to local function symbols.
+  Needed to dispatch on command passed to :around advice.")
 
-(defmacro defl (name arglist &optional docstring &rest body)
-  "Define a buffer local function.
-ARGLIST, DOCSTRING, and BODY are passed unmodified to `defun'
+  (defvar-local defl--local-defun-names nil
+    "A hash table that maps global function symbols to local function symbols.")
 
-WARNING: If you redefine NAME with `defun' after using `defun-local'
-then the current implementation will break."
-  (declare (doc-string 3) (indent 2))
-  (unless defl--local-defuns
-    (setq-local defl--local-defuns (make-hash-table :test #'equal)))
-  (unless defl--local-defun-names
-    (setq-local defl--local-defun-names (make-hash-table)))
-  (let ((docstring (if docstring (list docstring) docstring))
-        (local-name (or (gethash name defl--local-defun-names)
-                        (puthash name (cl-gentemp (format "%S-" name)) defl--local-defun-names))))
-    `(prog1
-         (defun ,local-name ,arglist ,@docstring ,@body)
-       (unless (fboundp ',name)
-         (defun ,name (&rest args) (error "global stub for defun-local %s" #',name))
-         (put ',name 'defun-local-stub t))
-       (puthash (symbol-function #',name) #',local-name defl--local-defuns) ; XXX broken if the stub is overwritten
-       (advice-add #',name :around #'defl--has-local-defuns))))
+  (defun defl--has-local-defuns (command &rest args)
+    "Advise COMMAND with ARGS to check if there are buffer local defuns."
+    (let ((command (or (and defl--local-defuns
+                            (gethash command defl--local-defuns))
+                       command)))
+      (apply command args)))
 
-(defalias 'defun-local #'defl)
+  (defmacro defl (name arglist &optional docstring &rest body)
+    "Define a buffer local function.
+  ARGLIST, DOCSTRING, and BODY are passed unmodified to `defun'
 
-(defun defl-defalias-local (symbol definition &optional docstring)
-  "Define a buffer local alias. NOTE only works for functions.
-It is not really needed for variables since `setq-local' covers
-nearly every use case. Note that the way this is defined uses
-`defun-local' so it probably does not behave like a real alias."
-  (if (symbol-function definition)
-      (defun-local symbol (&rest args)
-        docstring
-        (apply definition args))
-    (error "%S does not point to a function" definition)))
+  WARNING: If you redefine NAME with `defun' after using `defun-local'
+  then the current implementation will break."
+    (declare (doc-string 3) (indent 2))
+    (unless defl--local-defuns
+      (setq-local defl--local-defuns (make-hash-table :test #'equal)))
+    (unless defl--local-defun-names
+      (setq-local defl--local-defun-names (make-hash-table)))
+    (let ((docstring (if docstring (list docstring) docstring))
+          (local-name (or (gethash name defl--local-defun-names)
+                          (puthash name (cl-gentemp (format "%S-" name)) defl--local-defun-names))))
+      `(prog1
+           (defun ,local-name ,arglist ,@docstring ,@body)
+         (unless (fboundp ',name)
+           (defun ,name (&rest args) (error "global stub for defun-local %s" #',name))
+           (put ',name 'defun-local-stub t))
+         (puthash (symbol-function #',name) #',local-name defl--local-defuns) ; XXX broken if the stub is overwritten
+         (advice-add #',name :around #'defl--has-local-defuns))))
 
-(defun defl--raw-symbol-function (name)
-  "Return unadvised form of NAME. NOT THREAD SAFE."
-  (if (advice-member-p #'defl--has-local-defuns name)
-      (unwind-protect
-          (progn
-            (advice-remove name #'defl--has-local-defuns)
-            (symbol-function name))
-        ;; FIXME > assuming that name was previously advised
-        (advice-add name :around #'defl--has-local-defuns))
-    (symbol-function name)))
+  (defalias 'defun-local #'defl)
 
-(defun defl--fmakunbound-local (command &rest args)
-  "Advise COMMAND `fmakunbound' to be aware of `defun-local' forms."
-  (if defl--local-defun-names
-      (let* ((name (car args))
-             (local-name (gethash name defl--local-defun-names)))
-        ;; FIXME If we mimic the behavior of defvar-local then
-        ;; we should never remove the error stub, but this is
-        ;; a bit different because we can't change how defun works to
-        ;; mimic how setq works and then have defun-default that mimics
-        ;; how setq-default works, the behavior of local variables is
-        ;; already confusing enough without having to also deal with the
-        ;; the fact that defun and defvar have radically different behavior
-        ;; with regard to redefinition
-        ;; FIXME it would still be nice to be able to remove the advice
-        ;; from the global function when the last local function ceases
-        ;; to be defined but that can be for later
-        (if local-name
+  (defun defl-defalias-local (symbol definition &optional docstring)
+    "Define a buffer local alias. NOTE only works for functions.
+  It is not really needed for variables since `setq-local' covers
+  nearly every use case. Note that the way this is defined uses
+  `defun-local' so it probably does not behave like a real alias."
+    (if (symbol-function definition)
+        (defun-local symbol (&rest args)
+          docstring
+          (apply definition args))
+      (error "%S does not point to a function" definition)))
+
+  (defun defl--raw-symbol-function (name)
+    "Return unadvised form of NAME. NOT THREAD SAFE."
+    (if (advice-member-p #'defl--has-local-defuns name)
+        (unwind-protect
             (progn
-              (apply command (list local-name))
-              (remhash (defl--raw-symbol-function name) defl--local-defuns)
-              (remhash name defl--local-defun-names))
-          (apply command args)))
-    (apply command args)))
+              (advice-remove name #'defl--has-local-defuns)
+              (symbol-function name))
+          ;; FIXME > assuming that name was previously advised
+          (advice-add name :around #'defl--has-local-defuns))
+      (symbol-function name)))
 
-;;(advice-add #'fmakunbound :around #'defl--fmakunbound-local)
+  (defun defl--fmakunbound-local (command &rest args)
+    "Advise COMMAND `fmakunbound' to be aware of `defun-local' forms."
+    (if defl--local-defun-names
+        (let* ((name (car args))
+               (local-name (gethash name defl--local-defun-names)))
+          ;; FIXME If we mimic the behavior of defvar-local then
+          ;; we should never remove the error stub, but this is
+          ;; a bit different because we can't change how defun works to
+          ;; mimic how setq works and then have defun-default that mimics
+          ;; how setq-default works, the behavior of local variables is
+          ;; already confusing enough without having to also deal with the
+          ;; the fact that defun and defvar have radically different behavior
+          ;; with regard to redefinition
+          ;; FIXME it would still be nice to be able to remove the advice
+          ;; from the global function when the last local function ceases
+          ;; to be defined but that can be for later
+          (if local-name
+              (progn
+                (apply command (list local-name))
+                (remhash (defl--raw-symbol-function name) defl--local-defuns)
+                (remhash name defl--local-defun-names))
+            (apply command args)))
+      (apply command args)))
+
+  ;;(advice-add #'fmakunbound :around #'defl--fmakunbound-local)
+  )
 
 (defun ow-run-command (command &rest args)
   "Run COMMAND with ARGS. Raise an error if the return code is not zero."
@@ -444,7 +506,7 @@ All errors are silenced."
                               ("org" . "https://orgmode.org/elpa/")))
 
 (defun ow-enable-use-package ()
-  "Do all the setup needed `use-package'.
+  "Do all the setup needed for `use-package'.
 This needs to be called with (eval-when-compile ...) to the top level prior
 to any use of `use-package' otherwise it will be missing and fail"
   ;; package-archives is not an argument to this function to ensure that
@@ -462,8 +524,16 @@ to any use of `use-package' otherwise it will be missing and fail"
   (setq use-package-always-ensure t))
 
 (defmacro ow-use-packages (&rest names)
-  "enable multiple calls to `use-package' during bootstrap"
-  (cons 'progn (mapcar (lambda (name) `(use-package ,name)) names)))
+  "enable multiple calls to `use-package' during bootstrap
+additional configuration can be provided by converting the symbol
+into a list (name body ...)"
+  (cons
+   'progn
+   (mapcar (lambda (name)
+             (cond ((symbolp name) `(use-package ,name))
+                   ((listp name) `(use-package ,@name))
+                   ((t (error "unhandled type %s" (type-of name))))))
+           names)))
 
 ;; mouse behavior
 
