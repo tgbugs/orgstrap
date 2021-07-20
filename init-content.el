@@ -39,6 +39,9 @@
 (setq history-length t)
 (savehist-mode t)
 
+(setq scroll-conservatively 101)  ; don't jump
+(setq scroll-step 1)
+
 (setq mouse-yank-at-point t)
 (setq select-enable-primary t) ; yank to middle mouse
 
