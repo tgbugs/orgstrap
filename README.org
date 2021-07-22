@@ -2589,6 +2589,100 @@ always return no when in batch mode. One additional feature is be to able to pas
 on the command line. The eval variables would still have to be loaded in some way, but avoiding
 the need to open and edit =orgstrap-known-safe.el= for each new file, and possibly edit it again
 to remove the approval in the future.
+
+#+begin_src elisp :results none
+(let ((buffer (find-file-noselect "orgstrap-batch-helper.el.example")))
+  (with-current-buffer buffer
+    (erase-buffer)
+    (let (print-length print-level (print-escape-newlines t))
+      (insert ";;; -*- mode: emacs-lisp; lexical-binding: t -*-\n\n")
+      (insert ";;; add audited checksums here\n\n")
+      (insert "(setq-local\n orgstrap-audited-checksums\n '(\n\n  ))\n\n")
+      ;; TODO insert test file block checksums
+      (insert ";;; set audiated checksums as safe local variables\n\n")
+      (insert
+       (pp-to-string
+        '(mapcar (lambda (checksum-value)
+                   (add-to-list 'safe-local-variable-values (cons 'orgstrap-block-checksum checksum-value)))
+                 orgstrap-audited-checksums))))
+    (insert "\n;;; helper local variables\n\n")
+    (cl-loop
+     for local-variable in '((orgstrap-cypher . sha256)
+                             (orgstrap-norm-func-name . orgstrap-norm-func--prp-1.1))
+     do
+     (let (print-length print-level (print-escape-newlines t))
+       (insert (prin1-to-string
+                `(add-to-list 'safe-local-variable-values ',local-variable)))
+       (insert "\n")))
+    (insert "\n;;; known eval local variables\n\n")
+    )
+  (cl-loop
+   for eval-local-variable in
+   (cl-remove-duplicates
+    (cl-loop
+     for block-name in '("example-noweb-no" "example-noweb-yes" "example-noweb-eval")
+     append
+     (cl-loop
+      for minimal in '(nil t)
+      append
+      (cl-loop
+       for norm-func-name in
+       '(;; orgstrap-norm-func--prp-1.0 ; deprecated do not include
+         orgstrap-norm-func--prp-1.1)
+       collect
+       (let ((info (save-excursion
+                     (org-babel-goto-named-src-block block-name)
+                     (org-babel-get-src-block-info))))
+         (setf (nth 6 info) "hrm")
+         ' ; use as a sanity check
+         (secure-hash
+          orgstrap-cypher
+          (orgstrap-norm
+           (let (print-quoted print-length print-level)
+             (prin1-to-string (orgstrap--lv-command info minimal norm-func-name)))))
+         (orgstrap--lv-command info minimal norm-func-name)))))
+    :test #'equal)
+   do
+   (with-current-buffer buffer
+     (let (print-length print-level (print-escape-newlines t))
+       (insert (prin1-to-string
+                `(add-to-list 'safe-local-eval-forms ',eval-local-variable)))
+       (insert "\n"))))
+  (with-current-buffer buffer
+    (save-buffer)))
+#+end_src
+
+#+name: example-noweb-no
+#+begin_src elisp :noweb no
+#+end_src
+
+#+name: example-noweb-yes
+#+begin_src elisp :noweb yes
+#+end_src
+
+#+name: example-noweb-eval
+#+begin_src elisp :noweb eval
+#+end_src
+
+#+name: test-batch-helper
+#+begin_src bash
+emacs -q --batch \
+-l orgstrap-batch-helper.el \
+--eval "(message \"\n%s\"(emacs-version))" \
+--eval "(defun orgstrap-test () (error \"Test failed.\"))" \
+-f toggle-debug-on-error \
+--visit test-lv-list-minimal \
+--eval "(message \"done\")" 2>&1
+
+emacs -q --batch \
+-l orgstrap-batch-helper.el \
+--eval "(message \"\n%s\"(emacs-version))" \
+--eval "(defun orgstrap-test () (error \"Test failed.\"))" \
+-f toggle-debug-on-error \
+--visit test-lv-list-portable \
+--eval "(message \"done\")" 2>&1
+#+end_src
+
 ** Run once
 In principle the simplest way to do this is to use the =:cache yes= header on a block.
 However, unless the state is persisted into a users =init.el= file or equivalent, then
