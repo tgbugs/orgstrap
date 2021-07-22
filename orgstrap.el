@@ -945,6 +945,19 @@ Insert BLOCK-CONTENTS if they are supplied."
             (org-babel-update-block-body block-contents)))
         nil))))
 
+(defun orgstrap--lv-command (info &optional minimal norm-func-name)
+  (let ((lv-cver (orgstrap--local-variables--check-version
+                  info
+                  minimal))
+        (lv-norm (orgstrap--local-variables--norm
+                  norm-func-name))
+        (lv-ncom (orgstrap--local-variables--norm-common))
+        (lv-eval (orgstrap--local-variables--eval
+                  info
+                  minimal))
+        (lv-ecom (orgstrap--local-variables--eval-common)))
+    (cons 'progn (orgstrap--dedoc (append lv-cver lv-norm lv-ncom lv-eval lv-ecom)))))
+
 (defun orgstrap--add-file-local-variables (&optional minimal norm-func-name)
   "Add the file local variables needed to make orgstrap work.
 MINIMAL is used to control whether the portable or minimal block is used.
@@ -965,32 +978,22 @@ orgstrap elv is always added first."
                 (org-babel-goto-named-src-block orgstrap-orgstrap-block-name)
                 (org-babel-get-src-block-info)))
         (elv (orgstrap--read-current-local-variables)))
-    (let ((lv-cver (orgstrap--local-variables--check-version
-                    info
-                    minimal))
-          (lv-norm (orgstrap--local-variables--norm
-                    norm-func-name))
-          (lv-ncom (orgstrap--local-variables--norm-common))
-          (lv-eval (orgstrap--local-variables--eval
-                    info
-                    minimal))
-          (lv-ecom (orgstrap--local-variables--eval-common)))
-      (let ((lv-command (cons 'progn (orgstrap--dedoc (append lv-cver lv-norm lv-ncom lv-eval lv-ecom))))
-            (commands-existing (mapcar #'cdr (cl-remove-if-not (lambda (l) (eq (car l) 'eval)) elv))))
-        (let ((eval-commands
-               (cons lv-command (cl-remove-if-not
-                                 (lambda (cmd) (orgstrap--match-elvs (cons 'eval cmd)))
-                                 commands-existing))))
-          (when commands-existing
-            (delete-file-local-variable 'eval))
-          (let ((print-escape-newlines t)  ; needed to preserve the escaped newlines
-                ;; if `print-length' or `print-level' is accidentally set
-                ;; `add-file-local-variable' will truncate the sexp with and elispsis
-                ;; this is clearly a bug in `add-file-local-variable' and possibly in
-                ;; something deeper, `print-length' is the only one that has actually
-                ;; caused issues, but better safe than sorry
-                print-length print-level)
-            (mapcar (lambda (sexp) (add-file-local-variable 'eval sexp)) eval-commands)))))))
+    (let ((lv-command (orgstrap--lv-command info minimal norm-func-name))
+          (commands-existing (mapcar #'cdr (cl-remove-if-not (lambda (l) (eq (car l) 'eval)) elv))))
+      (let ((eval-commands
+             (cons lv-command (cl-remove-if-not
+                               (lambda (cmd) (orgstrap--match-elvs (cons 'eval cmd)))
+                               commands-existing))))
+        (when commands-existing
+          (delete-file-local-variable 'eval))
+        (let ((print-escape-newlines t)  ; needed to preserve the escaped newlines
+              ;; if `print-length' or `print-level' is accidentally set
+              ;; `add-file-local-variable' will truncate the sexp with and elispsis
+              ;; this is clearly a bug in `add-file-local-variable' and possibly in
+              ;; something deeper, `print-length' is the only one that has actually
+              ;; caused issues, but better safe than sorry
+              print-length print-level)
+          (mapcar (lambda (sexp) (add-file-local-variable 'eval sexp)) eval-commands))))))
 
 ;; init user facing functions
 ;;;###autoload
