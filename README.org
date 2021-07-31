@@ -1,4 +1,4 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 217d1560cc61944ea2ad9d033a9bc074b1fa014f3ade630642f4f971c465cb9d; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: c5a2566b3ccc000f8fc4078a8c86c9798a35f7f4074d5e5c23e48b9db7988042; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Orgstrap: Executable Org files
 #+startup: showall
@@ -703,6 +703,18 @@ Once =orgstrap--confirm-eval= is defined the rest of the =eval:= local variables
 Since =orgstrap-norm-func= is a dynamic variable it simplifies the
 potential future case where we don't embed the normalization function,
 still not sure if we really want to do that though
+
+#+caption: common local variables once lexical is enabled by default
+#+name: orgstrap-file-local-variables-common-lexical
+#+begin_src elisp :eval never
+(unwind-protect
+    (let ((orgstrap-norm-func orgstrap-norm-func-name)
+          (org-confirm-babel-evaluate #'orgstrap--confirm-eval))
+      (save-excursion
+        (org-babel-goto-named-src-block ,orgstrap-orgstrap-block-name) ; quasiquoted when nowebbed
+        (org-babel-execute-src-block)))
+  (org-set-startup-visibility))
+#+end_src
 ** Note on noweb support
 :PROPERTIES:
 :CUSTOM_ID: note-on-noweb-support
@@ -2396,9 +2408,9 @@ Configurations for services that can be reused across orgstrap files.
 - [[./services/blazegraph.org][Blazegraph]]
 ** Useful orgstrap blocks
 Include these in part or whole to simplify common orgstrap workflows.
-- [[reval.org#minimal][reval-minimal]]
-# - [[orgware.org#run-command][run-process-as-command]]
-# - [[orgware.org#securl][securl]]
+- [[file:reval.org::#minimal][reval-minimal]]
+# - [[file:orgware.org::#run-command][run-process-as-command]]
+# - [[file:orgware.org::#securl][securl]]
 * Background, file local variables, and checksums
 :PROPERTIES:
 :CUSTOM_ID: background-file-local-variables-and-checksums
@@ -2837,8 +2849,45 @@ As those workflows become established it would be nice to have a set
 of minimal wrappers for the various CI systems that will be sufficient
 to kick off the testing. See https://github.com/purcell/nix-emacs-ci
 for one way we might approach this.
-** Buffer local functions
-See [[file:./defl.org]].
+** Lexical variant
+This saves about 300 chars over the current minimal version.
+#+begin_src elisp
+(cl-defun orgstrap--length-of-sexp-at-point (&aux print-level print-length (print-escape-newlines t))
+  (length
+   (prin1-to-string
+    (read
+     ;; (org-babel-get-src-block-info)
+     (thing-at-point 'sexp)))))
+#+end_src
+
+#+begin_src elisp
+(let ((need "8.2.10")
+      (actual (org-version))
+      (org-confirm-babel-evaluate #'orgstrap--confirm-eval))
+  (or
+   (fboundp #'orgstrap--confirm-eval)
+   (not need)
+   (string< need actual)
+   (string= need actual)
+   (error "Org too old! %s < %s" actual need))
+  (defun orgstrap-norm-func--prp-1\.1 (body)
+    (let (print-quoted print-length print-level)
+      (prin1-to-string (read (concat "(progn\n" body "\n)")))))
+  (unless (fboundp #'orgstrap-norm)
+    (defun orgstrap-norm (body) (funcall orgstrap-norm-func-name body)))
+  (unless (fboundp 'orgstrap--confirm-eval)
+    (defun orgstrap--confirm-eval (lang body)
+      (not (and (member lang '("elisp" "emacs-lisp"))
+                (eq orgstrap-block-checksum
+                    (intern (secure-hash orgstrap-cypher (orgstrap-norm body))))))))
+  (unwind-protect
+      (save-excursion
+        (org-babel-goto-named-src-block "orgstrap")
+        (org-babel-execute-src-block))
+    (org-set-startup-visibility)))
+#+end_src
+** DONE Buffer local functions
+See [[file:./defl.org]] for an awful hack.
 ** TODO fix orgstrap--update-on-change hook so that it does not modify buffer fold state
 :PROPERTIES:
 :CREATED:  [2020-10-21 Wed 01:28]
