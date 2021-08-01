@@ -1,4 +1,4 @@
-# -*- orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; orgstrap-block-checksum: 26fb17ddebefbe150203f2b8d0975e05b25742c673ee9af49a028c7b15171a96; -*-
+# -*- orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; orgstrap-block-checksum: 5301b4e7124833442b38bb820dae75304f9a064aab60392e8acc2a7c69d37f48; -*-
 # [[orgstrap][jump to the orgstrap block for this file]]
 #+title: Orgware: Tooling for interactive Org files
 
@@ -72,7 +72,7 @@ for bootstrap, or that can be reloaded, or installed as a package.
 ;; ow.el is the catch-all file that includes all the functionality
 ;; that you might want to use in an orgstrap block in a single place
 ;; including functions that are also packaged independently such as
-;; the reval-* and securl-* functionality. The normal way to use it
+;; the reval-* and securl-* functionality.  The normal way to use it
 ;; is to use `reval-minimal' to obtain all the functionality, and then
 ;; use `reval-reload-latest' to cache a persistent copy and reload from
 ;; that file so that all xrefs can be resolved.
@@ -98,6 +98,8 @@ for bootstrap, or that can be reloaded, or installed as a package.
 <<ow-utils>>
 
 <<&ow-package>>
+
+<<ow-cli>>
 
 <<ow-usability>>
 
@@ -207,8 +209,15 @@ NOTE: `undo-fu' is required for Emacs < 28."
         (local-set-key "C-Z" #'undo-redo)
       (local-set-key "C-y" #'undo-redo)))
 
+  ;; Move text smoothly when point is at top or bottom of buffer
+  (setq-local scroll-conservatively 101)
+  (setq-local scroll-step 1)
+
   ;; Use left mouse to cycle
   (ow-enable-mouse-cycle)
+
+  ;; Mouse paste at point not cursor
+  (setq-local mouse-yank-at-point t)
 
   ;; Mouse wheel behavior
   (setq-local mouse-wheel-progressive-speed nil)
@@ -547,6 +556,170 @@ the string output of the process.
           (error "code: %s stdout: %S" return-code string)
         string))))
 #+end_src
+** cli and orthauth
+# see also [[file:~/git/git-share/README.org::parse-args-cli][git-share parse args]]
+#+name: ow-cli
+#+begin_src elisp :noweb yes
+;; ow-cli
+
+(require 'cl-lib)
+
+(defun ow-string-to-number (string &optional base)
+  "vanilla `string-to-number' has a degenerate case with \"0\""
+  (let ((maybe-zero (string-to-number string base)))
+    (if (= maybe-zero 0)
+        (if (string= maybe-zero "0")
+            0
+          (error "%S is not a number!" string))
+      maybe-zero)))
+
+(defun ow-keyword-name (keyword)
+  "Get the `symbol-name' of KEYWORD without the leading colon."
+  (unless (keywordp keyword)
+    (error "%s is not a keyword! %s" keyword (type-of keyword)))
+  (substring (symbol-name keyword) 1))
+
+(defun ow-cli--norm-arg (arg)
+  (let ((int (ignore-errors (ow--string-to-number arg))))
+    (if int int arg)))
+
+(defun ow-cli--process-bind-keyword (bind-keyword)
+  "Processes BIND-KEYWORD into let-binding elements `cl-case' elements and alist elements.
+
+Bind keyword lists may take the following forms.
+
+(:flag) ; legacy support before we added the internal binding clause
+((:flag)) ; same as (:flag)
+((:flag) flag-internal)
+
+(:option default)
+((:option default))
+((:option default) option-internal)"
+  (unless (listp bind-keyword)
+    (error "%s not a list! %s" bind-keyword (type-of bind-keyword)))
+  (let* ((kw-or-element? (car bind-keyword))
+         (bind? (if (keywordp kw-or-element?) nil (cdr bind-keyword)))
+         (element (if (keywordp kw-or-element?) bind-keyword kw-or-element?))
+         (_ (unless (listp element)
+              (error "%s not a list! %s" element (type-of element))))
+         (kw (car element))
+         (sl (ow-keyword-name kw))
+         (assign? (cdr element))
+         (real-assign (if bind? (car bind?) (intern (ow-keyword-name kw))))
+         (default (if assign? (car assign?) assign?)) ; FIXME
+         (p (if assign?
+                `(progn (setf ,real-assign (ow-cli--norm-arg (cadr args)))
+                        ;; equivalent of bash shift shift
+                        (setf args (cddr args)))
+              `(progn (setf ,real-assign t)
+                      ;; equivalent of bash shift
+                      (setf args (cdr args))))))
+    (list `(,real-assign ,default)  ; default
+          `(,(intern (format "--%s" sl)) ,p)  ; case
+          `(cons ',real-assign ,real-assign))))
+
+(defmacro ow-cli-parse-args (&rest keywords)
+  "(parse-args (:port port) (:pid pid) (:flag))
+
+   XXX This is a legacy function.
+
+   NOTE if the default value if a kwarg is nil rather than
+   empty i.e. (:asdf nil) vs (:asdf) the form with nil will
+   not fail but will be nil unless some value is provided
+   AND it will eat the next kwarg this is probably a misdesign"
+  `(ow-cli-gen ,keywords parsed))
+
+(defmacro ow-cli-gen (bind-keywords &rest body) ; (ref:cli-gen)
+  "All the machinery needed for simple cli specification.
+
+BIND-KEYWORDS follow a reverse let pattern because if the name to
+bind is not specified then it is the `ow-keyword-name' of the keyword
+used to specify the command line option.
+
+For example
+((:option default)) -> --option value -> (let ((option \"value\")) )
+((:option default) option-internal) -> --option value -> (let ((option-internal \"value\")) )"
+  (declare (indent 2) (indent 1))
+  (cl-destructuring-bind (defaults cases returns)
+      (apply #'cl-mapcar #'list ; `cl-mapcar' required for this to work
+             (mapcar #'ow-cli--process-bind-keyword bind-keywords))
+    `(let ((args (cdr command-line-args-left))
+           ,@defaults)
+       (cl-do ()
+           ((null args) nil)
+         (cl-case (intern (car args))
+           ,@cases
+           (otherwise (progn (message "unhandled: %s" (car args))
+                             (setf args (cdr args))))))
+       (let (cases returns (parsed (list ,@returns)))
+         ,@body))))
+
+<<orthauth-minimal>>
+#+end_src
+
+[[(cli-gen)][~ow-cli-gen~]] takes a generative approach to parsing command line
+options which I usually dislike and discourage because it puts the
+specification of the interface at the wrong place and the =--help=
+string can easily get out of sync and must be actively kept in
+sync. This should thus only be used for quick and dirty work that is
+not indented for external consumption or reuse. For more complex cli
+needs including any that are expected to be user facing I suggest
+reusing the internal machinery from [[https://github.com/r0man/docopt.el][docopt.el]] since it makes the
+specification of the interface the interface!
+
+#+name: emacs-cli-testing
+#+begin_src bash
+emacs -q \
+--eval "(setq command-line-args-left nil)" \
+-- --option value --flag --other other
+#+end_src
+
+#+name: ow-cli-tests
+#+begin_src elisp
+(ow-cli-gen
+    (((:repo "~/git/apinatomy-models") apinat-model-repo)
+     ((:converter "apinat-converter") apinat-converter-path)
+     ((:model-id nil))
+     ((:secrets oa-secrets) oa-secrets)
+     ((:debug) apinat-converter-debug)
+     )
+  parsed)
+
+(let ((command-line-args-left '("--" "--option" "value" "--flag" "--other" "other")))
+  (ow-cli-gen
+      ((:option nil)
+       ((:option-2 'lol))
+       ((:flag) flag-internal)
+       ((:other "default") other-internal))
+    parsed))
+
+#+end_src
+
+# FIXME this needs to be its own thing, probably in the orthauth repo,
+# but it is going here for now
+#+name: orthauth-minimal
+#+begin_src elisp
+;; orthauth-minimal
+
+(defvar oa-secrets nil "path to orthauth secrets.sxpr file")
+
+(defun oa--resolve-path (plist elements)
+  "recursively `cl-getf' in order keywords from ELEMENTS in nested plists inside PLIST"
+  (if elements
+      (oa--resolve-path (cl-getf plist (car elements)) (cdr elements))
+    plist))
+
+(defun oa--read (path)
+  "read the first sexpression in the file at PATH"
+  (with-temp-buffer
+    (insert-file-contents path)
+    (read (buffer-string))))
+
+(defun oa-path (&rest elements)
+  "Retrieve value at nested path defined by keywords provided in ELEMENTS in `oa-secrets'"
+  (let ((plist (oa--read oa-secrets)))
+    (oa--resolve-path plist elements)))
+#+end_src
 ** securl
 :PROPERTIES:
 :CUSTOM_ID: securl
@@ -567,8 +740,8 @@ portable makes it significantly harder to understand and audit.
 (defvar securl-default-cypher 'sha256)  ; remember kids, always publish the cypher with the checksum
 
 (defun securl-path-checksum (path &optional cypher)
-  "not as fast as using sha256sum, but requires no dependencies
-1.4s vs .25s for ~60mb"
+  "Compute checksum for PATH under CYPHER.
+Not as fast as using sha256sum, but requires no dependencies 1.4s vs .25s for ~60mb"
   (let ((cypher (or cypher securl-default-cypher)))
     (with-temp-buffer
       (insert-file-contents-literally path)
@@ -634,7 +807,23 @@ All errors are silenced."
           (goto-char 0)
           (re-search-forward "^HTTP.+OK$"))
       (error nil))))
+
+(defun ow-babel-eval (block-name &optional universal-argument)
+  "Use to confirm running a chain of dependent blocks starting with BLOCK-NAME.
+This retains single confirmation at the entry point for the block."
+  ;; TODO consider a header arg for a variant of this in org babel proper
+  (interactive "P")
+  (let ((org-confirm-babel-evaluate (lambda (_l _b) nil)))
+    (save-excursion
+      (when (org-babel-find-named-block block-name)
+        ;; goto won't raise an error which results in the block where
+        ;; `ow-confirm-once' is being used being called an infinite
+        ;; number of times and blowing the stack
+        (org-babel-goto-named-src-block block-name)
+        (org-babel-execute-src-block)))))
 #+end_src
+
+
 * Emacs sandbox
 Not quite a sandbox yet, but at least a clean slate.
 
@@ -759,6 +948,23 @@ persistent to prevent prompt fatigue.
   (org-babel-lob-ingest "./reval.org"))
 
 (add-hook 'org-babel-pre-tangle-hook #'ow---pre-tangle nil t)
+;; TODO need a way to hook for C-c C-v C-v because org-src-mode-hook fires too late
+
+(defun ow---strip-empty-lines ()
+  ;; NOTE don't use `replace-regexp' it is marked as interacitve only
+  ;; for a reason, the byte compiler would probably catch the issue
+  (save-excursion
+    (goto-char (point-min))
+    (while (re-search-forward "^ +$" nil t)
+      (replace-match ""))))
+
+;; FIXME this is a hack to deal with the fact that noweb expansion
+;; adds whitespace at the start of empty lines and there is no obvious
+;; way to fix that right now note that the hook runs in the buffer
+;; where the expanded body is being prepared before buffer-string is
+;; called so it is perfect for this use case, note that the hook has
+;; to be set globally
+(add-hook 'org-babel-tangle-body-hook #'ow---strip-empty-lines)
 #+end_src
 
 ** Local variables :ARCHIVE:

@@ -92,6 +92,8 @@ it doesn't handle name collisions which is out primary use case.
 # TODO fmakunbound doesn't quite work as desired, may need to advise it
 #+name: defl-impl
 #+begin_src elisp :results none :lexical yes
+(require 'cl-lib)
+
 (defvar-local defl--local-defuns nil
   "A hash table that maps global closures to local function symbols.
 Needed to dispatch on command passed to :around advice.")
@@ -123,7 +125,7 @@ then the current implementation will break."
     `(prog1
          (defun ,local-name ,arglist ,@docstring ,@body)
        (unless (fboundp ',name)
-         (defun ,name (&rest args) (error "global stub for defun-local %s" #',name))
+         (defun ,name (&rest args) (error "Global stub for defun-local %s" #',name))
          (put ',name 'defun-local-stub t))
        (puthash (symbol-function #',name) #',local-name defl--local-defuns) ; XXX broken if the stub is overwritten
        (advice-add #',name :around #'defl--has-local-defuns))))
