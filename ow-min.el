@@ -22,6 +22,8 @@
 
 ;;; Code:
 
+(require 'cl-lib)
+
 (defvar-local defl--local-defuns nil
   "A hash table that maps global closures to local function symbols.
 Needed to dispatch on command passed to :around advice.")
@@ -53,7 +55,7 @@ then the current implementation will break."
     `(prog1
          (defun ,local-name ,arglist ,@docstring ,@body)
        (unless (fboundp ',name)
-         (defun ,name (&rest args) (error "global stub for defun-local %s" #',name))
+         (defun ,name (&rest args) (error "Global stub for defun-local %s" #',name))
          (put ',name 'defun-local-stub t))
        (puthash (symbol-function #',name) #',local-name defl--local-defuns) ; XXX broken if the stub is overwritten
        (advice-add #',name :around #'defl--has-local-defuns))))
@@ -78,8 +80,8 @@ then the current implementation will break."
 (defvar securl-default-cypher 'sha256)  ; remember kids, always publish the cypher with the checksum
 
 (defun securl-path-checksum (path &optional cypher)
-  "not as fast as using sha256sum, but requires no dependencies
-1.4s vs .25s for ~60mb"
+  "Compute checksum for PATH under CYPHER.
+Not as fast as using sha256sum, but requires no dependencies 1.4s vs .25s for ~60mb"
   (let ((cypher (or cypher securl-default-cypher)))
     (with-temp-buffer
       (insert-file-contents-literally path)
@@ -118,6 +120,20 @@ All errors are silenced."
           (goto-char 0)
           (re-search-forward "^HTTP.+OK$"))
       (error nil))))
+
+(defun ow-babel-eval (block-name &optional universal-argument)
+  "Use to confirm running a chain of dependent blocks starting with BLOCK-NAME.
+This retains single confirmation at the entry point for the block."
+  ;; TODO consider a header arg for a variant of this in org babel proper
+  (interactive "P")
+  (let ((org-confirm-babel-evaluate (lambda (_l _b) nil)))
+    (save-excursion
+      (when (org-babel-find-named-block block-name)
+        ;; goto won't raise an error which results in the block where
+        ;; `ow-confirm-once' is being used being called an infinite
+        ;; number of times and blowing the stack
+        (org-babel-goto-named-src-block block-name)
+        (org-babel-execute-src-block)))))
 
 (defun ow-min--reval-update ()
   "Get the immutable url for the current remote version of this file."

@@ -17,7 +17,7 @@
 ;; ow.el is the catch-all file that includes all the functionality
 ;; that you might want to use in an orgstrap block in a single place
 ;; including functions that are also packaged independently such as
-;; the reval-* and securl-* functionality. The normal way to use it
+;; the reval-* and securl-* functionality.  The normal way to use it
 ;; is to use `reval-minimal' to obtain all the functionality, and then
 ;; use `reval-reload-latest' to cache a persistent copy and reload from
 ;; that file so that all xrefs can be resolved.
@@ -27,10 +27,18 @@
 ;;; Code:
 
 (unless (featurep 'reval)
+  (require 'cl-lib)
+
+  (defgroup reval nil
+    "Minimal remote evaluation of elisp code."
+    :tag "reval"
+    :group 'applications)
+
   (defcustom reval-default-cypher 'sha256
     "Default cypher to use to fill in a hole in `reval'."
     :type 'symbol
-    :options (secure-hash-algorithms))
+    :options (secure-hash-algorithms)
+    :group 'reval)
 
   (defvar reval-cache-directory (concat user-emacs-directory "reval/cache/")
     "The directory where retrieved .el files are saved.")
@@ -75,7 +83,7 @@
               (switch-to-buffer (current-buffer))
               ;; FIXME `yes-or-no-p' still blocks the command loop in >= 27 emacsclient
               (unless (yes-or-no-p "Audit of file ok? ") ; not using `y-or-n-p' since it is too easy
-                (error "Audit failed. Checksum will not be calculated for %s"
+                (error "Audit failed.  Checksum will not be calculated for %s"
                        (buffer-file-name (current-buffer)))))
 
             ;; need to ensure that file is actually elisp
@@ -86,14 +94,14 @@
 
             ;; elisp check by major mode
             (unless (eq major-mode 'emacs-lisp-mode)
-              (error "Not an emacs lisp file!"))
+              (error "Not an Emacs Lisp file!"))
 
             ;; elisp check by read
             (condition-case nil
                 (read (concat "(progn\n"
                               (buffer-substring-no-properties (point-min) (point-max))
                               "\n)"))
-              (error (error "Not an emacs lisp file!")))
+              (error (error "Not an Emacs Lisp file!")))
 
             ;; return the checksum
             (intern (secure-hash cypher (current-buffer))))))))
@@ -105,7 +113,7 @@
 
   (defalias 'reval-resum #'reval-resum-review)
 
-  (defvar reval--make-audit t "Dynamic variable to control audit during `reval--make'")
+  (defvar reval--make-audit t "Dynamic variable to control audit during `reval--make'.")
   ;; the control of audit behavior is intentionally excluded from the
   ;; arguments of `reval--make' so that top level calls must audit
   (defun reval--make (cypher path-or-url)
@@ -148,7 +156,10 @@
                   nil t))))
 
   (defun reval-cache-path (checksum &optional basename)
-    "Return the path to the local cache for a given checksum."
+    "Return the path to the local cache for a given CHECKSUM.
+  If BASENAME is provided a wildcard is not used.  This is mostly
+  to make the calls more human readable for debugging but also
+  makes it easier to catch cases where the wrong checksum was passed."
     (let* ((name (symbol-name checksum))
            (subdir (substring name 0 2))
            (cache-path (concat reval-cache-directory subdir "/" name "-" (or basename "*"))))
@@ -162,7 +173,7 @@
             nil)))))
 
   (defun reval--write-cache (buffer cache-path)
-    "Write BUFFER to CACHE-PATH. Create the parent if it doesn not exist."
+    "Write BUFFER to CACHE-PATH.  Create the parent if it doesn not exist."
     (let ((parent-path (file-name-directory cache-path))
           make-backup-files)
       (unless (file-directory-p parent-path)
@@ -171,6 +182,8 @@
         (write-file cache-path))))
 
   (defun reval-find-cache (&optional universal-argument)
+    "Jump to the cache for a given reval call.
+  At the moment UNIVERSAL-ARGUMENT is a placeholder."
     (interactive)
     (cl-multiple-value-bind (_cypher checksum path-or-url _alternates _b _e)
         (reval--form-at-point)
@@ -187,8 +200,9 @@
 
   The simplest way to populate a `reval' expression starting from just
   PATH-OR-URL is to write out expression with CYPHER and CHECKSUM as a
-  nonsense values. For example (reval ? ? \"path/to/file.el\"). Then run
-  M-x `reval-update-simple' to populate CYPHER and CHECKSUM."
+  nonsense values.  For example (reval ? ? \"path/to/file.el\").  Then
+  run \\[reval-update-simple] (M-x `reval-update-simple') to populate
+  CYPHER and CHECKSUM."
     (let (done
           (cache-path (reval-cache-path checksum (file-name-nondirectory path-or-url))))
       (with-url-handler-mode
@@ -233,12 +247,13 @@
 
   (defvar url-http-end-of-headers)
   (defun reval-url->json (url)  ; see utils.el
-    "given a url string return json as a hash table"
+    "Given a URL string return json as a hash table."
     (json-parse-string
      (with-current-buffer (url-retrieve-synchronously url)
        (buffer-substring url-http-end-of-headers (point-max)))))
 
   (defun reval--get-new-immutable-url ()
+    "Get the immutable url for the current buffer."
     (let ((get-imm-name (reval-header-get-immutable)))
       (if get-imm-name
           (let ((get-imm (intern get-imm-name)))
@@ -250,6 +265,7 @@
         nil)))
 
   (defun reval-get-imm-github (group repo path &optional branch)
+    "Get the immutable url for PATH on BRANCH in a github remote for REPO at GROUP."
     (let* ((branch (or branch "master"))
            (url (format "https://api.github.com/repos/%s/%s/git/refs/heads/%s" group repo branch))
            (sha (gethash "sha" (gethash "object" (reval-url->json url)))))
@@ -264,7 +280,7 @@
       (lm-header "is-version-of")))
 
   (defun reval-header-get-immutable (&optional file)
-    "Return the Reval-Get-Immutable: header for File or current buffer.
+    "Return the Reval-Get-Immutable: header for FILE or current buffer.
 
   The value of this header should name a function in the current
   file that returns an immutable name that points to the current
@@ -299,7 +315,7 @@
     )
 
   (defun reval--dquote-symbolp (thing)
-    "Matches pattern ''THING.
+    "Match pattern ''THING.
   Useful when dealing with quoted symbols in the outpub or a `read'.
   For example elt 2 of '(reval 'sha256 ? \"file.el\")."
     (and (consp thing)
@@ -308,6 +324,7 @@
          (symbolp (cadr thing))))
 
   (defun reval--form-at-point ()
+    "Extract the components of the reval expression at the current point."
     (save-excursion
       (re-search-forward " ")
       (re-search-backward "(reval[[:space:]]")
@@ -326,6 +343,7 @@
             (cl-values cypher checksum path-or-url alternates begin end))))))
 
   (defun reval-checksum-at-point (&optional universal-argument)
+    "Get the checksum in the reval form at point.  UNIVERSAL-ARGUMENT is a placeholder."
     (interactive)
     (cl-multiple-value-bind (_cypher checksum _path-or-url _alternates _b _e)
         (reval--form-at-point)
@@ -357,6 +375,8 @@
   )
 
 (unless (featurep 'defl)
+  (require 'cl-lib)
+
   (defvar-local defl--local-defuns nil
     "A hash table that maps global closures to local function symbols.
   Needed to dispatch on command passed to :around advice.")
@@ -388,7 +408,7 @@
       `(prog1
            (defun ,local-name ,arglist ,@docstring ,@body)
          (unless (fboundp ',name)
-           (defun ,name (&rest args) (error "global stub for defun-local %s" #',name))
+           (defun ,name (&rest args) (error "Global stub for defun-local %s" #',name))
            (put ',name 'defun-local-stub t))
          (puthash (symbol-function #',name) #',local-name defl--local-defuns) ; XXX broken if the stub is overwritten
          (advice-add #',name :around #'defl--has-local-defuns))))
@@ -460,8 +480,8 @@
 (defvar securl-default-cypher 'sha256)  ; remember kids, always publish the cypher with the checksum
 
 (defun securl-path-checksum (path &optional cypher)
-  "not as fast as using sha256sum, but requires no dependencies
-1.4s vs .25s for ~60mb"
+  "Compute checksum for PATH under CYPHER.
+Not as fast as using sha256sum, but requires no dependencies 1.4s vs .25s for ~60mb"
   (let ((cypher (or cypher securl-default-cypher)))
     (with-temp-buffer
       (insert-file-contents-literally path)
@@ -501,6 +521,20 @@ All errors are silenced."
           (re-search-forward "^HTTP.+OK$"))
       (error nil))))
 
+(defun ow-babel-eval (block-name &optional universal-argument)
+  "Use to confirm running a chain of dependent blocks starting with BLOCK-NAME.
+This retains single confirmation at the entry point for the block."
+  ;; TODO consider a header arg for a variant of this in org babel proper
+  (interactive "P")
+  (let ((org-confirm-babel-evaluate (lambda (_l _b) nil)))
+    (save-excursion
+      (when (org-babel-find-named-block block-name)
+        ;; goto won't raise an error which results in the block where
+        ;; `ow-confirm-once' is being used being called an infinite
+        ;; number of times and blowing the stack
+        (org-babel-goto-named-src-block block-name)
+        (org-babel-execute-src-block)))))
+
 (defvar ow-package-archives '(("melpa" . "https://melpa.org/packages/")
                               ("nongnu" . "https://elpa.nongnu.org/nongnu/")
                               ("org" . "https://orgmode.org/elpa/")))
@@ -534,6 +568,121 @@ into a list (name body ...)"
                    ((listp name) `(use-package ,@name))
                    ((t (error "unhandled type %s" (type-of name))))))
            names)))
+
+;; ow-cli
+
+(require 'cl-lib)
+
+(defun ow-string-to-number (string &optional base)
+  "vanilla `string-to-number' has a degenerate case with \"0\""
+  (let ((maybe-zero (string-to-number string base)))
+    (if (= maybe-zero 0)
+        (if (string= maybe-zero "0")
+            0
+          (error "%S is not a number!" string))
+      maybe-zero)))
+
+(defun ow-keyword-name (keyword)
+  "Get the `symbol-name' of KEYWORD without the leading colon."
+  (unless (keywordp keyword)
+    (error "%s is not a keyword! %s" keyword (type-of keyword)))
+  (substring (symbol-name keyword) 1))
+
+(defun ow-cli--norm-arg (arg)
+  (let ((int (ignore-errors (ow--string-to-number arg))))
+    (if int int arg)))
+
+(defun ow-cli--process-bind-keyword (bind-keyword)
+  "Processes BIND-KEYWORD into let-binding elements `cl-case' elements and alist elements.
+
+Bind keyword lists may take the following forms.
+
+(:flag) ; legacy support before we added the internal binding clause
+((:flag)) ; same as (:flag)
+((:flag) flag-internal)
+
+(:option default)
+((:option default))
+((:option default) option-internal)"
+  (unless (listp bind-keyword)
+    (error "%s not a list! %s" bind-keyword (type-of bind-keyword)))
+  (let* ((kw-or-element? (car bind-keyword))
+         (bind? (if (keywordp kw-or-element?) nil (cdr bind-keyword)))
+         (element (if (keywordp kw-or-element?) bind-keyword kw-or-element?))
+         (_ (unless (listp element)
+              (error "%s not a list! %s" element (type-of element))))
+         (kw (car element))
+         (sl (ow-keyword-name kw))
+         (assign? (cdr element))
+         (real-assign (if bind? (car bind?) (intern (ow-keyword-name kw))))
+         (default (if assign? (car assign?) assign?)) ; FIXME
+         (p (if assign?
+                `(progn (setf ,real-assign (ow-cli--norm-arg (cadr args)))
+                        ;; equivalent of bash shift shift
+                        (setf args (cddr args)))
+              `(progn (setf ,real-assign t)
+                      ;; equivalent of bash shift
+                      (setf args (cdr args))))))
+    (list `(,real-assign ,default)  ; default
+          `(,(intern (format "--%s" sl)) ,p)  ; case
+          `(cons ',real-assign ,real-assign))))
+
+(defmacro ow-cli-parse-args (&rest keywords)
+  "(parse-args (:port port) (:pid pid) (:flag))
+
+   XXX This is a legacy function.
+
+   NOTE if the default value if a kwarg is nil rather than
+   empty i.e. (:asdf nil) vs (:asdf) the form with nil will
+   not fail but will be nil unless some value is provided
+   AND it will eat the next kwarg this is probably a misdesign"
+  `(ow-cli-gen ,keywords parsed))
+
+(defmacro ow-cli-gen (bind-keywords &rest body) ; (ref:cli-gen)
+  "All the machinery needed for simple cli specification.
+
+BIND-KEYWORDS follow a reverse let pattern because if the name to
+bind is not specified then it is the `ow-keyword-name' of the keyword
+used to specify the command line option.
+
+For example
+((:option default)) -> --option value -> (let ((option \"value\")) )
+((:option default) option-internal) -> --option value -> (let ((option-internal \"value\")) )"
+  (declare (indent 2) (indent 1))
+  (cl-destructuring-bind (defaults cases returns)
+      (apply #'cl-mapcar #'list ; `cl-mapcar' required for this to work
+             (mapcar #'ow-cli--process-bind-keyword bind-keywords))
+    `(let ((args (cdr command-line-args-left))
+           ,@defaults)
+       (cl-do ()
+           ((null args) nil)
+         (cl-case (intern (car args))
+           ,@cases
+           (otherwise (progn (message "unhandled: %s" (car args))
+                             (setf args (cdr args))))))
+       (let (cases returns (parsed (list ,@returns)))
+         ,@body))))
+
+;; orthauth-minimal
+
+(defvar oa-secrets nil "path to orthauth secrets.sxpr file")
+
+(defun oa--resolve-path (plist elements)
+  "recursively `cl-getf' in order keywords from ELEMENTS in nested plists inside PLIST"
+  (if elements
+      (oa--resolve-path (cl-getf plist (car elements)) (cdr elements))
+    plist))
+
+(defun oa--read (path)
+  "read the first sexpression in the file at PATH"
+  (with-temp-buffer
+    (insert-file-contents path)
+    (read (buffer-string))))
+
+(defun oa-path (&rest elements)
+  "Retrieve value at nested path defined by keywords provided in ELEMENTS in `oa-secrets'"
+  (let ((plist (oa--read oa-secrets)))
+    (oa--resolve-path plist elements)))
 
 ;; mouse behavior
 
@@ -676,8 +825,15 @@ NOTE: `undo-fu' is required for Emacs < 28."
         (local-set-key "C-Z" #'undo-redo)
       (local-set-key "C-y" #'undo-redo)))
 
+  ;; Move text smoothly when point is at top or bottom of buffer
+  (setq-local scroll-conservatively 101)
+  (setq-local scroll-step 1)
+
   ;; Use left mouse to cycle
   (ow-enable-mouse-cycle)
+
+  ;; Mouse paste at point not cursor
+  (setq-local mouse-yank-at-point t)
 
   ;; Mouse wheel behavior
   (setq-local mouse-wheel-progressive-speed nil)
