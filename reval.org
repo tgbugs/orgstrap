@@ -113,6 +113,10 @@ When update is called and there is an existing immutable url or a
 cached version of the hash the new version should be diffed against
 the existing version and the changes should be displayed for easier
 review.
+** TODO secure-hash-algorithms is only useful for emacs >= 26
+:PROPERTIES:
+:CREATED:  [2021-08-02 Mon 17:19]
+:END:
 * reval.el
 ** tangles
 #+begin_src elisp :noweb no-export :tangle ./reval.el :lexical yes
@@ -229,7 +233,7 @@ reduced complexity everywhere else.
 (defcustom reval-default-cypher 'sha256
   "Default cypher to use to fill in a hole in `reval'."
   :type 'symbol
-  :options (secure-hash-algorithms)
+  :options (if (fboundp #'secure-hash-algorithms) (secure-hash-algorithms) '(sha256))
   :group 'reval)
 
 (defvar reval-cache-directory (concat user-emacs-directory "reval/cache/")
