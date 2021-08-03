@@ -30,7 +30,7 @@
 (defcustom reval-default-cypher 'sha256
   "Default cypher to use to fill in a hole in `reval'."
   :type 'symbol
-  :options (secure-hash-algorithms)
+  :options (if (fboundp #'secure-hash-algorithms) (secure-hash-algorithms) '(sha256))
   :group 'reval)
 
 (defvar reval-cache-directory (concat user-emacs-directory "reval/cache/")

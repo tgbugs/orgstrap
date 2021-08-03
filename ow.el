@@ -37,7 +37,7 @@
   (defcustom reval-default-cypher 'sha256
     "Default cypher to use to fill in a hole in `reval'."
     :type 'symbol
-    :options (secure-hash-algorithms)
+    :options (if (fboundp #'secure-hash-algorithms) (secure-hash-algorithms) '(sha256))
     :group 'reval)
 
   (defvar reval-cache-directory (concat user-emacs-directory "reval/cache/")
@@ -535,9 +535,13 @@ This retains single confirmation at the entry point for the block."
         (org-babel-goto-named-src-block block-name)
         (org-babel-execute-src-block)))))
 
-(defvar ow-package-archives '(("melpa" . "https://melpa.org/packages/")
+(defvar ow-package-archives '(("gnu" . "https://elpa.gnu.org/packages/") ; < 26 has http
+                              ("melpa" . "https://melpa.org/packages/")
                               ("nongnu" . "https://elpa.nongnu.org/nongnu/")
                               ("org" . "https://orgmode.org/elpa/")))
+
+(when (< emacs-major-version 26)
+  (setq gnutls-algorithm-priority "NORMAL:-VERS-TLS1.3"))
 
 (defun ow-enable-use-package ()
   "Do all the setup needed for `use-package'.
@@ -548,7 +552,22 @@ to any use of `use-package' otherwise it will be missing and fail"
   ;; changes, namely this library, updating that is easier to get right using
   ;; the `reval-update' machinery
   (require 'package)
-  (dolist (pair ow-package-archives) (add-to-list 'package-archives pair t))
+  (when (< emacs-major-version 26)
+    (setq package-archives
+          (cl-remove-if (lambda (p) (equal p '("gnu" . "http://elpa.gnu.org/packages/")))
+                        package-archives))
+    (add-to-list 'package-archives (assoc "gnu" ow-package-archives))
+    (package-initialize)
+    (unless (package-installed-p 'gnu-elpa-keyring-update)
+      (let (os package-check-signature)
+        (setq package-check-signature nil)
+        (package-refresh-contents)
+        (package-install 'gnu-elpa-keyring-update)
+        (warn "You need to restart Emacs for package keyring changes to take effect.")
+        (setq package-check-signature os)))
+    (setq package--initialized nil))
+  (dolist (pair ow-package-archives)
+    (add-to-list 'package-archives pair t))
   (unless package--initialized
     (package-initialize))
   (unless (package-installed-p 'use-package)
@@ -746,8 +765,6 @@ For example
 
 ;; don't export buttons
 
-(require 'ol)
-
 (defun ow-link-no-export (path desc format)
   "Return nothing for export" ; FIXME broken ???
   "")
@@ -761,50 +778,63 @@ For example
 
 ;; TODO defalias defbutton ow-defbutton
 
-;; hide headline for future startups
+(defun ow--org-link-set-parameters (type &rest parameters)
+  "no-op to prevent error, install a newer version of org or emacs")
 
-(org-link-set-parameters "FOLD-HEADLINE" :export #'ow-link-no-export :follow
-                         (lambda (&optional nothing)
-                           (ow-fold-headline)))
+(defun ow-make-buttons ()
+  "Enable standard buttons." ; needed to avoid autoloading the built-in version of org-mode
 
-;; run the next #+begin_src block
+  (when (string< "9.3" (org-version))
+    ;; before 9.3 the org link functionality was still in org.el
+    (require 'ol))
 
-(org-link-set-parameters "RUN" :export #'ow-link-no-export :follow
-                         (lambda (&optional nothing)
-                           (org-next-block nil)
-                           (org-babel-execute-src-block)))
+  (when (string< (org-version) "9.0")
+    (defalias 'org-link-set-parameters #'ow--org-link-set-parameters))
 
-;; run the previous src block (doesn't work if there are results)
+  ;; hide headline for future startups
 
-(org-link-set-parameters "RUNPREV" :export #'ow-link-no-export :follow
-                         (lambda (&optional nothing)
-                           (org-previous-block nil)
-                           (org-babel-execute-src-block)))
+  (org-link-set-parameters "FOLD-HEADLINE" :export #'ow-link-no-export :follow
+                           (lambda (&optional nothing)
+                             (ow-fold-headline)))
 
-;; run the next #+call: TODO we should be able to do this with mouse-1?
+  ;; run the next #+begin_src block
 
-(org-link-set-parameters "RUNC" :export #'ow-link-no-export :follow
-                         (lambda (&optional nothing)
-                           (save-excursion
-                             (re-search-forward "#\\+call:")
-                             (org-ctrl-c-ctrl-c))))
+  (org-link-set-parameters "RUN" :export #'ow-link-no-export :follow
+                           (lambda (&optional nothing)
+                             (org-next-block nil)
+                             (org-babel-execute-src-block)))
 
-;; adjust font size for the current buffer
+  ;; run the previous src block (doesn't work if there are results)
 
-(org-link-set-parameters "TEXT-LARGER" :export #'orsgrap--nox :follow
-                         (lambda (&optional nothing)
-                           (text-scale-adjust 1)
-                           (ow-recenter-on-mouse)))
+  (org-link-set-parameters "RUNPREV" :export #'ow-link-no-export :follow
+                           (lambda (&optional nothing)
+                             (org-previous-block nil)
+                             (org-babel-execute-src-block)))
 
-(org-link-set-parameters "TEXT-SMALLER" :export #'ow-link-no-export :follow
-                         (lambda (&optional nothing)
-                           (text-scale-adjust -1)
-                           (ow-recenter-on-mouse)))
+  ;; run the next #+call: TODO we should be able to do this with mouse-1?
 
-(org-link-set-parameters "TEXT-RESET" :export #'ow-link-no-export :follow
-                         (lambda (&optional nothing)
-                           (text-scale-adjust 0)
-                           (ow-recenter-on-mouse)))
+  (org-link-set-parameters "RUNC" :export #'ow-link-no-export :follow
+                           (lambda (&optional nothing)
+                             (save-excursion
+                               (re-search-forward "#\\+call:")
+                               (org-ctrl-c-ctrl-c))))
+
+  ;; adjust font size for the current buffer
+
+  (org-link-set-parameters "TEXT-LARGER" :export #'orsgrap--nox :follow
+                           (lambda (&optional nothing)
+                             (text-scale-adjust 1)
+                             (ow-recenter-on-mouse)))
+
+  (org-link-set-parameters "TEXT-SMALLER" :export #'ow-link-no-export :follow
+                           (lambda (&optional nothing)
+                             (text-scale-adjust -1)
+                             (ow-recenter-on-mouse)))
+
+  (org-link-set-parameters "TEXT-RESET" :export #'ow-link-no-export :follow
+                           (lambda (&optional nothing)
+                             (text-scale-adjust 0)
+                             (ow-recenter-on-mouse))))
 
 (defun ow--headline-faces ()
   "Set face for all headline levels to be bold."
