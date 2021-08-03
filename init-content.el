@@ -105,6 +105,8 @@
   (evil-select-search-module 'evil-search-module 'evil-search))
  (org-plus-contrib
    :mode ("\\.org\\'" . org-mode)
+   :bind (:map org-mode-map
+               ("<tab>" . org-cycle))
    :custom
    (org-adapt-indentation nil)
    (org-edit-src-content-indentation 0)
