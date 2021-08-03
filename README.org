@@ -220,8 +220,8 @@ This is the =orgstrap= block that is used for this file.
 
 <<orgstrap-run-helper-defuns>>
 <<orgstrap-edit-helper-defuns>>
-<<orgstrap-init-helper-defuns>>
 <<orgstrap-dev-helper-defuns>>
+<<orgstrap-init-helper-defuns>>
 <<orgstrap-extra-helper-defuns>>
 <<orgstrap-do>>
 
@@ -698,20 +698,24 @@ Once =orgstrap--confirm-eval= is defined the rest of the =eval:= local variables
 #+caption: common local variables
 #+name: orgstrap-file-local-variables-common
 #+begin_src elisp :eval never
-(let ((ocbe org-confirm-babel-evaluate)
-      (obs (org-babel-find-named-block ,orgstrap-orgstrap-block-name))) ; quasiquoted when nowebbed
-  (if obs
-      (unwind-protect
-        (save-excursion
-          (setq-local orgstrap-norm-func orgstrap-norm-func-name)
-          (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
-          (goto-char obs)
-          (org-babel-execute-src-block))
-      (setq-local org-confirm-babel-evaluate ocbe)
-      ;; FIXME `org-set-startup-visibility' should not run on subsequent calls to the block?
-      (org-set-startup-visibility))
-    ;; FIXME warn or error here?
-    (warn "No orgstrap block.")))
+(defvar ds t)
+(if ds
+    (let ((ds nil)) (vc-refresh-state))
+  (let ((ocbe org-confirm-babel-evaluate)
+        (obs (org-babel-find-named-block ,orgstrap-orgstrap-block-name))) ; quasiquoted when nowebbed
+    (if obs
+        (unwind-protect
+            (save-excursion
+              (setq-local orgstrap-norm-func orgstrap-norm-func-name)
+              (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
+              (goto-char obs)
+              (org-babel-execute-src-block))
+          (setq-local org-confirm-babel-evaluate ocbe)
+          ;; FIXME `org-set-startup-visibility' should not run on subsequent calls to the block?
+          (org-set-startup-visibility))
+      ;; FIXME warn or error here?
+      (warn "No orgstrap block.")))
+  (makunbound 'ds))
 #+end_src
 
 Since =orgstrap-norm-func= is a dynamic variable it simplifies the
@@ -2635,6 +2639,7 @@ take nearly 3 hours to complete and debug.
 :CUSTOM_ID: future-work
 :visibility: children
 :END:
+** TODO orgstrap-inspect-elvs
 ** TODO symlinks and vc
 :PROPERTIES:
 :CREATED:  [2021-08-02 Mon 01:23]
