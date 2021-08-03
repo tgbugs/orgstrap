@@ -32,7 +32,9 @@
 (defvar init-simple-testing nil)
 
 (when init-simple-testing
-  (defconst working-dir (file-name-directory (or load-file-name (buffer-file-name)))
+  (defconst working-dir
+    (concat (file-name-directory (or load-file-name (buffer-file-name)))
+            "emacs-d-testing/" (number-to-string emacs-major-version) "/")
     "Directory where this file is located")
 
   (defvar init-simple-user-dir (expand-file-name "init-simple-user" working-dir))
@@ -78,18 +80,17 @@
         (unless o
           (url-handler-mode 0)))))
   (defalias 'reval #'reval-minimal)
-  (reval 'sha256 'f978168b5c0fc0ce43f69c748847e693acc545df9a3ff1d9def57bdb1fc63c4a
+  (reval 'sha256 '1eb9c155d89e5d1f14b3f62f6acdeb6ab03647662ff9473ad211c9e4e5e297ef
          ;; "~/git/orgstrap/reval.el"
-         "https://raw.githubusercontent.com/tgbugs/orgstrap/649fd0cdcb831dcd840c66ee324005165ce970ca/reval.el"))
+         "https://raw.githubusercontent.com/tgbugs/orgstrap/2ee5438e6382786d1269310cef0315eca0d227be/reval.el"))
 
 (let ((ghost "https://raw.githubusercontent.com/tgbugs/orgstrap/"))
   ;; FIXME ghost breaks the reval helper code
   (unless (featurep 'ow)
-    (reval 'sha256 'a90b12c386d60882cadeb6b6557f7eb05378bfcf94f68f7f8512a9edfeb34d6c
+    (reval 'sha256 '68c873965d1f054dea88e602ccf19676efbb65b16f7aefbe444f7688845ca99c ; FIXME somehow this is broken on 25 ??
            ;; "~/git/orgstrap/ow.el"
-           (concat ghost "98350dc97b6a079d35c94b1798501a62cbbdf176" "/ow.el")))
-  (reval 'sha256 '715f6d3ca6cb3ce91185af85dcb4a307dbf2912f18a9c36f8ea76faf1772b4b4
-         ;; "~/git/orgstrap/init-content.el"
-         (concat ghost "7111b8c4dab5a5404bb06e816abf35df96caa739" "/init-content.el")))
+           (concat ghost "2ee5438e6382786d1269310cef0315eca0d227be" "/ow.el")))
+  (reval 'sha256 '453e91c9c563267d5d943d86cf5427a2c7e36d6e4a5c672626debfbaf9f72881
+         (concat ghost "36b9d0a8c2f8398c2185da26d43d5a818c90a691" "/init-content.el")))
 
 ;;;; init-simple.el ends here
