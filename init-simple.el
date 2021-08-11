@@ -90,7 +90,9 @@
     (reval 'sha256 '68c873965d1f054dea88e602ccf19676efbb65b16f7aefbe444f7688845ca99c ; FIXME somehow this is broken on 25 ??
            ;; "~/git/orgstrap/ow.el"
            (concat ghost "2ee5438e6382786d1269310cef0315eca0d227be" "/ow.el")))
-  (reval 'sha256 '453e91c9c563267d5d943d86cf5427a2c7e36d6e4a5c672626debfbaf9f72881
-         (concat ghost "36b9d0a8c2f8398c2185da26d43d5a818c90a691" "/init-content.el")))
+  (reval 'sha256 '60d5c137be54270c7a05ab5b21c018d08774d803e780e68589c65d44c0fd8d11
+         ;; "~/git/orgstrap/init-content.el"
+         (concat ghost "f889e6a3de2ef16f8ba66a9b27762ed3325e1b8a" "/init-content.el")))
+
 
 ;;;; init-simple.el ends here
