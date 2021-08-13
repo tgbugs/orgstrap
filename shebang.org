@@ -1,0 +1,119 @@
+# -*- orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; orgstrap-block-checksum: 053030a49a3b128f182fc01626ec68292474aa723aeb27345975f7d4a8869dd8; -*-
+# [[orgstrap][jump to the orgstrap block for this file]]
+#+title: Executable Org files
+
+# `find-file-literally' in 26 and 27 runs `hack-local-variables' !?!?
+#+name: orgstrap-shebang
+#+begin_src bash :eval never :results none
+{ __p=$(mktemp -d); touch ${__p}/=; chmod +x ${__p}/=; __op=$PATH; PATH=${__p}:$PATH;} > ${null="/dev/null"}
+$file= $MyInvocation.MyCommand.Source
+$ErrorActionPreference= "silentlycontinue"
+file=$0
+args=$@
+$ErrorActionPreference= "Continue"
+{ PATH=$__op; rm ${__p}/=; rmdir ${__p}; } > $null
+emacs -batch -no-site-file -eval "(let ((enable-local-eval t) vc-follow-symlinks) (defun orgstrap--confirm-eval (l _b) (not (member (intern l) '(elisp emacs-lisp)))) (dolist (v '(orgstrap-cypher orgstrap-norm-func-name orgstrap-block-checksum)) (put v 'safe-local-variable #'symbolp)) (let ((file (car argv))) (setq argv (cdr argv)) (find-file-literally file)) (unless (boundp 'orgstrap-cypher) (hack-local-variables)))" "${file}" -- $args
+exit
+<# powershell open
+#+end_src
+
+The above block is visible in this file to illustrate how it works.
+Normally it would include =:exports none= to make it invisible.
+=#+begin_src bash :eval never :results none :exports none=
+
+This block acts as a shebang that makes Org files executable on
+=bash=, =bash --posix=, =zsh=, =dash=, =pwsh=, and =powershell=.  It
+may also work on other posix shells, but they have been tested.  For
+=pwsh= and =powershell= the file should be symlinked to have a =.ps1=
+file extension.
+
+It is beyond annoying that this block has to use =mktemp -d= in order
+to add ~=~ to the path because not only does =dash= not support the
+=function= keyword, but it also arbitrarily prevents defining a
+function with the name ~=~. As a result the only portable way to get
+~=~ on the path is to create an executable file for it.
+
+Here is a breakdown of the elisp that appears in the =-eval= string.
+#+begin_src elisp
+(let (;; if running an orgstrapped file as a scrip there are other
+      ;; means of preventing arbitrary execution
+      (enable-local-eval t)
+      ;; don't follow symlinks as there is no way to prevent them from
+      ;; opening in `org-mode' due to an oversight in `vc-follow-link'
+      ;; if for whatever reason you need to work from the truename of the
+      ;; file then the adjustment can be made in the orgstrap block itself
+      vc-follow-symlinks)
+  ;; allow elisp blocks to run without prompting, this bypasses the
+  ;; usual orgstrap safeguards but when running as a script there are
+  ;; other mechanisms that preven automatic execution
+  ;; we use `intern' here to avoid having to escape strings which breaks powershell
+  (defun orgstrap--confirm-eval (l _b) (not (member (intern l) '(elisp emacs-lisp))))
+  ;; add the orgstrap local variables as safe local variables so long
+  ;; as they are symbols
+  (dolist (v '(orgstrap-cypher orgstrap-norm-func-name orgstrap-block-checksum))
+    ;; this could be risky if another untrused orgstrapped file was opened
+    (put v 'safe-local-variable #'symbolp))
+  (let (file (car argv))
+    ;; file is passed on argv to avoid needing to escape double quotes
+    ;; with the nice side effect that it can handle file names with a
+    ;; literal double quote
+    (setq argv (cdr argv))
+    ;; open the file literally to avoid starting `org-mode' which can
+    ;; take up to 700ms to start and is not required to run babel blocks
+    (find-file-literally file))
+  ;; check to see if orgstrap-cypher is already bound due to a bug in Emacs 26 and 27
+  ;; which runs hack-local-variables on literal buffers
+  (unless (boundp 'orgstrap-cypher)
+    (hack-local-variables)))
+#+end_src
+
+This is an older version of the block that is more verbose and that
+also does not work on Debian and friends because =dash= does not
+support the =function= keyword. The development workflow is also
+significantly more annoying and prone to break because the checksums
+always have to be updated and kept in sync.
+
+#+name: orgstrap-shebang-block-old
+#+begin_src bash :eval never :results none
+function = () { :; }
+function silentlycontinue () { :; }
+
+$ErrorActionPreference= "silentlycontinue"
+null="/dev/stdout"
+__FILE="${0}"
+__PARGS=${@}
+function posix () {
+    test $ZSH_VERSION && { setopt shwordsplit; _IFS=$IFS; unset IFS; }
+    emacs --quick --batch --load ~/.emacs.d/orgstrap-developer-checksums.el --load ~/.emacs.d/orgstrap-batch-helper.el --visit "${__FILE}" -- ${__PARGS}
+    test $ZSH_VERSION && { unsetopt shwordsplit; IFS=$_IFS; }
+}
+"posix" > $null
+"exit" > $null
+$ErrorActionPreference= "Continue"
+
+$org=$MyInvocation.MyCommand.Source
+emacs --quick --batch --load ~/.emacs.d/orgstrap-batch-helper.el --visit $org -- $args
+exit
+<# open powershell comment
+#+end_src
+
+* Bootstrap :noexport:
+
+#+name: orgstrap
+#+begin_src elisp :results none :lexical yes
+(message "I am an executable Org file!")
+(message "file name is: %S" buffer-file-name)
+(message "file truename is: %S" buffer-file-truename)
+(unless (featurep 'ow) (load "~/git/orgstrap/ow.el"))
+(ow-cli-gen
+    ((:test))
+  (message "running ow-cli-gen block ..."))
+(message "post cli-gen")
+;; (setq debug-on-message "Followed link to")
+#+end_src
+
+** Local Variables :ARCHIVE:
+# close powershell comment #>
+# Local Variables:
+# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((actual (org-version)) (need orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not need) (string< need actual) (string= need actual) (error "Your Org is too old! %s < %s" actual need))) (defun orgstrap-norm-func--prp-1\.1 (body) (let (print-quoted print-length print-level) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (unless (boundp 'orgstrap-norm-func) (defvar orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap-org-src-coderef-regexp (_fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))) (unless (fboundp #'org-src-coderef-regexp) (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp)) (defun orgstrap--expand-body (info) (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1)))) (defun orgstrap--confirm-eval-portable (lang _body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (orgstrap-norm body)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum))))) (unless (fboundp #'orgstrap--confirm-eval) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable)) (let ((enable-local-eval nil)) (vc-find-file-hook)) (let ((ocbe org-confirm-babel-evaluate) (obs (org-babel-find-named-block "orgstrap"))) (if obs (unwind-protect (save-excursion (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (goto-char obs) (org-babel-execute-src-block)) (setq-local org-confirm-babel-evaluate ocbe) (org-set-startup-visibility)) (warn "No orgstrap block."))))
+# End:
