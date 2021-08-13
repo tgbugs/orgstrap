@@ -2,8 +2,14 @@
 # [[orgstrap][jump to the orgstrap block for this file]]
 #+title: Executable Org files
 
+# [[file:./shebang.pdf]]
+# [[file:./shebang.html]]
+
+#+options: num:nil
+
+#+header: :exports code
 #+name: orgstrap-shebang
-#+begin_src bash :eval never :results none
+#+begin_src bash :eval never :results none :exports none
 { __p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > ${null="/dev/null"}
 $file= $MyInvocation.MyCommand.Source
 $ErrorActionPreference= "silentlycontinue"
@@ -16,23 +22,28 @@ exit
 <# powershell open
 #+end_src
 
-The above block is visible in this file to illustrate how it works.
-Normally it would include =:exports none= to make it invisible.
-=#+begin_src bash :eval never :results none :exports none=
-
 This block acts as a shebang that makes Org files executable on
 =bash=, =bash --posix=, =zsh=, =dash=, =pwsh=, and =powershell=.  It
-may also work on other posix shells, but they have been tested.  For
-=pwsh= and =powershell= the file should be symlinked to have a =.ps1=
-file extension.
+may also work on other posix shells, but they have not been tested.
+For =pwsh= and =powershell= the file should be symlinked to have a
+=.ps1= file extension.
 
-It is beyond annoying that this block has to use =mktemp -d= in order
-to add ~=~ to the path because not only does =dash= not support the
-=function= keyword, but it also arbitrarily prevents defining a
-function with the name ~=~. As a result the only portable way to get
-~=~ on the path is to create an executable file for it.
+The shebang block must come before the first line of the file that
+does not start with =#=.
 
-Here is a breakdown of the elisp that appears in the =-eval= string.
+In this file the block is visible to illustrate how it works.  It uses
+=#+header: :exports code= so that it is easy to copy and paste the
+block into other files with =:exports none= set so that it is
+invisible for export.
+
+Annoyingly we have to use =mktemp -d= in order to add ~=~ to the path
+because not only does =dash= not support the =function= keyword, but
+it also arbitrarily prevents defining a function with the name ~=~. As
+a result the only portable way to get ~=~ on path is to create an
+executable file for it.
+
+* Details
+A breakdown of the elisp that appears in the =-eval= string.
 #+name: shebang-explication
 #+begin_src elisp
 (let (vc-follow-symlinks) ; don't follow symlinks as there is no way
@@ -83,6 +94,7 @@ Here is a breakdown of the elisp that appears in the =-eval= string.
 #+RESULTS:
 : (let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv))) (find-file-literally file)) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))
 
+** Old approach
 This is an older version of the block that is more verbose and that
 also does not work on Debian and friends because =dash= does not
 support the =function= keyword. The development workflow is also
