@@ -1,8 +1,7 @@
-# -*- orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; orgstrap-block-checksum: 053030a49a3b128f182fc01626ec68292474aa723aeb27345975f7d4a8869dd8; -*-
+# -*- mode: org; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; orgstrap-block-checksum: 7471d2eeba9ea4df25c7051d8620ac09590e48e997c89d655464dc1e4e3260a7; -*-
 # [[orgstrap][jump to the orgstrap block for this file]]
 #+title: Executable Org files
 
-# `find-file-literally' in 26 and 27 runs `hack-local-variables' !?!?
 #+name: orgstrap-shebang
 #+begin_src bash :eval never :results none
 { __p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > ${null="/dev/null"}
@@ -12,7 +11,7 @@ file=$0
 args=$@
 $ErrorActionPreference= "Continue"
 { PATH=$__op;rm ${__p}/=;rmdir ${__p};} > $null
-emacs -batch -no-site-file -eval "(let ((enable-local-eval t) (enable-local-variables :all) vc-follow-symlinks) (defun orgstrap--confirm-eval (l _b) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv))) (find-file-literally file)) (unless (boundp 'orgstrap-cypher) (hack-local-variables)))" "${file}" -- $args
+emacs -batch -no-site-file -eval "(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv))) (find-file-literally file)) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))" "${file}" -- $args
 exit
 <# powershell open
 #+end_src
@@ -34,6 +33,7 @@ function with the name ~=~. As a result the only portable way to get
 ~=~ on the path is to create an executable file for it.
 
 Here is a breakdown of the elisp that appears in the =-eval= string.
+#+name: shebang-explication
 #+begin_src elisp
 (let (vc-follow-symlinks) ; don't follow symlinks as there is no way
   ;; to prevent them from opening in `org-mode' due to an oversight
@@ -47,15 +47,11 @@ Here is a breakdown of the elisp that appears in the =-eval= string.
   ;; other mechanisms that preven automatic execution we use `intern'
   ;; here to avoid having to escape strings which breaks powershell
 
-  (let ((file (pop argv)) ; file is passed on argv to avoid needing to
-        ;; escape double quotes with the nice side effect that it can
-        ;; handle file names with a literal double quote
+  (let ((file (pop argv))) ; file is passed on argv to avoid needing to
+    ;; escape double quotes with the nice side effect that it can
+    ;; handle file names with a literal double quote
 
-        ;; `enable-local-eval' is set to nil due to a bug in Emacs 26 and 27
-        ;; in `find-file-noselect' where `enable-local-eval' is not properly
-        ;; shadowed to ensure that is is always nil if rawfile is true see
-        ;; Emacs a1fd11a28f3c2f4f81163765dd3b53e5ce0b39cf for related issues
-        enable-local-eval)
+    ;; `find-file-literally' avoids org-mode which can take over 500ms
     (find-file-literally file))
 
   (let ((enable-local-eval t) ; when running as a script other means
@@ -77,6 +73,15 @@ Here is a breakdown of the elisp that appears in the =-eval= string.
     ;; run the orgstrap block without entering org-mode, this saves lots of time
     (hack-local-variables)))
 #+end_src
+
+#+begin_src elisp :exports none
+(orgstrap--with-block "shebang-explication"
+  (let (print-level print-length)
+    (prin1-to-string (read body))))
+#+end_src
+
+#+RESULTS:
+: (let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv))) (find-file-literally file)) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))
 
 This is an older version of the block that is more verbose and that
 also does not work on Debian and friends because =dash= does not
@@ -117,18 +122,25 @@ emacs -q -Q -eval "(let ((file (pop argv))) (find-file-literally file) (hack-loc
 
 * Bootstrap :noexport:
 
+#+name: nowhere
+#+begin_src elisp
+(message "noweb working")
+#+end_src
+
 #+name: orgstrap
-#+begin_src elisp :results none :lexical yes
-(message "I am an executable Org file!")
+#+begin_src elisp :results none :lexical yes :noweb yes
+(message "I am an executable Org file!") ; (ref:test)
 (message "file name is: %S" buffer-file-name)
 (message "file truename is: %S" buffer-file-truename)
+<<nowhere>>
 (unless (featurep 'ow) (load "~/git/orgstrap/ow.el"))
 (ow-cli-gen
     ((:test))
   (message "running ow-cli-gen block ..."))
 (message "post cli-gen")
-;; (setq debug-on-message "Followed link to")
 #+end_src
+
+[[(test)]] Make sure coderefs work.
 
 ** Local Variables :ARCHIVE:
 # close powershell comment #>
