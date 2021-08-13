@@ -12,7 +12,7 @@ file=$0
 args=$@
 $ErrorActionPreference= "Continue"
 { PATH=$__op;rm ${__p}/=;rmdir ${__p};} > $null
-emacs -batch -no-site-file -eval "(let ((enable-local-eval t) (enable-local-variables :all) vc-follow-symlinks) (defun orgstrap--confirm-eval (l _b) (not (member (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv))) (find-file-literally file)) (unless (boundp 'orgstrap-cypher) (hack-local-variables)))" "${file}" -- $args
+emacs -batch -no-site-file -eval "(let ((enable-local-eval t) (enable-local-variables :all) vc-follow-symlinks) (defun orgstrap--confirm-eval (l _b) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv))) (find-file-literally file)) (unless (boundp 'orgstrap-cypher) (hack-local-variables)))" "${file}" -- $args
 exit
 <# powershell open
 #+end_src
@@ -35,35 +35,46 @@ function with the name ~=~. As a result the only portable way to get
 
 Here is a breakdown of the elisp that appears in the =-eval= string.
 #+begin_src elisp
-(let (;; if running an orgstrapped file as a scrip there are other
-      ;; means of preventing arbitrary execution
-      (enable-local-eval t)
-      ;; don't follow symlinks as there is no way to prevent them from
-      ;; opening in `org-mode' due to an oversight in `vc-follow-link'
-      ;; if for whatever reason you need to work from the truename of the
-      ;; file then the adjustment can be made in the orgstrap block itself
-      vc-follow-symlinks)
+(let (vc-follow-symlinks) ; don't follow symlinks as there is no way
+  ;; to prevent them from opening in `org-mode' due to an oversight
+  ;; in `vc-follow-link' if for whatever reason you need to work
+  ;; from the truename of the file then the adjustment can be made
+  ;; in the orgstrap block itself
+
+  (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp))))
   ;; allow elisp blocks to run without prompting, this bypasses the
   ;; usual orgstrap safeguards but when running as a script there are
-  ;; other mechanisms that preven automatic execution
-  ;; we use `intern' here to avoid having to escape strings which breaks powershell
-  (defun orgstrap--confirm-eval (l _b) (not (member (intern l) '(elisp emacs-lisp))))
-  ;; add the orgstrap local variables as safe local variables so long
-  ;; as they are symbols
-  (dolist (v '(orgstrap-cypher orgstrap-norm-func-name orgstrap-block-checksum))
-    ;; this could be risky if another untrused orgstrapped file was opened
-    (put v 'safe-local-variable #'symbolp))
-  (let (file (car argv))
-    ;; file is passed on argv to avoid needing to escape double quotes
-    ;; with the nice side effect that it can handle file names with a
-    ;; literal double quote
-    (setq argv (cdr argv))
-    ;; open the file literally to avoid starting `org-mode' which can
-    ;; take up to 700ms to start and is not required to run babel blocks
+  ;; other mechanisms that preven automatic execution we use `intern'
+  ;; here to avoid having to escape strings which breaks powershell
+
+  (let ((file (pop argv)) ; file is passed on argv to avoid needing to
+        ;; escape double quotes with the nice side effect that it can
+        ;; handle file names with a literal double quote
+
+        ;; `enable-local-eval' is set to nil due to a bug in Emacs 26 and 27
+        ;; in `find-file-noselect' where `enable-local-eval' is not properly
+        ;; shadowed to ensure that is is always nil if rawfile is true see
+        ;; Emacs a1fd11a28f3c2f4f81163765dd3b53e5ce0b39cf for related issues
+        enable-local-eval)
     (find-file-literally file))
-  ;; check to see if orgstrap-cypher is already bound due to a bug in Emacs 26 and 27
-  ;; which runs hack-local-variables on literal buffers
-  (unless (boundp 'orgstrap-cypher)
+
+  (let ((enable-local-eval t) ; when running as a script other means
+        ;; there are other means of preventing arbitrary execution
+        (enable-local-variables :all) ; allow all local variables
+
+        ;; fake setting the major mode to org-mode so that
+        ;; `org-set-regexp-and-options' will trigger correctly
+        (major-mode 'org-mode))
+    ;; we do not set `enable-local-eval' and `enable-local-variables'
+    ;; in the outer let due to a bug in Emacs 26 and 27 inside of
+    ;; `find-file-noselect' where `enable-local-eval' is not properly
+    ;; shadowed see Emacs a1fd11a28f3c2f4f81163765dd3b53e5ce0b39cf
+    (require 'org) ; `org-set-regexps-and-options' is not an autoload
+    ;; so we have to require org to get it
+    (org-set-regexps-and-options) ; `org-complex-heading-regexp' must be bound
+    ;; otherwise orgstrap blocks that use noweb will cause errors
+
+    ;; run the orgstrap block without entering org-mode, this saves lots of time
     (hack-local-variables)))
 #+end_src
 
@@ -97,6 +108,13 @@ exit
 <# open powershell comment
 #+end_src
 
+* Issues
+** TODO cannot use a ~mode: org;~ local variable, it triggers ~hack-local-variables~ twice somehow
+setting an explicit mode =mode: org;= in the file causes hack local variables to try to run itself twice recursively.
+#+begin_src bash :eval never
+emacs -q -Q -eval "(let ((file (pop argv))) (find-file-literally file) (hack-local-variables))" "./shebang.org"
+#+end_src
+
 * Bootstrap :noexport:
 
 #+name: orgstrap
@@ -115,5 +133,5 @@ exit
 ** Local Variables :ARCHIVE:
 # close powershell comment #>
 # Local Variables:
-# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((actual (org-version)) (need orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not need) (string< need actual) (string= need actual) (error "Your Org is too old! %s < %s" actual need))) (defun orgstrap-norm-func--prp-1\.1 (body) (let (print-quoted print-length print-level) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (unless (boundp 'orgstrap-norm-func) (defvar orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap-org-src-coderef-regexp (_fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))) (unless (fboundp #'org-src-coderef-regexp) (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp)) (defun orgstrap--expand-body (info) (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1)))) (defun orgstrap--confirm-eval-portable (lang _body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (orgstrap-norm body)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum))))) (unless (fboundp #'orgstrap--confirm-eval) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable)) (let ((enable-local-eval nil)) (vc-find-file-hook)) (let ((ocbe org-confirm-babel-evaluate) (obs (org-babel-find-named-block "orgstrap"))) (if obs (unwind-protect (save-excursion (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (goto-char obs) (org-babel-execute-src-block)) (setq-local org-confirm-babel-evaluate ocbe) (org-set-startup-visibility)) (warn "No orgstrap block."))))
+# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((actual (org-version)) (need orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not need) (string< need actual) (string= need actual) (error "Your Org is too old! %s < %s" actual need))) (defun orgstrap-norm-func--prp-1\.1 (body) (let (print-quoted print-length print-level) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (unless (boundp 'orgstrap-norm-func) (defvar orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap-org-src-coderef-regexp (_fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))) (unless (fboundp #'org-src-coderef-regexp) (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp)) (defun orgstrap--expand-body (info) (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1)))) (defun orgstrap--confirm-eval-portable (lang _body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (orgstrap-norm body)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum))))) (unless (fboundp #'orgstrap--confirm-eval) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable)) (let (enable-local-eval) (vc-find-file-hook)) (let ((ocbe org-confirm-babel-evaluate) (obs (org-babel-find-named-block "orgstrap"))) (if obs (unwind-protect (save-excursion (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (goto-char obs) (org-babel-execute-src-block)) (setq-local org-confirm-babel-evaluate ocbe) (org-set-startup-visibility)) (warn "No orgstrap block."))))
 # End:
