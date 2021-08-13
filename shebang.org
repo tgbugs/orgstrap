@@ -5,13 +5,13 @@
 # `find-file-literally' in 26 and 27 runs `hack-local-variables' !?!?
 #+name: orgstrap-shebang
 #+begin_src bash :eval never :results none
-{ __p=$(mktemp -d); touch ${__p}/=; chmod +x ${__p}/=; __op=$PATH; PATH=${__p}:$PATH;} > ${null="/dev/null"}
+{ __p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > ${null="/dev/null"}
 $file= $MyInvocation.MyCommand.Source
 $ErrorActionPreference= "silentlycontinue"
 file=$0
 args=$@
 $ErrorActionPreference= "Continue"
-{ PATH=$__op; rm ${__p}/=; rmdir ${__p}; } > $null
+{ PATH=$__op;rm ${__p}/=;rmdir ${__p};} > $null
 emacs -batch -no-site-file -eval "(let ((enable-local-eval t) (enable-local-variables :all) vc-follow-symlinks) (defun orgstrap--confirm-eval (l _b) (not (member (intern l) '(elisp emacs-lisp)))) (let ((file (car argv))) (setq argv (cdr argv)) (find-file-literally file)) (unless (boundp 'orgstrap-cypher) (hack-local-variables)))" "${file}" -- $args
 exit
 <# powershell open
