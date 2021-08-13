@@ -12,7 +12,7 @@ file=$0
 args=$@
 $ErrorActionPreference= "Continue"
 { PATH=$__op; rm ${__p}/=; rmdir ${__p}; } > $null
-emacs -batch -no-site-file -eval "(let ((enable-local-eval t) vc-follow-symlinks) (defun orgstrap--confirm-eval (l _b) (not (member (intern l) '(elisp emacs-lisp)))) (dolist (v '(orgstrap-cypher orgstrap-norm-func-name orgstrap-block-checksum)) (put v 'safe-local-variable #'symbolp)) (let ((file (car argv))) (setq argv (cdr argv)) (find-file-literally file)) (unless (boundp 'orgstrap-cypher) (hack-local-variables)))" "${file}" -- $args
+emacs -batch -no-site-file -eval "(let ((enable-local-eval t) (enable-local-variables :all) vc-follow-symlinks) (defun orgstrap--confirm-eval (l _b) (not (member (intern l) '(elisp emacs-lisp)))) (let ((file (car argv))) (setq argv (cdr argv)) (find-file-literally file)) (unless (boundp 'orgstrap-cypher) (hack-local-variables)))" "${file}" -- $args
 exit
 <# powershell open
 #+end_src
