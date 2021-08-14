@@ -75,6 +75,23 @@ then the current implementation will break."
           (error "code: %s stdout: %S" return-code string)
         string))))
 
+(defun ow--default-sentinel (process message)
+  "An example sentinel for async processes."
+  (message "%s %s" message (process-status process))
+  (with-current-buffer (process-buffer process)
+    (message "%S" (buffer-string))))
+
+(cl-defun ow-run-command-async (command &rest args &key sentinel &allow-other-keys)
+  "Reminder that kwargs must come before rest when calling a cl-defun."
+  (let* ((args (or (and (memq :sentinel args)
+                        (cl-remove-if (lambda (x) (or (not x) (eq x :sentinel)))
+                                      (plist-put args :sentinel nil)))
+                   args))
+         (process (apply #'start-process (format "process-%s" command) (format "process-buffer-%s" command) command args)))
+    (when sentinel
+      (set-process-sentinel process sentinel))))
+
+
 (defalias 'run-command #'ow-run-command)
 
 (defvar securl-default-cypher 'sha256)  ; remember kids, always publish the cypher with the checksum
@@ -121,6 +138,19 @@ All errors are silenced."
           (re-search-forward "^HTTP.+OK$"))
       (error nil))))
 
+(defun ow--results-silent (fun &rest args)
+  "Whoever named the original version of this has a strange sense of humor."
+  ;; so :results silent, which is what org babel calls between vars
+  ;; set automatically is completely broken when one block calls another
+  ;; there likely needs to be an internal gensymed value that babel blocks
+  ;; can pass to eachother so that a malicious user cannot actually slience
+  ;; values, along with an option to still print, but until then we have this
+  (let ((result (car args))
+        (result-params (cadr args)))
+    (if (member "silent" result-params)
+        result
+      (apply fun args))))
+
 (defun ow-babel-eval (block-name &optional universal-argument)
   "Use to confirm running a chain of dependent blocks starting with BLOCK-NAME.
 This retains single confirmation at the entry point for the block."
@@ -133,7 +163,11 @@ This retains single confirmation at the entry point for the block."
         ;; `ow-confirm-once' is being used being called an infinite
         ;; number of times and blowing the stack
         (org-babel-goto-named-src-block block-name)
-        (org-babel-execute-src-block)))))
+        (unwind-protect
+            (progn
+              (advice-add #'org-babel-insert-result :around #'ow--results-silent)
+              (org-babel-execute-src-block))
+          (advice-remove #'org-babel-insert-result #'ow--results-silent))))))
 
 (defun ow-min--reval-update ()
   "Get the immutable url for the current remote version of this file."
