@@ -17,10 +17,12 @@ file=$0
 args=$@
 $ErrorActionPreference= "Continue"
 { PATH=$__op;rm ${__p}/=;rmdir ${__p};} > $null
-emacs -batch -no-site-file -eval "(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv))) (find-file-literally file)) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))" "${file}" -- $args
+emacs -batch -no-site-file -eval "(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))" "${file}" -- $args
 exit
 <# powershell open
 #+end_src
+
+#+call: shebang-elisp() :exports none
 
 This block acts as a shebang that makes Org files executable on
 =bash=, =bash --posix=, =zsh=, =dash=, =pwsh=, and =powershell=.  It
@@ -42,10 +44,31 @@ it also arbitrarily prevents defining a function with the name ~=~. As
 a result the only portable way to get ~=~ on path is to create an
 executable file for it.
 
+* Windows
+On windows org files must be symlinked to have a =.ps1= file
+extension.  You can use the following powershell function to create
+the symlinks.  Beware that certain posix tools for windows such as
+git-bash have a version of =ln= that doesn't actually create symlinks.
+
+#+begin_src powershell
+function make-link ($target, $link) { New-Item -Path $link -ItemType SymbolicLink -Value $target }
+#+end_src
+
+You can then run the following.
+#+begin_src powershell
+make-link shebang.org shebang.ps1
+#+end_src
+
+If you want to use the file as a command create an alias.
+#+begin_src powershell
+New-Alias test-orgstrap-shebang (Get-ChildItem shebang.ps1).FullName -Force
+#+end_src
+# TODO create this as part of --install
+
 * Details
 A breakdown of the elisp that appears in the =-eval= string.
 #+name: shebang-explication
-#+begin_src elisp
+#+begin_src elisp :lexical yes
 (let (vc-follow-symlinks) ; don't follow symlinks as there is no way
   ;; to prevent them from opening in `org-mode' due to an oversight
   ;; in `vc-follow-link' if for whatever reason you need to work
@@ -58,12 +81,21 @@ A breakdown of the elisp that appears in the =-eval= string.
   ;; other mechanisms that preven automatic execution we use `intern'
   ;; here to avoid having to escape strings which breaks powershell
 
-  (let ((file (pop argv))) ; file is passed on argv to avoid needing to
-    ;; escape double quotes with the nice side effect that it can
-    ;; handle file names with a literal double quote
+  (let ((file (pop argv)) ; file is passed on argv to avoid needing to
+        ;; escape double quotes with the nice side effect that it can
+        ;; handle file names with a literal double quote
 
+        ;; explicitly set to nil to work around the dos literal local
+        ;; variables issue, it seems the `find-file-literally' still
+        ;; reads local variables even if it does not set them
+        enable-local-variables)
+    (find-file-literally file)
     ;; `find-file-literally' avoids org-mode which can take over 500ms
-    (find-file-literally file))
+    (end-of-line)
+    (when (eq (char-before) ?\^m) ; if crlf line ending detected
+      ;; revert buffer to avoid dos literal local variables issue
+      (let ((coding-system-for-read 'utf-8))
+        (revert-buffer nil t t))))
 
   (let ((enable-local-eval t) ; when running as a script other means
         ;; there are other means of preventing arbitrary execution
@@ -85,14 +117,12 @@ A breakdown of the elisp that appears in the =-eval= string.
     (hack-local-variables)))
 #+end_src
 
+#+name: shebang-elisp
 #+begin_src elisp :exports none
 (orgstrap--with-block "shebang-explication"
   (let (print-level print-length)
     (prin1-to-string (read body))))
 #+end_src
-
-#+RESULTS:
-: (let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv))) (find-file-literally file)) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))
 
 ** Old approach
 This is an older version of the block that is more verbose and that
