@@ -65,6 +65,13 @@ New-Alias test-orgstrap-shebang (Get-ChildItem shebang.ps1).FullName -Force
 #+end_src
 # TODO create this as part of --install
 
+There is a rare bug that can happen if you try to run a file with dos
+line endings on a system that expects posix line endings. If you do
+this you will encounter errors if there are any "blank" lines before
+the shebang block because bash and friends will try to run a command
+named the carriage return variables =\r=. To fix this either remove
+the blank lines or add a =#= at the start of the line.
+
 * Details
 A breakdown of the elisp that appears in the =-eval= string.
 #+name: shebang-explication
