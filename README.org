@@ -1626,6 +1626,7 @@ Please update `orgstrap-norm-func-name' to `orgstrap-norm-func--prp-1.1'"))
 The heading is inserted at the top of the current file.
 HEADER-ARGS is an alist of symbols that are converted to strings.
 If NOEXPORT is non-nil then the :noexport: tag is added to the heading."
+  (declare (indent 1))
   (save-excursion
     (goto-char (point-min))
     (outline-next-heading)  ;; alternately outline-next-heading
@@ -1693,10 +1694,11 @@ Insert BLOCK-CONTENTS if they are supplied."
     (if (member orgstrap-orgstrap-block-name all-block-names)
         (warn "orgstrap block already exists not adding!")
       (orgstrap--new-heading-elisp-block "Bootstrap"
-                                         orgstrap-orgstrap-block-name
-                                         '((results . none)
-                                           (lexical . yes))
-                                         t)
+        orgstrap-orgstrap-block-name
+        '((results . none)
+          (exports . none)
+          (lexical . yes))
+        t)
       (orgstrap--with-block orgstrap-orgstrap-block-name
         (ignore params body-unexpanded body)
         (when block-contents
