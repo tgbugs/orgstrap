@@ -74,6 +74,8 @@
            fn)))
 
 (load-theme 'whiteboard)
+(ow--tweak-whiteboard)
+
 ;; (load-theme 'lush)
 ;; (load-theme 'blackboard)
 

@@ -737,6 +737,31 @@ For example
   (let ((plist (oa--read oa-secrets)))
     (oa--resolve-path plist elements)))
 
+;; control initial visibility
+
+(defun ow-hide-section-0-blocks ()
+  "Hide blocks and dynamic blocks that are used in section 0."
+  (let ((dblocks '("metadata" "properties" "prefixes"))
+        (blocks '("orgstrap-shebang")))
+    ;; dblocks and blocks have separate namespaces
+    (save-excursion
+      (mapcar (lambda (name) (and (org-find-dblock name) (org-hide-block-toggle 'hide)))
+              dblocks)
+      (mapcar (lambda (name) (and (org-babel-find-named-block name) (org-hide-block-toggle 'hide)))
+              blocks))))
+
+;; permanently modify visibility
+
+(defun ow-fold-headline (&optional name)
+  "Set visibility property of headline with NAME or previous visible to folded."
+  ;; https://orgmode.org/manual/Using-the-Property-API.html
+  (save-excursion
+    (if name
+        (goto-char (org-find-exact-headline-in-buffer name))
+      (org-previous-visible-heading 0))
+    (org-entry-put nil "visibility" "folded")
+    (save-buffer)))
+
 ;; mouse behavior
 
 (defun ow--safe-cycle (event &optional promote-to-region)
@@ -784,18 +809,6 @@ For example
          (offset (- mouse-line cursor-line)))
     ;;(message "ml: %s cl: %s offset: %s" mouse-line cursor-line offset)
     (scroll-down offset)))
-
-;; random useful functions
-
-(defun ow-fold-headline (&optional name)
-  "Set visibility property of headline with NAME or previous visible to folded."
-  ;; https://orgmode.org/manual/Using-the-Property-API.html
-  (save-excursion
-    (if name
-        (goto-char (org-find-exact-headline-in-buffer name))
-      (org-previous-visible-heading 0))
-    (org-entry-put nil "visibility" "folded")
-    (save-buffer)))
 
 ;; don't export buttons
 
@@ -871,9 +884,17 @@ For example
                              (ow-recenter-on-mouse))))
 
 (defun ow--headline-faces ()
-  "Set face for all headline levels to be bold."
-  (mapcar (lambda (n) (set-face-attribute (intern (format "org-level-%s" n)) nil :bold t))
+  "Set face for all headline levels to be bold and 1.2x as tall."
+  (mapcar (lambda (n) (set-face-attribute (intern (format "org-level-%s" n)) nil :bold t :height 1.2))
           (number-sequence 1 8)))
+
+(defun ow--tweak-whiteboard ()
+  "Tweak the settings for `whiteboard-theme'."
+  (set-face-attribute 'shadow nil :foreground "gray35")
+  (set-face-attribute 'org-meta-line nil :inherit font-lock-keyword-face)
+  (set-face-attribute 'org-block-begin-line nil :extend t :foreground "black" :background "silver")
+  (set-face-attribute 'org-block-end-line nil :extend t :foreground "black" :background "silver")
+  (set-face-attribute 'org-block nil :extend t :background "white"))
 
 (defun ow-enable-config-familiar-1 ()
   "Minimal config to achieve something more familiar for non-Emacs users.
@@ -897,7 +918,7 @@ NOTE: `undo-fu' is required for Emacs < 28."
   (ow-enable-mouse-cycle)
 
   ;; Mouse paste at point not cursor
-  (setq-local mouse-yank-at-point t)
+  (setq mouse-yank-at-point t) ; set globally due to minibuffer
 
   ;; Mouse wheel behavior
   (setq-local mouse-wheel-progressive-speed nil)
@@ -917,12 +938,10 @@ NOTE: `undo-fu' is required for Emacs < 28."
 
   ;; Use the whiteboard theme
   (load-theme 'whiteboard)
+  (ow--tweak-whiteboard)
 
-  ;; Set headline faces, sligh improvements to the whiteboard defaults
-  (ow--headline-faces)
-  (set-face-attribute 'org-block-begin-line nil :extend t :foreground "black" :background "silver")
-  (set-face-attribute 'org-block-end-line nil :extend t :foreground "black" :background "silver")
-  (set-face-attribute 'org-block nil :extend t :background "white"))
+  ;; Set headline faces
+  (ow--headline-faces))
 
 (defun ow--reval-update ()
   "Get the immutable url for the current remote version of this file."
