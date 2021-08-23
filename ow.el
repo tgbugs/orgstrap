@@ -618,7 +618,11 @@ into a list (name body ...)"
    'progn
    (mapcar (lambda (name)
              (cond ((symbolp name) `(use-package ,name))
-                   ((listp name) `(use-package ,@name))
+                   ((listp name)
+                    (unless (eq (car name) 'quote)
+                      (if (memq (car name) '(if when unless))
+                          `(,(car name) ,(cadr name) (use-package ,@(cddr name)))
+                        `(use-package ,@name))))
                    ((t (error "unhandled type %s" (type-of name))))))
            names)))
 
@@ -747,7 +751,10 @@ For example
     (save-excursion
       (mapcar (lambda (name) (and (org-find-dblock name) (org-hide-block-toggle 'hide)))
               dblocks)
-      (mapcar (lambda (name) (and (org-babel-find-named-block name) (org-hide-block-toggle 'hide)))
+      ;; FIXME inconsistent behavior between `org-find-dblock' and `org-babel-find-named-block'
+      (mapcar (lambda (name)
+                (let ((p (org-babel-find-named-block name)))
+                  (and p (goto-char p) (org-hide-block-toggle 'hide))))
               blocks))))
 
 ;; permanently modify visibility
@@ -890,11 +897,20 @@ For example
 
 (defun ow--tweak-whiteboard ()
   "Tweak the settings for `whiteboard-theme'."
+  (require 'org-faces)
   (set-face-attribute 'shadow nil :foreground "gray35")
   (set-face-attribute 'org-meta-line nil :inherit font-lock-keyword-face)
-  (set-face-attribute 'org-block-begin-line nil :extend t :foreground "black" :background "silver")
-  (set-face-attribute 'org-block-end-line nil :extend t :foreground "black" :background "silver")
-  (set-face-attribute 'org-block nil :extend t :background "white"))
+  (let ((dx (>= emacs-major-version 27)))
+    (apply #'set-face-attribute `(org-block-begin-line nil :foreground "black" :background "silver" ,@(when dx '(:extend t))))
+    (apply #'set-face-attribute `(org-block-end-line nil :foreground "black" :background "silver" ,@(when dx '(:extend t))))
+    (apply #'set-face-attribute `(org-block nil :background "white" ,@(when dx '(:extend t))))))
+
+(defun ow--rainy-day ()
+  "Enable `rainbow-deimiters-mode' with tweaks."
+  (ow-use-packages (rainbow-delimiters :hook ((prog-mode) . rainbow-delimiters-mode)))
+  (set-face-attribute 'rainbow-delimiters-base-face nil :bold t)
+  (set-face-attribute 'rainbow-delimiters-unmatched-face nil :bold t :foreground "white" :background "red")
+  (set-face-attribute 'rainbow-delimiters-mismatched-face nil :bold t :foreground "black" :background "yellow"))
 
 (defun ow-enable-config-familiar-1 ()
   "Minimal config to achieve something more familiar for non-Emacs users.
@@ -934,7 +950,8 @@ NOTE: `undo-fu' is required for Emacs < 28."
   (setq-local org-support-shift-select t)
 
   ;; Enable tab-bar-mode
-  (tab-bar-mode t)
+  (when (>= emacs-major-version 27)
+    (tab-bar-mode t))
 
   ;; Use the whiteboard theme
   (load-theme 'whiteboard)
