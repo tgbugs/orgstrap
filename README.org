@@ -1085,8 +1085,8 @@ unsafe-vars risky-vars dir-name)."
 
 (defmacro orgstrap--lv-common-with-block-name ()
   "Helper macro to allow use of same code between core and lv impls."
-  ` ; separate line to avoid the issue with noweb and prefixes
-  <<orgstrap-file-local-variables-common>>)
+  `(progn
+     <<orgstrap-file-local-variables-common>>))
 
 (defun orgstrap--hack-lv ()
   "If orgstrap is present, run the orgstrap block for the current buffer."
@@ -1411,8 +1411,7 @@ for calirty.  You cannot stamp an orgstrap block into its own buffer."
 ;;;###autoload
 (define-minor-mode orgstrap-edit-mode
   "Minor mode for editing with orgstrapped files."
-  nil "" nil
-
+  :init-value nil :lighter "" :keymap nil
   (unless (eq major-mode 'org-mode)
     (setq orgstrap-edit-mode 0)
     (user-error "`orgstrap-edit-mode' only works with org-mode buffers"))
@@ -2644,10 +2643,19 @@ take nearly 3 hours to complete and debug.
 :CUSTOM_ID: future-work
 :visibility: children
 :END:
+** TODO bug secondary runs of the orgstrap block klobber modified obce
+:PROPERTIES:
+:CREATED:  [2021-08-19 Thu 21:47]
+:END:
+[[file:~/git/sparc-curation/docs/queries.org::orgstrap][orgstrap]]
+the quick fix is just to manually remove the step where we restore ocbe
 ** TODO somehow a stale orgstrap norm func managed to sneak in I have no idea how
 :PROPERTIES:
 :CREATED:  [2021-08-11 Wed 12:32]
 :END:
+I'm 99% sure that this was coming from release.org and
+orgstrap-norm-func was not being reset and sticking around and fucking
+stuff up.
 ** TODO data section
 base64 (or whatever) encode a compressed data blob, stick it in an
 archived heading and then add =--pack= and =--unpack= and =--repack=

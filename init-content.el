@@ -73,12 +73,6 @@
            "https://raw.githubusercontent.com/andre-richter/emacs-lush-theme/645e1959143532df8f7ef90e1184e9556df18af7/lush-theme.el"
            fn)))
 
-(load-theme 'whiteboard)
-(ow--tweak-whiteboard)
-
-;; (load-theme 'lush)
-;; (load-theme 'blackboard)
-
 ;;; packages
 
 (ow-enable-use-package)
@@ -113,6 +107,10 @@
    (org-adapt-indentation nil)
    (org-edit-src-content-indentation 0)
    :init
+   ;; FIXME Emacs 24 during the first pass byte compile of ob-core.el
+   ;; the bytecode file that is produced is mangled in such a way that
+   ;; org-babel-check-evaluate always returns nil, fix is to delete
+   ;; ob-core.elc and then recompile it
    (require 'ob-core)
    (org-babel-do-load-languages
     'org-babel-load-languages
@@ -194,6 +192,16 @@
 
   (require 'magit)
   (require 'racket-mode))
+
+;;; themes
+;;;; must come after packages so that require org-faces doesn't load
+;;;; the version of org that is bundled with Emacs
+
+(load-theme 'whiteboard)
+(ow--tweak-whiteboard)
+
+;; (load-theme 'lush)
+;; (load-theme 'blackboard)
 
 ;;; reval update
 
