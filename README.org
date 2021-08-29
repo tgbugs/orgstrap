@@ -717,7 +717,7 @@ Once =orgstrap--confirm-eval= is defined the rest of the =eval:= local variables
           (save-excursion
             (setq-local orgstrap-norm-func orgstrap-norm-func-name)
             (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
-            (goto-char obs)
+            (goto-char obs) ; FIXME `org-save-outline-visibility' but that is not portable
             (org-babel-execute-src-block))
         (setq-local org-confirm-babel-evaluate ocbe)
         ;; FIXME `org-set-startup-visibility' should not run on subsequent calls to the block?
@@ -1215,8 +1215,9 @@ The macro provides local bindings for four names:
 `info', `params', `body-unexpanded', and `body'."
   (declare (indent defun))
   `(let* ((info (save-excursion
-                  (orgstrap--goto-named-src-block ,blockname)
-                  (org-babel-get-src-block-info)))
+                  (org-save-outline-visibility 'use-markers
+                    (orgstrap--goto-named-src-block ,blockname)
+                    (org-babel-get-src-block-info))))
           (params (nth 2 info))
           (body-unexpanded (nth 1 info))
           (body (orgstrap--expand-body info)))
@@ -3112,13 +3113,21 @@ This saves about 300 chars over the current minimal version.
 #+end_src
 ** DONE Buffer local functions
 See [[file:./defl.org]] for an awful hack.
-** TODO fix orgstrap--update-on-change hook so that it does not modify buffer fold state
+** DONE fix orgstrap--update-on-change hook so that it does not modify buffer fold state
+CLOSED: [2021-08-29 Sun 16:36]
 :PROPERTIES:
 :CREATED:  [2020-10-21 Wed 01:28]
 :END:
 Not sure exactly which function is causing this but getting the
 checksum of the block seems like it might be the one, unfolding and
 not restoring the state.
+
+The issue was in =orgstrap--with-block= because =goto-char= will cause
+outlines to open and we have to use =org-save-outline-visibility= with
+=use-markers= set to ensure that folding is restored.
+
+=save-restriction= was not what we needed.
+https://stackoverflow.com/a/44158824 put me on the right track.
 ** TODO fix orgstrap-init formatting issue where comment goes in headline
 :PROPERTIES:
 :CREATED:  [2020-10-19 Mon 18:01]
