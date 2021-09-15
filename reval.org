@@ -136,9 +136,15 @@ review.
 
 ;;; Commentary:
 
-;; reval.el implements eval of remote elisp code.  More accurately
-;; it implements local evaluation of remote elisp in a way that is
-;; somewhat secure.
+;; reval.el implements eval of remote elisp code. It implements
+;; somewhat secure local evaluation of remote elisp by only running
+;; `eval-buffer' when the checksum of the remote matches the checksum
+;; embedded in the reval expression. If the checksum passes the remote
+;; file is cached to avoid future calls to the network.
+;;
+;; To make it easier to maintain files using remote elisp code, reval
+;; provides functionality to check for updates, and streamlines the
+;; process for auditing new files and changes via `reval-sync'.
 
 ;;; Code:
 
@@ -239,9 +245,15 @@ reduced complexity everywhere else.
 (defvar reval-cache-directory (concat user-emacs-directory "reval/cache/")
   "The directory where retrieved .el files are saved.")
 
-(defvar reval-failed-buffer-list nil "List of failed reval buffers.")
+(defvar reval-failed-buffer-list nil "List of failed reval buffers.") ; XXX FIXME this is dumb
+;; use the buffer to track the state using `reval-fail' because then
+;; the process composes with the other tools we have for interacting
+;; with revaled files and caches etc.
 
 (defvar reval-evaled-buffer-list nil "List of evaled reval buffers.")
+
+(defvar-local reval--pending-updates nil
+  "Internal variable use to coordinate updates for a single buffer.")
 
 (defmacro with-url-handler-mode (&rest body)
   "Run BODY with `url-handler-mode' enabled."
@@ -390,6 +402,10 @@ At the moment UNIVERSAL-ARGUMENT is a placeholder."
             (pop-to-buffer-same-window buffer))
         (error "No cache for %s" path-or-url)))))
 
+(defun reval-fail (&rest args)
+  "Embed in buffer if audit fails on ARGS so that there is a record."
+  (error "reval audit failed for: %S" args))
+
 (defun reval (cypher checksum path-or-url &rest alternates)
   "Open PATH-OR-URL, match CHECKSUM under CYPHER, then eval.
 If an error is encountered try ALTERNATES in order.
@@ -401,6 +417,44 @@ run \\[reval-update-simple] (M-x `reval-update-simple') to populate
 CYPHER and CHECKSUM."
   (reval--get-buffer cypher checksum path-or-url alternates #'eval-buffer))
 
+(defun reval--get-buffer (cypher checksum path-or-url &optional alternates do-with-buffer)
+  "generic implementation that gets a buffer and can run a function
+DO-WITH-BUFFER in that buffer to enforce invariants, eval the buffer, etc.
+Note that this function ALWAYS returns the buffer, so DO-WITH-BUFFER should only
+be used to trigger a failure mode before the buffer is retruned, not used to get
+a return value from the buffer."
+  (let (found-buffer (cache-path (reval-cache-path checksum (file-name-nondirectory path-or-url))))
+    (with-url-handler-mode
+      (cl-loop for path-or-url in (cons cache-path (cons path-or-url alternates))
+               do (if (file-exists-p path-or-url)
+                      (let* ((buffer (reval-id->buffer path-or-url))
+                             (_ (when (string= path-or-url cache-path)
+                                  (with-current-buffer buffer (emacs-lisp-mode))))
+                             ;; FIXME this is still not right ... can error due to not elisp
+                             (buffer-checksum (reval-resum cypher buffer)))
+                        (if (eq buffer-checksum checksum)
+                            (let ((buffer
+                                   (if (string= path-or-url cache-path)
+                                       buffer
+                                     ;; save to cache and switch buffer before eval for xrefs
+                                     (reval--write-cache buffer cache-path)
+                                     (find-file-noselect cache-path))))
+                              (when do-with-buffer
+                                (with-current-buffer buffer
+                                  (funcall do-with-buffer)))
+                              (setq found-buffer buffer))
+                          (reval--add-buffer-to-list buffer 'reval-failed-buffer-list)
+                          (funcall (if alternates #'warn #'error)
+                                   ;; if alternates warn to prevent an early failure
+                                   ;; from blocking later potential successes otherwise
+                                   ;; signal an error
+                                   "reval: checksum mismatch! %s" path-or-url)))
+                    (warn "reval: file does not exist! %s" path-or-url))
+               until found-buffer))
+    (unless found-buffer
+      (error "reval: all paths failed!"))
+    found-buffer))
+
 (defun reval-view-failed ()
   "View top of failed reval buffer stack and kill or keep."
   (interactive)
@@ -410,6 +464,8 @@ CYPHER and CHECKSUM."
         (switch-to-buffer (current-buffer))
         (when (y-or-n-p "Kill buffer? ")
           (kill-buffer))))))
+
+;;; machinery to get the latest immutable url for a revaled file
 
 (require 'lisp-mnt)
 
@@ -467,80 +523,61 @@ package is present on the system."
   ;; remote does all the work for us we will still have to ask the
   ;; remote to actually do the dereference operation, since we can't
   ;; gurantee that all remotes even have endpoints that behave this
-  ;; way we can't implement this once in reval, so we ask individual
-  ;; files to implement this pattern themselves, or worst case, the
+  ;; functionality we can't implement this once in reval, so each
+  ;; file implements this pattern itself, or worst case, the
   ;; update function can be supplied at update time if there is a
   ;; useful remote file that doesn't know that it is being revaled
   (lm-with-file file
     (lm-header "reval-get-immutable")))
 
-(defun reval-check-for-updates () ; TODO reval-sync ?
-  "Check current buffer revals for updates."
-  (interactive)
-  ;; search and collect all calls to reval in the current buffer? all org files? ???
-  ;; open the current reval in a buffer
-  ;; get the package info if avaiable
-  ;; warn about all revals that cannot be updated due to missing metadata?
+;;; internals for `reval-sync' workflow
 
-  (message "%S" )
-  (error "TODO not implemented"))
+(defun reval--audit-change (buffer-old url-new buffer-source cypher begin)
+  "Audit the changes made in URL-NEW relative to BUFFER-OLD.
+If the audit passes, a checksum is calculated under CYPHER for
+the new buffer, and a new reval form is inserted into BUFFER-SOURCE
+starting at position BEGIN which corresponds to the beginning of the
+reval form that was the source for BUFFER-OLD."
+  (let* ((buffer-new (with-url-handler-mode (find-file-noselect url-new)))
+         (buffer-review (reval--diff buffer-old buffer-new)))
+    ;; audit
+    ;; TODO see if we need something more than this, for small diffs it seems
+    ;; to work fairly well, it captures the core functionality needed, and
+    ;; if users are curious about the changes, they can accept or reject,
+    ;;; and then look up the changes in git without complicating this workflow
+    (let*
+        ((ok
+          (save-excursion
+            (save-window-excursion
+              (with-current-buffer buffer-review
+                (display-buffer buffer-review)
+                ;; not using `y-or-n-p' since it is too easy
+                (let ((yes (yes-or-no-p "Audit of changes ok? ")))
+                  (unless yes
+                    (warn "Audit failed.  Checksum will not be calculated for %s"
+                          (buffer-file-name buffer-new)))
+                  yes)))))
+         (checksum-new (if (not ok) 'audit-failed (intern (secure-hash cypher buffer-new))))
+         (to-insert
+          (prin1-to-string
+           `(,(if (not ok) 'reval-fail 'reval) ',cypher ',checksum-new ,url-new 'NEW))))
+      (with-current-buffer buffer-source
+        (save-excursion
+          (goto-char begin)
+          (insert to-insert "\n")))
+      ok)))
 
-(defun reval-update ()
-  "Update to latest version."
-  )
-
-(defun reval--get-buffer (cypher checksum path-or-url &optional alternates do-with-buffer)
-  "generic implementation that gets a buffer and can run a function
-DO-WITH-BUFFER in that buffer to enforce invariants, eval the buffer, etc.
-Note that this function ALWAYS returns the buffer, so DO-WITH-BUFFER should only
-be used to trigger a failure mode before the buffer is retruned, not used to get
-a return value from the buffer."
-  (let (found-buffer (cache-path (reval-cache-path checksum (file-name-nondirectory path-or-url))))
-    (with-url-handler-mode
-      (cl-loop for path-or-url in (cons cache-path (cons path-or-url alternates))
-               do (if (file-exists-p path-or-url)
-                      (let* ((buffer (reval-id->buffer path-or-url))
-                             (_ (when (string= path-or-url cache-path)
-                                  (with-current-buffer buffer (emacs-lisp-mode))))
-                             ;; FIXME this is still not right ... can error due to not elisp
-                             (buffer-checksum (reval-resum cypher buffer)))
-                        (if (eq buffer-checksum checksum)
-                            (let ((buffer
-                                   (if (string= path-or-url cache-path)
-                                       buffer
-                                     ;; save to cache and switch buffer before eval for xrefs
-                                     (reval--write-cache buffer cache-path)
-                                     (find-file-noselect cache-path))))
-                              (when do-with-buffer
-                                (with-current-buffer buffer
-                                  (funcall do-with-buffer)))
-                              (setq found-buffer buffer))
-                          (reval--add-buffer-to-list buffer 'reval-failed-buffer-list)
-                          (funcall (if alternates #'warn #'error)
-                                   ;; if alternates warn to prevent an early failure
-                                   ;; from blocking later potential successes otherwise
-                                   ;; signal an error
-                                   "reval: checksum mismatch! %s" path-or-url)))
-                    (warn "reval: file does not exist! %s" path-or-url))
-               until found-buffer))
-    (unless found-buffer
-      (error "reval: all paths failed!"))
-    found-buffer))
-
-(defun reval--eval-buffer-when-not-fboundp ()
-  "run inside `reval--get-buffer' to avoid revaling the buffer if
-the imm url function if it is already fboundp"
-  (let ((get-imm-name (reval-header-get-immutable)))
-    (if get-imm-name
-        (let ((get-imm (intern get-imm-name)))
-          (unless (fboundp get-imm)
-            (eval-buffer))))))
+(defun reval--diff (buffer-old buffer-new)
+  "Construct a buffer that is the diff between BUFFER-OLD and BUFFER-NEW."
+  ;;(ediff-buffers buffer-old buffer-new)
+  ;; lol no-select noselect inconsistency
+  (diff-no-select buffer-old buffer-new nil nil))
 
 (defun reval--get-changed ()
-  "collect all reval expressions in a buffer and their points"
+  "Collect thunks to update the reval expressions in the current buffer that have new versions."
   (save-excursion
     (goto-char (point-min))
-    (let (out)
+    (let (out (buffer-source (current-buffer)))
       (while (re-search-forward "(reval[[:space:]]" nil t)
         (cl-multiple-value-bind (cypher checksum path-or-url-raw alternates begin)
             (reval--form-at-point)
@@ -551,24 +588,33 @@ the imm url function if it is already fboundp"
                  (buffer
                   (reval--get-buffer
                    cypher checksum path-or-url alternates
-                   #'reval--eval-buffer-when-not-fboundp)))
-            (message "aaaaaaaaaaaa: %S" buffer)
-            (with-current-buffer buffer
-              ;; TODO alternates probably? or in second phase?
-              (let ((new-url (reval--get-new-immutable-url)))
-                (unless (string= new-url path-or-url)
-                  ;; FIXME TODO local urls should check for version control so that
-                  ;; checksums can be updated before pushing, but that is more involved
-                  (setq
-                   out
-                   (cons
-                    (list
-                     (list 'reval cypher '? new-url)
-                     begin
-                     alternates)
-                    out)))))))
+                   #'reval--eval-buffer-when-not-fboundp))
+                 (url-new (with-current-buffer buffer (reval--get-new-immutable-url))))
+            (unless (string= url-new path-or-url)
+              ;; FIXME TODO local urls should check for version control so that
+              ;; checksums can be updated before pushing, but that is more involved
+              (setq
+               out
+               (cons
+                (list
+                 (reval--make-diff-thunk buffer url-new buffer-source cypher begin)
+                 alternates)
+                out)))))
         (forward-sexp))
       out)))
+
+(defun reval--eval-buffer-when-not-fboundp ()
+  "Run inside `reval--get-buffer' to avoid revaling the buffer if
+the imm url function if it is already fboundp"
+  (let ((get-imm-name (reval-header-get-immutable)))
+    (if get-imm-name
+        (let ((get-imm (intern get-imm-name)))
+          (unless (fboundp get-imm)
+            (eval-buffer))))))
+
+(defun reval--make-diff-thunk (buffer-old url-new buffer-source cypher begin)
+  "Create the thunk that kicks off the update workflow."
+  (lambda () (reval--audit-change buffer-old url-new buffer-source cypher begin)))
 
 (defun reval--dquote-symbolp (thing)
   "Match pattern ''THING.
@@ -598,12 +644,45 @@ For example elt 2 of '(reval 'sha256 ? \"file.el\")."
               (alternates (cddddr raw)))
           (cl-values cypher checksum path-or-url alternates begin end))))))
 
-(defun reval-checksum-at-point (&optional universal-argument)
+(defun reval-check-for-updates (&optional universal-argument) ; TODO reval-sync ?
+  "Check current buffer revals for updates.
+UNIVERSAL-ARGUMENT is a placeholder."
+  (interactive)
+  ;; search and collect all calls to reval in the current buffer? all org files? ???
+  ;; open the current reval in a buffer
+  ;; get the package info if avaiable
+  ;; warn about all revals that cannot be updated due to missing metadata?
+  (let* ((pending-updates (reval--get-changed))
+         (count (length pending-updates))
+         (updates? (if (> count 1) "updates" "update")))
+    (setq-local reval--pending-updates pending-updates)
+    ;; TODO display a message about pending updates or a buffer
+    ;; with the pending updates? probably easier to do the latter
+    ;; and have approve/deny buttons or something
+    (if (> count 0)
+        (message "%s %s found for %s run `reval-do-updates' to audit changes."
+                 count updates? (buffer-file-name))
+      (message "No reval updates found for %s" (buffer-file-name)))))
+
+(defun reval-do-updates (&optional universal-argument)
+  "Audit and insert pending updates.
+UNIVERSAL-ARGUMENT is a placeholder."
+  ;; XXX `reval-update' isn't here because it would be for a single
+  ;; form, but our workflow doesn't do that right now
+  (interactive)
+  (while reval--pending-updates
+    (let* ((update (pop reval--pending-updates))
+           (do-update (car update))
+           (success (funcall do-update))))))
+
+(defun reval-form-checksum-at-point (&optional universal-argument)
   "Get the checksum in the reval form at point.  UNIVERSAL-ARGUMENT is a placeholder."
   (interactive)
   (cl-multiple-value-bind (_cypher checksum _path-or-url _alternates _b _e)
       (reval--form-at-point)
     checksum))
+
+;; user facing functionality
 
 (defun reval-update-simple (&optional universal-argument)
   "Update the checksum for the reval sexp under the cursor or up the page.
@@ -628,10 +707,32 @@ this functionality responsibly."
                        (append new (cons ''OLD> alternates))
                      new))))
         (goto-char sigh)))))
+
+(defun reval-sync (&optional universal-argument)
+  "Check for, audit, and insert updates for the current buffer.
+UNIVERSAL-ARGUMENT is a placeholder."
+  (interactive)
+  (reval-check-for-updates)
+  (when reval--pending-updates
+    (reval-do-updates)))
+
 #+end_src
 
 See https://emacs.stackexchange.com/a/7577 for why we have to manually
 save the position and ~save-excursion~ does nothing in this case.
+
+FIXME huge problem with older versions of reval being pulled in by ow.el
+there really isn't a way to fix that other than to decouple completely or
+to wrap the whole reval block in a conditional? actually that probably
+makes more sense ...
+
+FIXME TODO reuse the approach that we took with the orgstrap local
+variables for making it a bit more manageable to find and update any
+reval minimal blocks that are created. Since it is a key entry point
+and it is fairly large having an automated way to update to the latest
+version would be useful. Maybe via ~reval-insert-minimal~ and
+~reval-update-minimal~ or similar. Be sure to match whatever naming
+conventions we used in orgstrap.
 
 TODO M-: (insert (package-name--reval-update))
 or rather, the reval-confirm workflow which is
