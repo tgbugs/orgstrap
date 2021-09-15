@@ -399,35 +399,7 @@ PATH-OR-URL is to write out expression with CYPHER and CHECKSUM as a
 nonsense values.  For example (reval ? ? \"path/to/file.el\").  Then
 run \\[reval-update-simple] (M-x `reval-update-simple') to populate
 CYPHER and CHECKSUM."
-  (let (done
-        (cache-path (reval-cache-path checksum (file-name-nondirectory path-or-url))))
-    (with-url-handler-mode
-      (cl-loop for path-or-url in (cons cache-path (cons path-or-url alternates))
-               do (if (file-exists-p path-or-url)
-                      (let* ((buffer (reval-id->buffer path-or-url))
-                             (_ (when (string= path-or-url cache-path)
-                                  (with-current-buffer buffer (emacs-lisp-mode))))
-                             ;; FIXME this is still not right ... can error due to not elisp
-                             (buffer-checksum (reval-resum cypher buffer)))
-                        (if (eq buffer-checksum checksum)
-                            (progn
-                              (unless (string= path-or-url cache-path)
-                                ;; save to cache before eval for xrefs
-                                (reval--write-cache buffer cache-path))
-                              (eval-buffer buffer)
-                              (reval--add-buffer-to-list buffer 'reval-evaled-buffer-list)
-                              (setq done t))
-                          (reval--add-buffer-to-list buffer 'reval-failed-buffer-list)
-                          (funcall (if alternates #'warn #'error)
-                                   ;; if alternates warn to prevent an early failure
-                                   ;; from blocking later potential successes otherwise
-                                   ;; signal an error
-                                   "reval: checksum mismatch! %s" path-or-url)))
-                    (warn "reval: file does not exist! %s" path-or-url))
-               until done))
-    (unless done
-      (error "reval: all paths failed!")))
-  nil)
+  (reval--get-buffer cypher checksum path-or-url alternates #'eval-buffer))
 
 (defun reval-view-failed ()
   "View top of failed reval buffer stack and kill or keep."
@@ -463,8 +435,15 @@ CYPHER and CHECKSUM."
 (defun reval-get-imm-github (group repo path &optional branch)
   "Get the immutable url for PATH on BRANCH in a github remote for REPO at GROUP."
   (let* ((branch (or branch "master"))
-         (url (format "https://api.github.com/repos/%s/%s/git/refs/heads/%s" group repo branch))
-         (sha (gethash "sha" (gethash "object" (reval-url->json url)))))
+         (branch-url
+          (format "https://api.github.com/repos/%s/%s/git/refs/heads/%s"
+                  group repo branch))
+         (branch-sha (gethash "sha" (gethash "object" (reval-url->json branch-url))))
+         (url
+          (format "https://api.github.com/repos/%s/%s/commits?path=%s&page=1&per_page=1&sha=%s"
+                  group repo path branch-sha))
+         (result (reval-url->json url))
+         (sha (gethash "sha" (elt (reval-url->json url) 0))))
     (format "https://raw.githubusercontent.com/%s/%s/%s/%s" group repo sha path)))
 
 (defun reval-header-is-version-of (&optional file)
@@ -509,6 +488,87 @@ package is present on the system."
 (defun reval-update ()
   "Update to latest version."
   )
+
+(defun reval--get-buffer (cypher checksum path-or-url &optional alternates do-with-buffer)
+  "generic implementation that gets a buffer and can run a function
+DO-WITH-BUFFER in that buffer to enforce invariants, eval the buffer, etc.
+Note that this function ALWAYS returns the buffer, so DO-WITH-BUFFER should only
+be used to trigger a failure mode before the buffer is retruned, not used to get
+a return value from the buffer."
+  (let (found-buffer (cache-path (reval-cache-path checksum (file-name-nondirectory path-or-url))))
+    (with-url-handler-mode
+      (cl-loop for path-or-url in (cons cache-path (cons path-or-url alternates))
+               do (if (file-exists-p path-or-url)
+                      (let* ((buffer (reval-id->buffer path-or-url))
+                             (_ (when (string= path-or-url cache-path)
+                                  (with-current-buffer buffer (emacs-lisp-mode))))
+                             ;; FIXME this is still not right ... can error due to not elisp
+                             (buffer-checksum (reval-resum cypher buffer)))
+                        (if (eq buffer-checksum checksum)
+                            (let ((buffer
+                                   (if (string= path-or-url cache-path)
+                                       buffer
+                                     ;; save to cache and switch buffer before eval for xrefs
+                                     (reval--write-cache buffer cache-path)
+                                     (find-file-noselect cache-path))))
+                              (when do-with-buffer
+                                (with-current-buffer buffer
+                                  (funcall do-with-buffer)))
+                              (setq found-buffer buffer))
+                          (reval--add-buffer-to-list buffer 'reval-failed-buffer-list)
+                          (funcall (if alternates #'warn #'error)
+                                   ;; if alternates warn to prevent an early failure
+                                   ;; from blocking later potential successes otherwise
+                                   ;; signal an error
+                                   "reval: checksum mismatch! %s" path-or-url)))
+                    (warn "reval: file does not exist! %s" path-or-url))
+               until found-buffer))
+    (unless found-buffer
+      (error "reval: all paths failed!"))
+    found-buffer))
+
+(defun reval--eval-buffer-when-not-fboundp ()
+  "run inside `reval--get-buffer' to avoid revaling the buffer if
+the imm url function if it is already fboundp"
+  (let ((get-imm-name (reval-header-get-immutable)))
+    (if get-imm-name
+        (let ((get-imm (intern get-imm-name)))
+          (unless (fboundp get-imm)
+            (eval-buffer))))))
+
+(defun reval--get-changed ()
+  "collect all reval expressions in a buffer and their points"
+  (save-excursion
+    (goto-char (point-min))
+    (let (out)
+      (while (re-search-forward "(reval[[:space:]]" nil t)
+        (cl-multiple-value-bind (cypher checksum path-or-url-raw alternates begin)
+            (reval--form-at-point)
+          (let* ((path-or-url
+                  (or (and (stringp path-or-url-raw) path-or-url-raw) ; XXX why does stringp return t !??!?
+                      ;; FIXME DANGERZONE !? (yes very)
+                      (eval path-or-url-raw)))
+                 (buffer
+                  (reval--get-buffer
+                   cypher checksum path-or-url alternates
+                   #'reval--eval-buffer-when-not-fboundp)))
+            (message "aaaaaaaaaaaa: %S" buffer)
+            (with-current-buffer buffer
+              ;; TODO alternates probably? or in second phase?
+              (let ((new-url (reval--get-new-immutable-url)))
+                (unless (string= new-url path-or-url)
+                  ;; FIXME TODO local urls should check for version control so that
+                  ;; checksums can be updated before pushing, but that is more involved
+                  (setq
+                   out
+                   (cons
+                    (list
+                     (list 'reval cypher '? new-url)
+                     begin
+                     alternates)
+                    out)))))))
+        (forward-sexp))
+      out)))
 
 (defun reval--dquote-symbolp (thing)
   "Match pattern ''THING.
