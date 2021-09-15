@@ -489,9 +489,15 @@
                         (cl-remove-if (lambda (x) (or (not x) (eq x :sentinel)))
                                       (plist-put args :sentinel nil)))
                    args))
-         (process (apply #'start-process (format "process-%s" command) (format "process-buffer-%s" command) command args)))
+         (process (apply #'start-process
+                         (format "process-%s" command)
+                         (generate-new-buffer
+                          (format "process-buffer-%s" command))
+                         command
+                         args)))
     (when sentinel
-      (set-process-sentinel process sentinel))))
+      (set-process-sentinel process sentinel))
+    process))
 
 
 (defvar securl-default-cypher 'sha256)  ; remember kids, always publish the cypher with the checksum
