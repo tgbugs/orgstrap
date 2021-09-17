@@ -607,26 +607,102 @@
   )
 
 (defun ow-run-command (command &rest args)
-  "Run COMMAND with ARGS. Raise an error if the return code is not zero."
-  ;; I'm being a good namespace citizen and prefixing this with ow- but
-  ;; 99% of the time I'm going to have (defalias 'run-command #'ow-run-command)
-  ;; in my orgstrap blocks that reval ow.el (since ow-min.el has it already)
-  ;;(message "%S" (mapconcat #'identity (cons command args) " "))
+  "Run COMMAND with ARGS.
+Raise an error if the return code is not zero."
+  ;; TODO maybe implement this in terms of ow-run-command-async ?
+  ;; usually (defalias 'run-command #'ow-run-command)
+  (let ((stdout-buffer (generate-new-buffer " rc stdout"))
+        (stderr-buffer (generate-new-buffer " rc stderr")))
+    (unwind-protect
+        (let ((process
+               (make-process
+                :name (concat "run-command: " command)
+                :buffer stdout-buffer
+                :stderr stderr-buffer
+                :command (cons command args))))
+          (while (accept-process-output process)) ; don't use mutexes kids
+          (let ((ex (process-exit-status process)))
+            (if (= 0 ex)
+                (with-current-buffer stdout-buffer (buffer-string))
+              (error "Command %s failed code: %s stdout: %S stderr: %S"
+                     command ex
+                     (with-current-buffer stdout-buffer (buffer-string))
+                     (with-current-buffer stderr-buffer (buffer-string))))))
+      (kill-buffer stdout-buffer)
+      (kill-buffer stderr-buffer))))
+
+(defun ow-run-command-24 (command &rest args)
+  "Run COMMAND with ARGS. Raise an error if the return code is not zero.
+This is retained for compatibility with Emacs 24 since `make-process' was
+introduced in version 25."
   (with-temp-buffer
     (let* ((return-code (apply #'call-process command nil (current-buffer) nil args))
            (string (buffer-string)))
       (if (not (= 0 return-code))
-          (error "code: %s stdout: %S" return-code string)
+          (error "Command %s failed code: %s stdout: %S" command return-code string)
         string))))
 
-(defun ow--default-sentinel (process message)
-  "An example sentinel for async processes."
-  (message "%s %s" message (process-status process))
-  (with-current-buffer (process-buffer process)
-    (message "%S" (buffer-string))))
+(when (< emacs-major-version 25)
+  (defalias 'ow-run-command #'ow-run-command-24))
+
+(defun ow--default-sentinel (process message &optional stderr-process)
+  "An example sentinel for async processes.
+PROCESS is the process that changed status and MESSAGE is the
+message related to that change.  The STDERR-PROCESS is passed as
+an optional argument if :stderr was set (which it always is when
+using `ow-run-command-async')."
+  (message "%s %s %s"
+           message
+           (process-status process)
+           (and stderr-process (process-status stderr-process)))
+  (message "stdout: %S stderr: %S"
+           (with-current-buffer (process-buffer process) (buffer-string))
+           (and stderr-process (with-current-buffer (process-buffer stderr-process) (buffer-string)))))
 
 (cl-defun ow-run-command-async (command &rest args &key sentinel &allow-other-keys)
-  "Reminder that kwargs must come before rest when calling a cl-defun."
+  "Run COMMAND with ARGS asynchronously.
+
+SENTINEL is a function that has two required arguments, and MUST
+ACCEPT AN ADDITIONAL OPTIONAL ARGUMENT for stderr-process. This
+allows the sentinel process to be use as a normal sentinel
+function as well.
+
+Reminder that kwargs must come before rest when calling a cl-defun."
+  (let* ((args (or (and (memq :sentinel args)
+                        (cl-remove-if (lambda (x) (or (not x) (eq x :sentinel)))
+                                      (plist-put args :sentinel nil)))
+                   args))
+         (stdout-buffer (generate-new-buffer (concat " process-buffer-" command)))
+         (stderr-buffer (generate-new-buffer (concat " process-buffer-stderr" command)))
+         (stderr-process
+          (make-pipe-process
+           :name (concat "process-stderr-" command)
+           :buffer stderr-buffer))
+         (wrapped-sentinel
+          (if sentinel
+              (lambda (process message)
+                (unwind-protect
+                    (funcall sentinel process message stderr-process)
+                  (when (memq (process-status process) '(exit signal))
+                    (kill-buffer stdout-buffer)
+                    (kill-buffer stderr-buffer))))
+            (lambda (process message)
+              (when (memq (process-status process) '(exit signal))
+                (kill-buffer stdout-buffer)
+                (kill-buffer stderr-buffer)))))
+         (process
+          (make-process
+           :name (concat "process-" command)
+           :buffer stdout-buffer
+           :stderr stderr-process
+           :command (cons command args)
+           :sentinel wrapped-sentinel)))
+    process))
+
+(cl-defun ow-run-command-async-24 (command &rest args &key sentinel &allow-other-keys)
+  "Run COMMAND with ARGS asynchronously. SENTINEL runs when processes change status.
+Legacy implementation for Emacs < 25. Reminder that kwargs must
+come before rest when calling a cl-defun."
   (let* ((args (or (and (memq :sentinel args)
                         (cl-remove-if (lambda (x) (or (not x) (eq x :sentinel)))
                                       (plist-put args :sentinel nil)))
@@ -634,12 +710,15 @@
          (process (apply #'start-process
                          (format "process-%s" command)
                          (generate-new-buffer
-                          (format "process-buffer-%s" command))
+                          (format " process-buffer-%s" command))
                          command
                          args)))
     (when sentinel
       (set-process-sentinel process sentinel))
     process))
+
+(when (< emacs-major-version 25)
+  (defalias 'ow-run-command-async #'ow-run-command-async-24))
 
 
 (defvar securl-default-cypher 'sha256)  ; remember kids, always publish the cypher with the checksum
