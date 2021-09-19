@@ -1,4 +1,4 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 46847bb5240bbc666ca6779a7cbf9d0a764b95f46311f43d19dd8e297a9bca14; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 503715182fef6f5895e8b9d193a3014b478339452267a78b04bb17a09b46faa5; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Orgstrap: Executable Org files
 #+startup: showall
@@ -1238,11 +1238,10 @@ and then run `orgstrap-on-change-hook'."
       ;; so have to remove the hook to avoid infinite loop
       (unwind-protect
           (save-excursion
-            ;; using save-excusion here is a good for insurance against wierd hook issues
-            ;; however it does not deal with the fact that updating `orgstrap-add-block-checksum'
-            ;; adds an entry to the undo ring, which is bad
-            ;;(undo-boundary)  ; undo-boundary doesn't quite work the way we want
-            ;; related https://emacs.stackexchange.com/q/7558
+            (undo)
+            (undo-boundary) ; insert an undo boundary so that the
+            ;; changes to the checksum are transparent to the user
+            (undo) ; undo the undo above
             (orgstrap-add-block-checksum nil checksum)
             (run-hooks 'orgstrap-on-change-hook))
         (add-hook 'before-save-hook #'orgstrap--update-on-change nil t)))))
@@ -1860,6 +1859,8 @@ orgstrap being portable to other platforms outside of Emacs at some point in the
 very distant future, so keeping the machinery outside of the org file itself as
 minimal as possible is critical.
 *** Do
+FIXME these should be =ow-do=.
+
 See [[./do.org]] for more on what these are and how to use them.
 #+name: orgstrap-do
 #+begin_src elisp
@@ -2745,10 +2746,12 @@ we have the revoke functionality.
 :CREATED:  [2020-11-29 Sun 00:10]
 :END:
 annoying
+this is because orgstrap-mode is idiotically broken and can't be activated
+globally despite being a global minor mode >_<
 ** Tutorial videos for various workflows
 Record a series of short screen casts to illustrate common orgstrap
 authoring and consumption workflows.
-** Display contents of orgstrap block in other window during confirm
+** TODO Display contents of orgstrap block in other window during confirm
 :PROPERTIES:
 :CREATED:  [2020-10-08 Thu 23:27]
 :END:
@@ -2762,6 +2765,10 @@ the orgstrap block are the only two windows visible.
 
 Another issue is whether it is possible to do this in Emacs < 27,
 since it is not possible to switch out of the confirm dialogue.
+
+Probably use =org-babel-expand-src-block= via =call-interactively=.
+This will eat into the elvs budget. This also addresses some of the
+security concerns.
 ** Async blocks
 :PROPERTIES:
 :CREATED:  [2020-10-02 Fri 17:03]
@@ -2806,7 +2813,15 @@ onto a source block we probably need to do this. For the time being users need t
 for any hidden header properties that might be attached if the source block is buried
 within a tree somewhere. See ~org-babel-one-header-arg-safe-p~ for one way that this
 might be implemented in the elvs.
-** STARTED Batch mode
+** DONE Batch mode
+This is more effectively implemented in [[./shebang.org]] because it
+bypasses the orgstrap checksum entirely. It is still secure because
+the user has to intentionally run the org file as a script. The
+overall complexity for the user is lower as well since they do not
+have to maintain or worry about the batch helper file, and the churn
+in the batch helper file is also eliminated. This section is retained
+for the record.
+
 There are a number of use cases for being able to process orgstrapped files in batch mode.
 For example being able to load a file and have it automatically tangle itself vastly simplifies
 a number of different workflows. =emacs -q --batch -l orgstrap-known-safe.el my-file.org= seems
