@@ -171,16 +171,23 @@ using a mouse to toggle headings. https://emacs.stackexchange.com/a/31277
   ;; have to chain `mouse-set-point' otherwise double click to highlight words etc. fails
   (mouse-set-point event promote-to-region))
 
-(defun ow-enable-mouse-cycle ()
-  "Allow left mouse to cycle org headings."
+(defun ow--set-mouse-cycle ()
+  "Hook fun to set mouse-cycle behavior for org buffers."
+  (local-unset-key [mouse-1])
+  (local-set-key [mouse-1] #'ow--safe-cycle))
+
+(defun ow-enable-mouse-cycle (&optional global)
+  "Allow left mouse to cycle org headings.
+Set GLOBAL to enable for all org buffers."
   (interactive)
   ;; reset `org-cycle-hook' as a local variable so that
   ;; we can add/remove individual hooks without messing
   ;; with the global behavior which might some day not
   ;; be purely single threaded (heh)
   (setq-local org-cycle-hook org-cycle-hook)
-  (local-unset-key [mouse-1])
-  (local-set-key [mouse-1] #'ow--safe-cycle))
+  (ow--set-mouse-cycle)
+  (when global
+    (add-hook 'org-mode-hook #'ow--set-mouse-cycle)))
 
 (defun ow-recenter-on-mouse ()
   "Recenter the cursor line so that it is under the mouse."
@@ -234,7 +241,7 @@ this variant everything can only be enabled together.
   (set-face-attribute 'rainbow-delimiters-unmatched-face nil :bold t :foreground "white" :background "red")
   (set-face-attribute 'rainbow-delimiters-mismatched-face nil :bold t :foreground "black" :background "yellow"))
 
-(defun ow-enable-config-familiar-1 ()
+(defun ow-enable-config-familiar-1 (&optional global)
   "Minimal config to achieve something more familiar for non-Emacs users.
 
 Uses `cua-mode' with additional tweak for undo bindings.
@@ -242,19 +249,22 @@ NOTE: `undo-fu' is required for Emacs < 28."
 
   ;; Enable familiar copy/paste keybindings
   (cua-mode t)
-  ;; Ctrl s for save
-  (local-set-key (kbd "C-s") #'save-buffer)
-  ;; Ctrl f for find aka isearch
-  (local-set-key (kbd "C-f") #'isearch-forward)
-  ;; enable Cmd Shift Z for apple users Ctrl y for windows
-  (when (fboundp #'undo-redo)
-    (if (eq system-type 'darwin)
-        (local-set-key (kbd "C-Z") #'undo-redo)
-      (local-set-key (kbd "C-y") #'undo-redo)))
+
+  ;; additional keybinds
+  (let ((set-key (if global #'global-set-key #'local-set-key)))
+    ;; Ctrl s for save
+    (funcall set-key (kbd "C-s") #'save-buffer)
+    ;; Ctrl f for find aka isearch
+    (funcall set-key (kbd "C-f") #'isearch-forward)
+    ;; enable Cmd Shift Z for apple users Ctrl y for windows
+    (when (fboundp #'undo-redo)
+      (if (eq system-type 'darwin)
+          (funcall set-key (kbd "C-Z") #'undo-redo)
+        (funcall set-key (kbd "C-y") #'undo-redo))))
 
   ;; Move text smoothly when point is at top or bottom of buffer
-  (setq-local scroll-conservatively 101)
-  (setq-local scroll-step 1)
+  (ow--setq global scroll-conservatively 101)
+  (ow--setq global scroll-step 1)
 
   ;; Use left mouse to cycle
   (ow-enable-mouse-cycle)
@@ -263,8 +273,8 @@ NOTE: `undo-fu' is required for Emacs < 28."
   (setq mouse-yank-at-point t) ; set globally due to minibuffer
 
   ;; Mouse wheel behavior
-  (setq-local mouse-wheel-progressive-speed nil)
-  (setq-local mouse-wheel-scroll-amount '(3 ((shift) . hscroll)))
+  (ow--setq global mouse-wheel-progressive-speed nil)
+  (ow--setq global mouse-wheel-scroll-amount '(3 ((shift) . hscroll)))
 
   ;; Mouse on scroll bar behavior TODO this is not quite right, but I
   ;; have no idea how to get emacs to stop resizing the sliders
@@ -273,7 +283,7 @@ NOTE: `undo-fu' is required for Emacs < 28."
 
   ;; default shift functionality is usually not needed in ow files and
   ;; the message when you try to use it can be extremely confusing
-  (setq-local org-support-shift-select t)
+  (ow--setq global org-support-shift-select t)
 
   ;; Enable tab-bar-mode
   (when (>= emacs-major-version 27)
@@ -984,6 +994,11 @@ errors among others.
 Random stuff that doesn't fit elsewhere.
 #+name: ow-utils
 #+begin_src elisp
+(defmacro ow--setq (global &rest body)
+  `(if ,global
+       (setq ,@body)
+     (setq-local ,@body)))
+
 (defun ow-url-head-ok (url)
   "Check if URL is up and OK using HTTP HEAD.
 All errors are silenced."
