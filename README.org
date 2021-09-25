@@ -1,4 +1,4 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 7b5caafe3d8287acfc0ee79e7cd509dd98b098b87a048583deabf246bd936256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: fd36e5d581f48655fcdc33dd11b97dff80df47a1dbc3299230c06264723229ad; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Orgstrap: Executable Org files
 #+startup: showall
@@ -242,6 +242,9 @@ This is the =orgstrap= block that is used for this file.
 (defun orgstrap--update-examples ()
   "Use with `orgstrap-on-change-hook' to automatically keep the contents
 of the example blocks in sync."
+  ;; XXX WARNING if you update the orgstrap-file-local-variables-common block
+  ;; you MUST re`eval-defun' for `orgstrap--local-variables--eval-common' and
+  ;; `orgstrap--lv-common-with-block-name' otherwise the changes will not take
   (let ((pairs `(("local-variables-prop-line-example" ,(orgstrap--local-variables-prop-line-string))
                  ("local-variables-portable-example" ,(orgstrap--file-local-variables-string))
                  ("local-variables-minimal-example" ,(let ((orgstrap-use-minimal-local-variables t))
@@ -723,6 +726,9 @@ Once =orgstrap--confirm-eval= is defined the rest of the =eval:= local variables
 # that the symlinked file was opened in or the mode of the target to
 # avoid issues like this
 
+# XXX If you modify this block call =M-x orgstrap-run-block=
+# so that functions that use it internally will be updated.
+
 #+caption: common local variables
 #+name: orgstrap-file-local-variables-common
 #+begin_src elisp :eval never
@@ -736,7 +742,9 @@ Once =orgstrap--confirm-eval= is defined the rest of the =eval:= local variables
             (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval)
             (goto-char obs) ; FIXME `org-save-outline-visibility' but that is not portable
             (org-babel-execute-src-block))
-        (setq-local org-confirm-babel-evaluate ocbe)
+        (when (eq org-confirm-babel-evaluate #'orgstrap--confirm-eval)
+          ;; XXX allow orgstrap blocks to set ocbe so audit for that
+          (setq-local org-confirm-babel-evaluate ocbe))
         ;; FIXME `org-set-startup-visibility' should not run on subsequent calls to the block?
         (org-set-startup-visibility))
     ;; FIXME warn or error here?
@@ -787,7 +795,7 @@ Here is the prop line from the first line of this file that
 includes the cypher and checksum of the =orgstrap= block.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: 7b5caafe3d8287acfc0ee79e7cd509dd98b098b87a048583deabf246bd936256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: fd36e5d581f48655fcdc33dd11b97dff80df47a1dbc3299230c06264723229ad; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
 #+end_src
 
 # BE VERY CAREFUL WITH MANUAL EDITS
@@ -796,7 +804,15 @@ Here are the portable local variables from the end of the file.
 #+name: local-variables-portable-example
 #+begin_src org :eval never
 # Local Variables:
-# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((actual (org-version)) (need orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not need) (string< need actual) (string= need actual) (error "Your Org is too old! %s < %s" actual need))) (defun orgstrap-norm-func--prp-1\.1 (body) (let (print-quoted print-length print-level) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (unless (boundp 'orgstrap-norm-func) (defvar orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap-org-src-coderef-regexp (_fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))) (unless (fboundp #'org-src-coderef-regexp) (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp)) (defun orgstrap--expand-body (info) (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1)))) (defun orgstrap--confirm-eval-portable (lang _body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (orgstrap-norm body)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum))))) (unless (fboundp #'orgstrap--confirm-eval) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable)) (let (enable-local-eval) (vc-find-file-hook)) (let ((ocbe org-confirm-babel-evaluate) (obs (org-babel-find-named-block "orgstrap"))) (if obs (unwind-protect (save-excursion (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (goto-char obs) (org-babel-execute-src-block)) (setq-local org-confirm-babel-evaluate ocbe) (org-set-startup-visibility)) (warn "No orgstrap block."))))
+# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((actual (org-version)) (need orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not need) (string< need actual) (string= need actual) (error "Your Org is too old! %s < %s" actual need))) (defun orgstrap-norm-func--prp-1\.1 (body) (let (print-quoted print-length print-level) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (unless (boundp 'orgstrap-norm-func) (defvar orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap-org-src-coderef-regexp (_fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))) (unless (fboundp #'org-src-coderef-regexp) (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp)) (defun orgstrap--expand-body (info) (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1)))) (defun orgstrap--confirm-eval-portable (lang _body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (orgstrap-norm body)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum))))) (unless (fboundp #'orgstrap--confirm-eval) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable)) (let (enable-local-eval) (vc-find-file-hook)) (let ((ocbe org-confirm-babel-evaluate) (obs (org-babel-find-named-block "orgstrap"))) (if obs (unwind-protect (save-excursion (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (goto-char obs) (org-babel-execute-src-block)) (when (eq org-confirm-babel-evaluate #'orgstrap--confirm-eval) (setq-local org-confirm-babel-evaluate ocbe)) (org-set-startup-visibility)) (warn "No orgstrap block."))))
+# End:
+#+end_src
+
+Here are the minimal local variables from the end of the file.
+#+name: local-variables-minimal-example
+#+begin_src org :eval never
+# Local Variables:
+# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((actual (org-version)) (need orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not need) (string< need actual) (string= need actual) (error "Your Org is too old! %s < %s" actual need))) (defun orgstrap-norm-func--prp-1\.1 (body) (let (print-quoted print-length print-level) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (unless (boundp 'orgstrap-norm-func) (defvar orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap--confirm-eval-minimal (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (eq orgstrap-block-checksum (intern (secure-hash orgstrap-cypher (orgstrap-norm body))))))) (unless (fboundp #'orgstrap--confirm-eval) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-minimal)) (let (enable-local-eval) (vc-find-file-hook)) (let ((ocbe org-confirm-babel-evaluate) (obs (org-babel-find-named-block "orgstrap"))) (if obs (unwind-protect (save-excursion (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (goto-char obs) (org-babel-execute-src-block)) (when (eq org-confirm-babel-evaluate #'orgstrap--confirm-eval) (setq-local org-confirm-babel-evaluate ocbe)) (org-set-startup-visibility)) (warn "No orgstrap block."))))
 # End:
 #+end_src
 
@@ -1047,28 +1063,19 @@ COMMAND should be `hack-local-variables-confirm' with ARGS (all-vars
 unsafe-vars risky-vars dir-name)."
   (advice-remove #'hack-local-variables-confirm #'orgstrap--hack-lv-confirm)
   (cl-destructuring-bind (all-vars unsafe-vars risky-vars dir-name)
-      (mapcar (lambda (arg)
-                (if (listp arg)
-                    ;; We must use `cl-delete-if' on all-vars,
-                    ;; otherwise the list pointed to by all-vars in
-                    ;; the calling scope will remain unmodified and
-                    ;; the eval variable will be run without being
-                    ;; checked or confirmed. This also spills over to
-                    ;; the other -vars which is extra insurance
-                    ;; against any future changes to the
-                    ;; implementation in the calling scope.
-                    (cl-delete-if #'orgstrap--match-elvs arg)
-                  arg))
-              (if (member (buffer-file-name) orgstrap-file-blacklist)
-                  (mapcar (lambda (arg) ; zap checksums for blacklisted
-                            (if (listp arg)
-                                (cl-delete-if
-                                 (lambda (pair)
-                                   (eq (car pair) 'orgstrap-block-checksum))
-                                 arg)
-                              arg))
-                          args)
-                args))
+      (cl-loop
+       for arg in
+       (if (member (buffer-file-name) orgstrap-file-blacklist)
+           (cl-loop ; zap checksums for blacklisted
+            for arg in args collect
+            (if (listp arg)
+                (cl-delete-if
+                 (lambda (pair) (eq (car pair) 'orgstrap-block-checksum))
+                 arg)
+              arg))
+         args)
+       collect ; use `cl-delete-if' to mutate the lists in calling scope
+       (if (listp arg) (cl-delete-if #'orgstrap--match-elvs arg) arg))
     ;; After removal we have to recheck to see if unsafe-vars and
     ;; risky-vars are empty so we can skip the confirm dialogue. If we
     ;; do not, then the dialogue breaks the flow.
@@ -1082,6 +1089,10 @@ unsafe-vars risky-vars dir-name)."
   ;; internals. This hook will only run if there are actually local variables to
   ;; hack, so there is little to no chance of lingering hooks if an error occures
   (remove-hook 'before-hack-local-variables-hook #'orgstrap--before-hack-lv t)
+  ;; XXX we have to remove elvs here since `hack-local-variables-confirm' is not called
+  ;; if all variables are marked as safe, e.g. via `orgstrap-whitelist-file'
+  ;; FIXME other interactions between blacklist and whitelist may need to be handled here
+  (setq file-local-variables-alist (cl-delete-if #'orgstrap--match-elvs file-local-variables-alist))
   (add-hook 'hack-local-variables-hook #'orgstrap--hack-lv nil t))
 
 (defun orgstrap--used-in-current-buffer-p ()
@@ -1162,13 +1173,15 @@ variable for `orgstrap-block-checksum'."
   ;; to control this
   (if orgstrap-always-eval
       (apply command args)
-    (let* ((enable-local-eval (and args
-                                   orgstrap-always-eval-whitelist
-                                   (member (car args)
-                                           orgstrap-always-eval-whitelist)
-                                   enable-local-eval))
-           (ignored-local-variables (if enable-local-eval ignored-local-variables
-                                      (cons 'orgstrap-block-checksum ignored-local-variables))))
+    (let* ((enable-local-eval
+            (and args
+                 orgstrap-always-eval-whitelist
+                 (member (car args)
+                         orgstrap-always-eval-whitelist)
+                 enable-local-eval))
+           (ignored-local-variables
+            (if enable-local-eval ignored-local-variables
+              (cons 'orgstrap-block-checksum ignored-local-variables))))
       (apply command args))))
 
 (advice-add #'org-get-agenda-file-buffer :around #'orgstrap--advise-no-eval-lv)
@@ -1763,10 +1776,11 @@ orgstrap elv is always added first."
         (elv (orgstrap--read-current-local-variables)))
     (let ((lv-command (orgstrap--lv-command info minimal norm-func-name))
           (commands-existing (mapcar #'cdr (cl-remove-if-not (lambda (l) (eq (car l) 'eval)) elv)))) ;(ref:clrin)
-      (let ((eval-commands
-             (cons lv-command (cl-remove-if-not
-                               (lambda (cmd) (orgstrap--match-elvs (cons 'eval cmd)))
-                               commands-existing))))
+      (let* ((stripped
+              (cl-remove-if
+               (lambda (cmd) (orgstrap--match-elvs (cons 'eval cmd)))
+               commands-existing))
+             (eval-commands (cons lv-command stripped)))
         (when commands-existing
           (delete-file-local-variable 'eval))
         (let ((print-escape-newlines t)  ; needed to preserve the escaped newlines
@@ -1866,6 +1880,42 @@ in the orgstrap block as NAME-CHECKSUM pairs."
   (ignore name-checksum)
   (error "TODO"))
 
+(defun orgstrap--get-elvs (&optional from-flv-alist)
+  "Return the elvs as they are written in the current buffer.
+This does NOT return the elvs as they were executed or evaluated."
+  (cl-loop
+   for var in
+   (if from-flv-alist
+       file-local-variables-alist
+     (orgstrap--read-current-local-variables))
+   when (orgstrap--match-elvs var)
+   return (cdr var)))
+
+(defun orgstrap-inspect-elvs (&optional from-flv-alist)
+  "Display the elvs for the current buffer.
+If FROM-FLV-ALIST is not null display the elvs that are in `file-local-variables-alist'."
+  (interactive "P")
+  (let ((buffer (get-buffer-create (format "%s orgstrap elvs" (buffer-file-name))))
+        (elvs (orgstrap--get-elvs from-flv-alist))
+        (cypher orgstrap-cypher)
+        print-length print-level)
+    (with-current-buffer buffer
+      (emacs-lisp-mode)
+      (read-only-mode)
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        ;; TODO insert checksum in comment
+        (insert ";; -*- elvs-checksum: "
+                (secure-hash cypher (orgstrap-norm (pp-to-string elvs)))
+                "; -*-\n")
+        (insert (pp-to-string elvs))
+        (goto-char (point-min))
+        (while (re-search-forward "(\\(let\\|defun\\|when\\|unless\\|if\\|read\\)" nil t)
+          (join-line 1))
+        (indent-region (point-min) (point-max)))
+      (local-set-key (kbd "q") #'quit-window))
+    (display-buffer buffer)))
+
 (defun orgstrap--whitelist-current-buffer ()
   "Mark local variable values in the current buffer as safe."
   (let ((lvs (orgstrap--read-current-local-variables)))
@@ -1885,7 +1935,8 @@ emacs -batch -eval \\
 \"(let ((user-init-file (pop argv)) (file (pop argv))) (package-initialize) (orgstrap-whitelist-file file))\" \\
 ~/.emacs.d/init.el /path/to/whitelist.org"
   (with-current-buffer (find-file-literally path)
-    (orgstrap--whitelist-current-buffer)))
+    (orgstrap--whitelist-current-buffer)
+    (kill-buffer)))
 #+end_src
 
 Ideally we want to call [[(oab)][orgstrap-run-additional-blocks]] as
@@ -1958,7 +2009,7 @@ that will be used to manage and run data that sits elsewhere
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.2.7                             (ref:orgstrap.el-version)
+;; Version: 1.2.8                             (ref:orgstrap.el-version)
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -2064,32 +2115,29 @@ of Emacs you will be testing against.
 # reminder that you can't use bare bangs ! anywhere in bash scripts :/
 # XXX also reminder that unbound variables will break at export time
 # #+header: :var checksum=(identity orgstrap-block-checksum)
+# XXX remove elc files before running this due to bytecode mismatches
+# XXX regenerate autoloads, it seems that the version in 26 works for everyone
 #+name: test-matrix-run
 #+begin_src bash :results drawer output
 versions=( 24 25 26 27 28-vcs )
 test_files=( test-no-lv-list.org test-lv-list-portable test-lv-list-minimal )
 for v in ${versions[@]}; do
+[ -d test/emacs-$v ] || mkdir -p test/emacs-$v
 for f in ${test_files[@]};do
 # uncomment and reorder to debug tests
 #f=test-lv-list-minimal
-#emacs -q \
-emacs-$v -q --batch \
+#emacs -Q \
+emacs-$v -Q -batch \
+-eval "(setq user-init-file (concat default-directory \"test/emacs-${v}/init.el\"))" \
 -l orgstrap-autoloads.el \
---eval "(message \"\n%s\"(emacs-version))" \
+-eval "(message \"\n%s\"(emacs-version))" \
 -f toggle-debug-on-error \
---eval "(add-to-list 'load-path \"$(pwd)/\")" \
---eval "(orgstrap-mode)" \
---eval "(defun orgstrap-test () (error \"Test failed.\"))" \
---eval "(add-to-list 'safe-local-variable-values '(orgstrap-cypher . sha256))" \
---eval "(add-to-list 'safe-local-variable-values '(orgstrap-norm-func-name . orgstrap-norm-func--prp-1.1))" \
---eval "(add-to-list 'safe-local-variable-values '(orgstrap-block-checksum .
-8d941e14e89664b834f5b28c070f9f7b0ec55b092b55cc23dd903c010fdaeda5))" \
---eval "(add-to-list 'safe-local-variable-values '(orgstrap-block-checksum .
-14e85d1213ef7a6739ca6ca7361a227b0a55346d4c7c6457bdd5f7ba91ff5dff))" \
---eval "(add-to-list 'safe-local-variable-values '(orgstrap-block-checksum .
-3008580fd616cdfca904c7508ae023f782585229a87adab33fb8c2d391f89561))" \
---visit $f \
---eval "(orgstrap-test)" 2>&1
+-eval "(add-to-list 'load-path \"$(pwd)/\")" \
+-eval "(orgstrap-mode)" \
+-eval "(defun orgstrap-test () (error \"test failed.\"))" \
+-eval "(orgstrap-whitelist-file \"${f}\")" \
+-visit $f \
+-eval "(orgstrap-test)" 2>&1
 done
 done
 #+end_src
@@ -2168,6 +2216,9 @@ done
     (message "Portable local variables here!")))
 (message "orgstrap successful")
 ,#+end_src
+
+,** Local Variables :ARCHIVE:
+
 <<local-variables-portable-example>>
 #+end_src
 
@@ -2187,6 +2238,9 @@ done
     (message "Minimal local variables here!")))
 (message "orgstrap successful")
 ,#+end_src
+
+,** Local Variables :ARCHIVE:
+
 <<local-variables-minimal-example>>
 #+end_src
 ** Release :noexport:
@@ -2197,8 +2251,7 @@ Don't forget to run ~flycheck-package-setup~ to get better reports.
 Before a release run the following block and fix any byte compile
 errors and warnings.
 #+begin_src elisp :noweb yes :results drawer
-<<run-command>>
-(run-command "emacs" "-q" "--batch" "-f" "batch-byte-compile" "orgstrap.el")
+(ow-run-command "emacs" "-batch" "-f" "batch-byte-compile" "orgstrap.el")
 #+end_src
 *** Run test matrix
 Run ref:test-matrix-run.
@@ -2232,13 +2285,19 @@ Things that need to be done for a release.
 :CUSTOM_ID: changelog
 :END:
 ** 1.2.8
-
 - Fix ~org-edit-mode~ so that it now activates correctly.
 
-- Fix ~orgstrap-init~ so that it no longer misplaces the link.
+- Fix ~orgstrap-init~ so that it no longer misplaces the link to the
+  orgstrap block if there is already content in the buffer.
+
+- Fix ~orgstrap-init~ so that invocation in files with existing elvs
+  update only the existing orgstrap elv and preserve other elvs.
 
 - Update default elvs to handle issues with symlinks and vc mode.
   The core functionality remains compatible.
+
+- Update the elvs so that ~org-confirm-babel-evaluate~ can be set
+  by an orgstrap block without having to modify the elvs.
 
 - Update ~orgstrap-init~ to put the Bootstrap section at the end of
   the file and to put the local variables in an archived heading
@@ -2255,6 +2314,7 @@ Things that need to be done for a release.
 - Add ~orgstrap-whitelist-file~ to make it easier to mark known safe
   files in batch.
 
+- Add ~orgstrap-inspect-elvs~ to inspect the elvs for the current buffer.
 
 ** 1.2.7
 - Fix bad defaults on ~orgstrap-do-*~ custom variables.
@@ -2699,7 +2759,7 @@ take nearly 3 hours to complete and debug.
 :CUSTOM_ID: future-work
 :visibility: children
 :END:
-** TODO bug secondary runs of the orgstrap block klobber modified obce
+** DONE bug secondary runs of the orgstrap block klobber modified obce
 :PROPERTIES:
 :CREATED:  [2021-08-19 Thu 21:47]
 :END:
@@ -2782,7 +2842,7 @@ put the big stuff here
                        '(read-only t)))
 ,#+end_src
 #+end_src
-** TODO orgstrap-inspect-elvs
+** DONE orgstrap-inspect-elvs
 ** DONE symlinks and vc
 :PROPERTIES:
 :CREATED:  [2021-08-02 Mon 01:23]
