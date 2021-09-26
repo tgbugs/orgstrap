@@ -656,6 +656,82 @@ with =...=. This can also happens inside =add-file-local-variable= and
 possibly even inside =format=!? Therefore I'm updating to version to
 1.1 of the normalization procedure so that I can defensively bind
 those variables to =nil=.
+**** dprp-1.0
+A normalization function that removes docstrings.
+
+# TODO consider whether to try to normalize lambda in these cases
+# or better, to identify forms where random strings or other literals
+# appearing in the body don't change the semantics, it might be more
+# efficient to implement the generalized form ...
+
+Additional forms with docstrings that we aren't fiddling with right now.
+- ~lambda~
+- ~cl-defun~
+- ~cl-defmacro~
+- ~cl-defgeneric~
+- ~cl-defmethod~
+A more uniform way to deal with all these cases is desired.
+
+A better way using ~doc-string-elt~.
+#+begin_src elisp
+(cl-loop
+ for s in '(lambda defun defun-local defmacro cl-defun
+             cl-defgeneric ; missing in 24
+             cl-defmacro defvar defvar-local defconst defcustom defgroup)
+ collect
+ (get s 'doc-string-elt))
+#+end_src
+
+#+begin_src elisp
+(let* ((test '(defvar a t "b"))
+       (e (get (car test) 'doc-string-elt)))
+  (setcdr (nthcdr (1- e) test) (nthcdr (1+ e) test))
+  test)
+#+end_src
+
+#+name: orgstrap-code-normalization--dedoc-prin1-read-progn-1.0
+#+begin_src elisp :eval never
+(let ((bp (read (concat "(progn\n" body "\n)")))
+      print-quoted print-length print-level)
+  (cl-labels
+      ((dd
+        (b)
+        (cl-loop
+         for expr in b when (listp expr) do
+         (let ((c (car expr)))
+           (or
+            (and
+             (symbolp c)
+             (let* ((e (or (get c 'doc-string-elt)
+                           (and (memq c '(defun-local cl-defgeneric)) 3)))
+                    (d (get c 'lisp-define-type))
+                    (n (and e (nthcdr (1+ e) expr))))
+               (and
+                e ; is a form with docstrings
+                (stringp (nth e expr)) ; has a docstring
+                (and
+                 (or d n) ; var or doc not last
+                 (dd n) ; recurse for nested
+                 (or (setcdr (nthcdr (1- e) expr) n) t)))))
+            ;; recurse e.g. for (when x (defvar y t))
+            (dd expr))))
+        t))
+    (dd bp)
+    (prin1-to-string bp)))
+#+end_src
+
+#+name: block-orgstrap-norm-func--dprp-1.0
+#+begin_src elisp :noweb yes :results none :eval never :eval yes
+(defun orgstrap-norm-func--dprp-1.0 (body)
+  "Normalize BODY using dprp-1.0."
+  <<orgstrap-code-normalization--dedoc-prin1-read-progn-1.0>>)
+#+end_src
+
+#+begin_src elisp :results code
+(orgstrap--with-block "orgstrap"
+  (prog1 (read (orgstrap-norm-func--dprp-1.0 body)) nil))
+#+end_src
+
 ** Definitions
 :PROPERTIES:
 :CUSTOM_ID: definitions
