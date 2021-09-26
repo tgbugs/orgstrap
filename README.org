@@ -1,4 +1,4 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1\.0; orgstrap-block-checksum: 42259645a8a9c5b1f09d5f10b633642540f2b12d2ba92ac8a720d5a268181b2f; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1\.0; orgstrap-block-checksum: 54d5d85632e1f54b7d1c48fadac1da4de453229fab087b3579dabbaa28638c21; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Orgstrap: Executable Org files
 #+startup: showall
@@ -849,7 +849,7 @@ Here is the prop line from the first line of this file that
 includes the cypher and checksum of the =orgstrap= block.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1\.0; orgstrap-block-checksum: 42259645a8a9c5b1f09d5f10b633642540f2b12d2ba92ac8a720d5a268181b2f; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1\.0; orgstrap-block-checksum: 54d5d85632e1f54b7d1c48fadac1da4de453229fab087b3579dabbaa28638c21; -*-
 #+end_src
 
 # BE VERY CAREFUL WITH MANUAL EDITS
@@ -1869,15 +1869,16 @@ the minimal local variables will be used if possible."
     (error "Cannot orgstrap, buffer not in `org-mode' it is in %s!" major-mode))
   ;; TODO option for no link?
   ;; TODO option for local variables in comments vs noexport
-  (save-excursion
-    (orgstrap--add-orgstrap-block)
-    (orgstrap-add-block-checksum)
-    (orgstrap--add-link-to-orgstrap-block)
-    ;; FIXME sometimes local variables don't populate due to an out of range error
-    (orgstrap--add-file-local-variables
-     (or prefix-argument orgstrap-use-minimal-local-variables)
-     (cdr (assoc 'orgstrap-norm-func-name (orgstrap--read-current-local-variables))))
-    (orgstrap-edit-mode 1)))
+  (let ((orgstrap-norm-func
+         (cdr (assoc 'orgstrap-norm-func-name (orgstrap--read-current-local-variables)))))
+    (save-excursion
+      (orgstrap--add-orgstrap-block)
+      (orgstrap-add-block-checksum)
+      (orgstrap--add-link-to-orgstrap-block)
+      ;; FIXME sometimes local variables don't populate due to an out of range error
+      (orgstrap--add-file-local-variables
+       (or prefix-argument orgstrap-use-minimal-local-variables))
+      (orgstrap-edit-mode 1))))
 #+end_src
 
 # Note that multi-line strings cause issues with indentation if they are
@@ -2823,6 +2824,11 @@ dynamic variable instead of as ~defvar-local~.
 
 The other part of the issue was the we were not using the current
 ~orgstrap-norm-func-name~ for the buffer during ~orgstrap-init~.
+
+Even all that wasn't quite right. ~orgstrap-norm-func~ has to be
+overwritten before the checksum is added for existing files, otherwise
+the stale value will persist for files where local variables were
+actually accepted instead of ignored.
 ** TODO data section
 base64 (or whatever) encode a compressed data blob, stick it in an
 archived heading and then add =--pack= and =--unpack= and =--repack=
