@@ -298,3 +298,52 @@ controlled separately."
 ;(defcustom orgstrap-do-package nil "???" :type 'boolean) ; XXX superseded by build
 ;(defcustom orgstrap-do-release nil "???" :type 'boolean) ; XXX superseded by deposit
 #+end_src
+
+* From readme
+FIXME these should be =ow-do=.
+
+See [[./do.org]] for more on what these are and how to use them.
+#+name: orgstrap-do
+#+begin_src elisp
+;; orgstrap-do-*
+
+;; dependencies (default on) (ref:do-deps)
+(defcustom orgstrap-do-packages t "Install some packages." :type 'boolean)
+(defcustom orgstrap-do-packages-emacs t "Install Emacs packages." :type 'boolean)
+(defcustom orgstrap-do-packages-system t "Install system packages." :type 'boolean)
+
+(defcustom orgstrap-do-data t "Retrieve external data needed by file." :type 'boolean) ; TODO naming etc. (ref:do-data)
+
+;; configuration
+(defcustom orgstrap-do-config t "Run code that modifies some configuration." :type 'boolean) ;(ref:do-config)
+(defcustom orgstrap-do-config-emacs t "Run code that modifies the Emacs configuration." :type 'boolean)
+(defcustom orgstrap-do-config-system t "Run code that modifies the system configuration." :type 'boolean)
+
+(defcustom orgstrap-do-services t "Run services needed by file." :type 'boolean)
+
+;; batch functionality (default off)
+
+(defvar orgstrap-do-run nil "`org-babel-execute-buffer'")
+
+(defvar orgstrap-do-export nil "Run export.") ; TODO format XXX -do-build-document ox-ssh being an odd one
+(defvar orgstrap-do-publish nil "Run publish workflow.")
+
+(defvar orgstrap-do-tangle nil "`org-babel-tangle-file'.")
+
+(defvar orgstrap-do-build nil ; may imply tangle
+  "Produce one or more artifacts derived from the file.")
+
+(defvar orgstrap-do-test nil "Run tests.") ;(ref:do-test)
+
+(defvar orgstrap-do-deposit nil "Deposit build artifacts somewhere.")
+#+end_src
+** Candidates and docs
+[[./README.org::(do-deps)]] [[./do.org::(do-deps-cands)]]
+[[./README.org::(do-config)]] [[./do.org::(do-config-cands)]]
+[[./README.org::(do-test)]] [[./do.org::(do-test-cands)]]
+
+[[./README.org::(do-data)]]
+note that external data here would be data that the process described by the org file
+needs _locally_ in order to function, there are also many cases where the workflow
+described by the file might simply bootstrap a local working environment and code
+that will be used to manage and run data that sits elsewhere
