@@ -1,4 +1,4 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1\.0; orgstrap-block-checksum: a495f7981cfccf3893098063289237a88bb85944fe0fd7a75899f512bfec3270; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1\.0; orgstrap-block-checksum: 1d459a3cb98486b95c8ad44fd5275022241a6bd60cb001e3fc1b4cf7ebf1eb9c; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Orgstrap: Executable Org files
 #+startup: showall
@@ -849,7 +849,7 @@ Here is the prop line from the first line of this file that
 includes the cypher and checksum of the =orgstrap= block.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1\.0; orgstrap-block-checksum: a495f7981cfccf3893098063289237a88bb85944fe0fd7a75899f512bfec3270; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1\.0; orgstrap-block-checksum: 1d459a3cb98486b95c8ad44fd5275022241a6bd60cb001e3fc1b4cf7ebf1eb9c; -*-
 #+end_src
 
 # BE VERY CAREFUL WITH MANUAL EDITS
@@ -1870,17 +1870,21 @@ the minimal local variables will be used if possible."
     (error "Cannot orgstrap, buffer not in `org-mode' it is in %s!" major-mode))
   ;; TODO option for no link?
   ;; TODO option for local variables in comments vs noexport
-  (let ((orgstrap-norm-func
-         (or (cdr (assoc 'orgstrap-norm-func-name (orgstrap--read-current-local-variables)))
-             (default-value 'orgstrap-norm-func))))
-    (save-excursion
-      (orgstrap--add-orgstrap-block)
-      (orgstrap-add-block-checksum)
-      (orgstrap--add-link-to-orgstrap-block)
-      ;; FIXME sometimes local variables don't populate due to an out of range error
-      (orgstrap--add-file-local-variables
-       (or prefix-argument orgstrap-use-minimal-local-variables))
-      (orgstrap-edit-mode 1))))
+  (let (onf)
+    (let ((orgstrap-norm-func
+           (or (cdr (assoc 'orgstrap-norm-func-name (orgstrap--read-current-local-variables)))
+               (default-value 'orgstrap-norm-func))))
+      (save-excursion
+        (orgstrap--add-orgstrap-block)
+        (orgstrap-add-block-checksum)
+        (orgstrap--add-link-to-orgstrap-block)
+        ;; FIXME sometimes local variables don't populate due to an out of range error
+        (orgstrap--add-file-local-variables
+         (or prefix-argument orgstrap-use-minimal-local-variables))
+        (orgstrap-edit-mode 1)
+        (setq onf orgstrap-norm-func)))
+      ;; reset to ensure that a stale value is not inserted on next save
+      (setq-local orgstrap-norm-func onf)))
 #+end_src
 
 # Note that multi-line strings cause issues with indentation if they are
@@ -1983,7 +1987,8 @@ If FROM-FLV-ALIST is not null display the elvs that are in `file-local-variables
         (while (re-search-forward "(\\(let\\|defun\\|when\\|unless\\|if\\|read\\)" nil t)
           (join-line 1))
         (indent-region (point-min) (point-max)))
-      (local-set-key (kbd "q") #'quit-window))
+      (local-set-key (kbd "q") #'quit-window)
+      (goto-char (point-min)))
     (display-buffer buffer)))
 
 (defun orgstrap--whitelist-current-buffer ()
@@ -2316,19 +2321,38 @@ Things that need to be done for a release.
   ~defvar~, ~defvar-local~, ~defconst~, and ~defcustom~. This allows
   improved documentation without requiring the user to re-audit.
 
+  Note that ~orgstrap-norm-func--prp-1.1~ has NOT been deprecated, but
+  is no longer the default. It is still useful if for whatever reason
+  you want to minimize the elvs.
+
 - Add support for batch execution.
 
   The preferred method is to use an org shebang block (see
   [[./shebang.org]]) It is also possible to maintain an automatically
-  updating list of developer checksums, however this was deemed to be
-  silly, though the functionality is retained. As part of these
-  changes the code for generating elvs was decoupled and can now be
-  reused.
+  updating list of developer checksums. This approach was deemed to be
+  silly given shebang blocks, however the functionality is retained.
 
 - Add ~orgstrap-whitelist-file~ to make it easier to mark known safe
   files in batch.
 
+  See the docstring for example usage.
+
 - Add ~orgstrap-inspect-elvs~ to inspect the elvs for the current buffer.
+
+  The command also calculates the elvs checksum for comparison.
+
+  Known elv checksums for this release are below. The order is
+  minimal, minimal-noweb, and portable (aka minimal-noweb-eval).
+
+  For prp-1.1 \\
+  =446d0c80d72bb89dd149181e6a24eafa011d12d6dc99fad958a03ddebd9a95ad= \\
+  =b294539a74f2a1932d39790d6377a4229bd3d5e84df64d968baa8ff3f85349cc= \\
+  =543e3400c80e2cc7b9bf94b1799d1460b240776c2c7415a2f6c0c7a9507978ef= \\
+
+  For dprp-1.0 \\
+  =aa080a6469c22dfe960c43fa3bff3b92a6bc3da9383ec8fcd7d0a019192e7aa0= \\
+  =72c52a3483905aff6b83c6cd2c36899a2a8d1cbc603b6e5ce8c9e98f0dd7b099= \\
+  =9e33bc67b8850147962edcece4ea1193bb6cf3711264a26bde91b1f838912ffc= \\
 
 - Fix ~org-edit-mode~ so that it now activates correctly.
 
@@ -2336,7 +2360,7 @@ Things that need to be done for a release.
   orgstrap block if there is already content in the buffer.
 
 - Fix ~orgstrap-init~ so that invocation in files with existing elvs
-  update only the existing orgstrap elv and preserve other elvs.
+  updates only the existing orgstrap elv and preserves other elvs.
 
 - Fix ~orgstrap-init~ to read and pass the current value of
   ~orgstrap-norm-func-name~ when creating local variables.
@@ -2350,11 +2374,18 @@ Things that need to be done for a release.
 
 - Fix ~orgstrap-norm-func~ by always declaring it with ~defvar-local~.
 
-- Update default elvs to handle issues with symlinks and vc mode.
-  The core functionality remains compatible.
+- Update the elvs to handle issues with symlinks and vc mode.  The
+  core functionality remains compatible.
 
-- Update the elvs so that ~org-confirm-babel-evaluate~ can be set
-  by an orgstrap block without having to modify the elvs.
+- Update the elvs so that ~org-confirm-babel-evaluate~ can be set by
+  an orgstrap block without having to modify the elvs.
+
+- Update the elvs so that they only restore visibility set via
+  property drawers.
+
+  This makes it possible to use the orgstrap block to control initial
+  visibility and narrowing to simplify the presentation of orgstrapped
+  files (and avoid distracting users with the orgstrap machinery).
 
 - Update ~orgstrap-init~ to put the Bootstrap section at the end of
   the file and to put the elvs in an archived heading inside that.
@@ -2682,11 +2713,25 @@ See [[file:./get-emacs.org]].
 :PROPERTIES:
 :CUSTOM_ID: examples-from-around-the-web
 :END:
-- [[https://github.com/SciCrunch/sparc-curation/blob/master/docs/apinatomy.org][apinatomy.org]]
+- [[https://raw.githubusercontent.com/SciCrunch/sparc-curation/master/docs/apinatomy.org][apinatomy.org]] \\
   An executable Org file for running pipelines that build computational models of anatomy.
+- [[https://raw.githubusercontent.com/SciCrunch/sparc-curation/master/docs/queries.org][queries.org]] \\
+  An org file set up as an interface to query knowledge bases that is
+  configured to provide a familiar (cua+) interface for users who may
+  be unfamiliar with Emacs. Has examples for loading packages, and of
+  one way to hide configuration to avoid information overload. A
+  simpler version of the file (which leverages the same orgstrap block
+  because the files are distributed together) is at [[https://raw.githubusercontent.com/SciCrunch/sparc-curation/master/docs/sckan/scratch.org][scratch.org]].
+- [[https://raw.githubusercontent.com/SciCrunch/sparc-curation/master/docs/sckan/welcome.org][welcome.org]] \\
+  An org file that acts as a static welcome page for a docker image,
+  with links to other interactive org files. Has an example of how to
+  use narrowing to hide the orgstrap machinery from the user.
+# TODO release.org
+# TODO git-share/README.org
 ** Tooling for orgstrap
 - [[./reval.org][reval]]
 - [[./orgware.org][orgware]]
+- [[./shebang.org][shebang]]
 *** Services
 Configurations for services that can be reused across orgstrap files.
 - [[./services/blazegraph.org][Blazegraph]]
@@ -2805,6 +2850,13 @@ take nearly 3 hours to complete and debug.
 :CUSTOM_ID: future-work
 :visibility: children
 :END:
+** TODO detect whether dprp-1.0 is needed, otherwise use prp-1.1
+:PROPERTIES:
+:CREATED:  [2021-09-26 Sun 14:26]
+:END:
+The hashes that these generate are the same so long as there aren't
+any docstrings. For orgstrap blocks that don't use comments, we can
+save quite a bit of space in this way.
 ** DONE bug secondary runs of the orgstrap block klobber modified obce
 :PROPERTIES:
 :CREATED:  [2021-08-19 Thu 21:47]
@@ -3038,7 +3090,8 @@ to remove the approval in the future.
     (insert "\n;;; helper local variables\n\n")
     (cl-loop
      for local-variable in '((orgstrap-cypher . sha256)
-                             (orgstrap-norm-func-name . orgstrap-norm-func--prp-1.1))
+                             (orgstrap-norm-func-name . orgstrap-norm-func--prp-1.1)
+                             (orgstrap-norm-func-name . orgstrap-norm-func--dprp-1.0))
      do
      (let (print-length print-level (print-escape-newlines t))
        (insert (prin1-to-string
@@ -3047,7 +3100,7 @@ to remove the approval in the future.
     (insert "\n;;; known eval local variables\n\n")
     )
   (cl-loop
-   for eval-local-variable in
+   for (eval-local-variable elv-checksum) in
    (cl-remove-duplicates
     (cl-loop
      for block-name in '("example-noweb-no" "example-noweb-yes" "example-noweb-eval")
@@ -3058,23 +3111,26 @@ to remove the approval in the future.
       (cl-loop
        for norm-func-name in
        '(;; orgstrap-norm-func--prp-1.0 ; deprecated do not include
-         orgstrap-norm-func--prp-1.1)
+         orgstrap-norm-func--prp-1.1
+         orgstrap-norm-func--dprp-1.0)
        collect
        (let ((info (save-excursion
                      (orgstrap--goto-named-src-block block-name)
                      (org-babel-get-src-block-info))))
          (setf (nth 6 info) "hrm")
-         ' ; use as a sanity check
-         (secure-hash
-          orgstrap-cypher
-          (orgstrap-norm
-           (let (print-quoted print-length print-level)
-             (prin1-to-string (orgstrap--lv-command info minimal norm-func-name)))))
-         (orgstrap--lv-command info minimal norm-func-name)))))
+         (list (orgstrap--lv-command info minimal norm-func-name)
+               (secure-hash
+                orgstrap-cypher
+                (orgstrap-norm
+                 (let (print-quoted print-length print-level)
+                   (prin1-to-string (orgstrap--lv-command info minimal norm-func-name)))))
+               )))))
     :test #'equal)
    do
    (with-current-buffer buffer
      (let (print-length print-level (print-escape-newlines t))
+       (insert (prin1-to-string `(add-to-list 'orgstrap-known-elvs ,elv-checksum)))
+       (insert "\n")
        (insert (prin1-to-string
                 `(add-to-list 'safe-local-eval-forms ',eval-local-variable)))
        (insert "\n"))))
