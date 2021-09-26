@@ -1,10 +1,10 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: fd36e5d581f48655fcdc33dd11b97dff80df47a1dbc3299230c06264723229ad; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1\.0; orgstrap-block-checksum: 68b469d31743f79d7e57e15fbe5d8292a01ec4080934592164ab237e9e02f1f8; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Orgstrap: Executable Org files
 #+startup: showall
 #+options: num:nil \n:nil
 
-#+todo: TODO STARTED | EXPIRED DONE
+#+todo: TODO STARTED | DONE EXPIRED
 
 #+property: header-args :eval no-export
 #+property: header-args:elisp :lexical yes
@@ -541,7 +541,7 @@ Shared normalization code embedded as elvs.
 #+name: orgstrap-normalization-common-embed
 #+begin_src elisp
 (unless (boundp 'orgstrap-norm-func)
-  (defvar orgstrap-norm-func orgstrap-norm-func-name))
+  (defvar-local orgstrap-norm-func orgstrap-norm-func-name))
 
 (defun orgstrap-norm-embd (body)
   "Normalize BODY."
@@ -576,9 +576,12 @@ Normalization functions for orgstrap.el.
 
 ;; orgstrap normalization functions
 
+<<block-orgstrap-norm-func--dprp-1.0>>
+
 <<block-orgstrap-norm-func--prp-1.1>>
 
 <<block-orgstrap-norm-func--prp-1.0>>
+
 #+end_src
 
 #+caption: XXX portability note
@@ -657,67 +660,43 @@ possibly even inside =format=!? Therefore I'm updating to version to
 1.1 of the normalization procedure so that I can defensively bind
 those variables to =nil=.
 **** dprp-1.0
-A normalization function that removes docstrings.
+A normalization function that is invariant to changes in docstrings.
 
-# TODO consider whether to try to normalize lambda in these cases
-# or better, to identify forms where random strings or other literals
-# appearing in the body don't change the semantics, it might be more
-# efficient to implement the generalized form ...
+Walk the tree and ~setcdr~ out docstrings.
 
-Additional forms with docstrings that we aren't fiddling with right now.
-- ~lambda~
-- ~cl-defun~
-- ~cl-defmacro~
-- ~cl-defgeneric~
-- ~cl-defmethod~
-A more uniform way to deal with all these cases is desired.
+This normalization function must be portable between versions, which
+means that the forms that get spliced must be from a static set that
+does not change between versions.
 
-A better way using ~doc-string-elt~.
-#+begin_src elisp
-(cl-loop
- for s in '(lambda defun defun-local defmacro cl-defun
-             cl-defgeneric ; missing in 24
-             cl-defmacro defvar defvar-local defconst defcustom defgroup)
- collect
- (get s 'doc-string-elt))
-#+end_src
-
-#+begin_src elisp
-(let* ((test '(defvar a t "b"))
-       (e (get (car test) 'doc-string-elt)))
-  (setcdr (nthcdr (1- e) test) (nthcdr (1+ e) test))
-  test)
-#+end_src
-
+Since this normalization is mostly a quality of life improvement to
+allow docstrings to be changed without rehashing, limiting to a
+specific set of forms is ok. If you use something like ~cl-defun~ and
+chance the docstring, then you will have to rehash. The 90% use case
+is covered here in a compact manner.
 #+name: orgstrap-code-normalization--dedoc-prin1-read-progn-1.0
 #+begin_src elisp :eval never
-(let ((bp (read (concat "(progn\n" body "\n)")))
+(let ((p (read (concat "(progn\n" body "\n)")))
+      (m '(defun defun-local defmacro defvar defvar-local defconst defcustom))
       print-quoted print-length print-level)
   (cl-labels
-      ((dd
+      ((f
         (b)
         (cl-loop
-         for expr in b when (listp expr) do
-         (let ((c (car expr)))
-           (or
-            (and
-             (symbolp c)
-             (let* ((e (or (get c 'doc-string-elt)
-                           (and (memq c '(defun-local cl-defgeneric)) 3)))
-                    (d (get c 'lisp-define-type))
-                    (n (and e (nthcdr (1+ e) expr))))
-               (and
-                e ; is a form with docstrings
-                (stringp (nth e expr)) ; has a docstring
-                (and
-                 (or d n) ; var or doc not last
-                 (dd n) ; recurse for nested
-                 (or (setcdr (nthcdr (1- e) expr) n) t)))))
-            ;; recurse e.g. for (when x (defvar y t))
-            (dd expr))))
-        t))
-    (dd bp)
-    (prin1-to-string bp)))
+         for e in b when (listp e) do ; for expression in body when the expression is a list
+         (or
+          (and
+           (memq (car e) m) ; is a form with docstrings
+           (let ((n (cddddr e))) ; body after docstring
+             (and
+              (stringp (nth 3 e)) ; has a docstring
+              (or (cl-subseq m 3) n) ; var or doc not last
+              (f n) ; recurse for nested
+              ;; splice out the docstring and return t to avoid the other branch
+              (or (setcdr (cddr e) n) t))))
+          ;; recurse e.g. for (when x (defvar y t))
+          (f e)))
+        p))
+    (prin1-to-string (f p))))
 #+end_src
 
 #+name: block-orgstrap-norm-func--dprp-1.0
@@ -871,7 +850,7 @@ Here is the prop line from the first line of this file that
 includes the cypher and checksum of the =orgstrap= block.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-block-checksum: fd36e5d581f48655fcdc33dd11b97dff80df47a1dbc3299230c06264723229ad; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1\.0; orgstrap-block-checksum: 68b469d31743f79d7e57e15fbe5d8292a01ec4080934592164ab237e9e02f1f8; -*-
 #+end_src
 
 # BE VERY CAREFUL WITH MANUAL EDITS
@@ -880,7 +859,7 @@ Here are the portable local variables from the end of the file.
 #+name: local-variables-portable-example
 #+begin_src org :eval never
 # Local Variables:
-# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((actual (org-version)) (need orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not need) (string< need actual) (string= need actual) (error "Your Org is too old! %s < %s" actual need))) (defun orgstrap-norm-func--prp-1\.1 (body) (let (print-quoted print-length print-level) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (unless (boundp 'orgstrap-norm-func) (defvar orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap-org-src-coderef-regexp (_fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))) (unless (fboundp #'org-src-coderef-regexp) (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp)) (defun orgstrap--expand-body (info) (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1)))) (defun orgstrap--confirm-eval-portable (lang _body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (orgstrap-norm body)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum))))) (unless (fboundp #'orgstrap--confirm-eval) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable)) (let (enable-local-eval) (vc-find-file-hook)) (let ((ocbe org-confirm-babel-evaluate) (obs (org-babel-find-named-block "orgstrap"))) (if obs (unwind-protect (save-excursion (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (goto-char obs) (org-babel-execute-src-block)) (when (eq org-confirm-babel-evaluate #'orgstrap--confirm-eval) (setq-local org-confirm-babel-evaluate ocbe)) (org-set-startup-visibility)) (warn "No orgstrap block."))))
+# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((actual (org-version)) (need orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not need) (string< need actual) (string= need actual) (error "Your Org is too old! %s < %s" actual need))) (defun orgstrap-norm-func--dprp-1\.0 (body) (let ((p (read (concat "(progn\n" body "\n)"))) (m '(defun defun-local defmacro defvar defvar-local defconst defcustom)) print-quoted print-length print-level) (cl-labels ((f (b) (cl-loop for e in b when (listp e) do (or (and (memq (car e) m) (let ((n (cddddr e))) (and (stringp (nth 3 e)) (or (cl-subseq m 3) n) (f n) (or (setcdr (cddr e) n) t)))) (f e))) p)) (prin1-to-string (f p))))) (unless (boundp 'orgstrap-norm-func) (defvar orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap-org-src-coderef-regexp (_fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))) (unless (fboundp #'org-src-coderef-regexp) (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp)) (defun orgstrap--expand-body (info) (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1)))) (defun orgstrap--confirm-eval-portable (lang _body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (orgstrap-norm body)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum))))) (unless (fboundp #'orgstrap--confirm-eval) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable)) (let (enable-local-eval) (vc-find-file-hook)) (let ((ocbe org-confirm-babel-evaluate) (obs (org-babel-find-named-block "orgstrap"))) (if obs (unwind-protect (save-excursion (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (goto-char obs) (org-babel-execute-src-block)) (when (eq org-confirm-babel-evaluate #'orgstrap--confirm-eval) (setq-local org-confirm-babel-evaluate ocbe)) (org-set-startup-visibility)) (warn "No orgstrap block."))))
 # End:
 #+end_src
 
@@ -888,7 +867,7 @@ Here are the minimal local variables from the end of the file.
 #+name: local-variables-minimal-example
 #+begin_src org :eval never
 # Local Variables:
-# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((actual (org-version)) (need orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not need) (string< need actual) (string= need actual) (error "Your Org is too old! %s < %s" actual need))) (defun orgstrap-norm-func--prp-1\.1 (body) (let (print-quoted print-length print-level) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (unless (boundp 'orgstrap-norm-func) (defvar orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap--confirm-eval-minimal (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (eq orgstrap-block-checksum (intern (secure-hash orgstrap-cypher (orgstrap-norm body))))))) (unless (fboundp #'orgstrap--confirm-eval) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-minimal)) (let (enable-local-eval) (vc-find-file-hook)) (let ((ocbe org-confirm-babel-evaluate) (obs (org-babel-find-named-block "orgstrap"))) (if obs (unwind-protect (save-excursion (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (goto-char obs) (org-babel-execute-src-block)) (when (eq org-confirm-babel-evaluate #'orgstrap--confirm-eval) (setq-local org-confirm-babel-evaluate ocbe)) (org-set-startup-visibility)) (warn "No orgstrap block."))))
+# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((actual (org-version)) (need orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not need) (string< need actual) (string= need actual) (error "Your Org is too old! %s < %s" actual need))) (defun orgstrap-norm-func--dprp-1\.0 (body) (let ((p (read (concat "(progn\n" body "\n)"))) (m '(defun defun-local defmacro defvar defvar-local defconst defcustom)) print-quoted print-length print-level) (cl-labels ((f (b) (cl-loop for e in b when (listp e) do (or (and (memq (car e) m) (let ((n (cddddr e))) (and (stringp (nth 3 e)) (or (cl-subseq m 3) n) (f n) (or (setcdr (cddr e) n) t)))) (f e))) p)) (prin1-to-string (f p))))) (unless (boundp 'orgstrap-norm-func) (defvar orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap--confirm-eval-minimal (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (eq orgstrap-block-checksum (intern (secure-hash orgstrap-cypher (orgstrap-norm body))))))) (unless (fboundp #'orgstrap--confirm-eval) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-minimal)) (let (enable-local-eval) (vc-find-file-hook)) (let ((ocbe org-confirm-babel-evaluate) (obs (org-babel-find-named-block "orgstrap"))) (if obs (unwind-protect (save-excursion (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (goto-char obs) (org-babel-execute-src-block)) (when (eq org-confirm-babel-evaluate #'orgstrap--confirm-eval) (setq-local org-confirm-babel-evaluate ocbe)) (org-set-startup-visibility)) (warn "No orgstrap block."))))
 # End:
 #+end_src
 
@@ -1000,7 +979,8 @@ using `setq-default' since it will not change automatically.")
 
 (defconst orgstrap--internal-norm-funcs
   '(orgstrap-norm-func--prp-1.0
-    orgstrap-norm-func--prp-1.1)
+    orgstrap-norm-func--prp-1.1
+    orgstrap-norm-func--dprp-1.0)
   "List internally implemented normalization functions.
 Used to determine which norm func names are safe local variables.")
 
@@ -1011,9 +991,9 @@ Used to determine which norm func names are safe local variables.")
 ;; Unless `orgstrap-mode' is enabled and the name is in the list of
 ;; functions that are implemented internally this is not safe
 
-(defvar orgstrap-norm-func #'orgstrap-norm-func--prp-1.1
+(defvar-local orgstrap-norm-func #'orgstrap-norm-func--dprp-1.0
   "Dynamic variable to simplify calling normalizaiton functions.
-Defaults to `orgstrap-norm-func--prp-1.1'.")
+Defaults to `orgstrap-norm-func--dprp-1.0'.")
 
 (defvar orgstrap--debug nil
   "If non-nil run `orgstrap-norm' in debug mode.")
@@ -1661,17 +1641,24 @@ MINIMAL is passed to `orgstrap--get-min-org-version'."
         (string< need actual)
         (string= need actual))))
 
-(defun orgstrap--dedoc (sexp) ; FIXME TODO arbitrary lisp forms
-  "Remove docstrings from SEXP."
-  ;; defun 3 defmacro 3 defvar 3
-  (if (symbolp (elt sexp 0))
-      (if (and (memq (elt sexp 0) '(defun defmacro defvar))
-               (stringp (elt sexp 3))
-               (or (eq (elt sexp 0) 'defvar)
-                   (elt sexp 4)))
-          (append (cl-subseq sexp 0 3) (cl-subseq sexp 4))
-        sexp)
-    (mapcar #'orgstrap--dedoc sexp)))
+(defun orgstrap--dedoc (sexp)
+  "Remove docstrings from SEXP.  WARNING mutates sexp!"
+  (let ((m '(defun defun-local defmacro defvar defvar-local defconst defcustom)))
+    (cl-loop
+     for e in sexp when (listp e) do ; for expression in sexp when the expression is a list
+     (or
+      (and
+       (memq (car e) m) ; is a form with docstrings
+       (let ((n (cddddr e))) ; body after docstring
+         (and
+          (stringp (nth 3 e)) ; has a docstring
+          (or (cl-subseq m 3) n) ; var or doc not last
+          (orgstrap--dedoc n) ; recurse for nested
+          ;; splice out the docstring and return t to avoid the other branch
+          (or (setcdr (cddr e) n) t))))
+      ;; recurse e.g. for (when x (defvar y t))
+      (orgstrap--dedoc e))))
+  sexp)
 
 (defun orgstrap--local-variables--check-version (info &optional minimal)
   "Return the version check local variables given INFO and MINIMAL."
@@ -1681,8 +1668,11 @@ MINIMAL is passed to `orgstrap--get-min-org-version'."
 
 (defun orgstrap--local-variables--norm (&optional norm-func-name)
   "Return the normalization function for local variables given NORM-FUNC-NAME."
-  (let ((norm-func-name (or norm-func-name orgstrap-norm-func)))
+  (let ((norm-func-name (or norm-func-name (default-value 'orgstrap-norm-func))))
     (cl-case norm-func-name
+      (orgstrap-norm-func--dprp-1.0
+       '(
+         <<block-orgstrap-norm-func--dprp-1.0>>))
       (orgstrap-norm-func--prp-1.1
        '(
          <<block-orgstrap-norm-func--prp-1.1>>))
@@ -1885,7 +1875,9 @@ the minimal local variables will be used if possible."
     (orgstrap-add-block-checksum)
     (orgstrap--add-link-to-orgstrap-block)
     ;; FIXME sometimes local variables don't populate due to an out of range error
-    (orgstrap--add-file-local-variables (or prefix-argument orgstrap-use-minimal-local-variables))
+    (orgstrap--add-file-local-variables
+     (or prefix-argument orgstrap-use-minimal-local-variables)
+     (assoc 'orgstrap-norm-func-name (orgstrap--read-current-local-variables)))
     (orgstrap-edit-mode 1)))
 #+end_src
 
@@ -2085,7 +2077,7 @@ that will be used to manage and run data that sits elsewhere
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.2.8                             (ref:orgstrap.el-version)
+;; Version: 1.3                               (ref:orgstrap.el-version)
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -2360,7 +2352,28 @@ Things that need to be done for a release.
 :PROPERTIES:
 :CUSTOM_ID: changelog
 :END:
-** 1.2.8
+** 1.3
+- Add =orgstrap-norm-func--dprp-1.0= and make it the default norm func.
+
+  The default normalization function for orgstrap is now invariant to
+  changes in the docstring for ~defun~, ~defun-local~, ~defmacro~,
+  ~defvar~, ~defvar-local~, ~defconst~, and ~defcustom~. This allows
+  improved documentation without requiring the user to re-audit.
+
+- Add support for batch execution.
+
+  The preferred method is to use an org shebang block (see
+  [[./shebang.org]]) It is also possible to maintain an automatically
+  updating list of developer checksums, however this was deemed to be
+  silly, though the functionality is retained. As part of these
+  changes the code for generating elvs was decoupled and can now be
+  reused.
+
+- Add ~orgstrap-whitelist-file~ to make it easier to mark known safe
+  files in batch.
+
+- Add ~orgstrap-inspect-elvs~ to inspect the elvs for the current buffer.
+
 - Fix ~org-edit-mode~ so that it now activates correctly.
 
 - Fix ~orgstrap-init~ so that it no longer misplaces the link to the
@@ -2369,6 +2382,18 @@ Things that need to be done for a release.
 - Fix ~orgstrap-init~ so that invocation in files with existing elvs
   update only the existing orgstrap elv and preserve other elvs.
 
+- Fix ~orgstrap-init~ to read and pass the current value of
+  ~orgstrap-norm-func-name~ when creating local variables.
+
+  If ~orgstrap-norm-func-name~ is missing, the default value of
+  ~orgstrap-norm-func~ is used.
+
+  This prevents klobbering while also providing an easy way to update
+  the normalization function --- just update the variable value and
+  run ~orgstrap-init~.
+
+- Fix ~orgstrap-norm-func~ by always declaring it with ~defvar-local~.
+
 - Update default elvs to handle issues with symlinks and vc mode.
   The core functionality remains compatible.
 
@@ -2376,21 +2401,10 @@ Things that need to be done for a release.
   by an orgstrap block without having to modify the elvs.
 
 - Update ~orgstrap-init~ to put the Bootstrap section at the end of
-  the file and to put the local variables in an archived heading
-  inside of that. This pattern has been found to be quite effective
-  for a number of different use cases.
+  the file and to put the elvs in an archived heading inside that.
 
-- Add support for batch execution.
-  - The preferred method is to use an org shebang block (see [[./shebang.org]])
-  - It is also possible to maintain an automatically updating list of
-    developer checksums, however this was deemed to be silly, though
-    the functionality is retained. As part of these changes the code
-    for generating elvs was decoupled and can now be reused.
-
-- Add ~orgstrap-whitelist-file~ to make it easier to mark known safe
-  files in batch.
-
-- Add ~orgstrap-inspect-elvs~ to inspect the elvs for the current buffer.
+  This pattern has been found to be quite effective for a number of
+  different use cases.
 
 ** 1.2.7
 - Fix bad defaults on ~orgstrap-do-*~ custom variables.
@@ -2841,12 +2855,20 @@ take nearly 3 hours to complete and debug.
 :END:
 [[file:~/git/sparc-curation/docs/queries.org::orgstrap][orgstrap]]
 the quick fix is just to manually remove the step where we restore ocbe
-** TODO somehow a stale orgstrap norm func managed to sneak in I have no idea how
+** DONE somehow a stale orgstrap norm func managed to sneak in I have no idea how
 :PROPERTIES:
 :CREATED:  [2021-08-11 Wed 12:32]
 :END:
 I'm 99% sure that this was coming from release.org and
 orgstrap-norm-func was not being reset and sticking around and messing stuff up.
+
+This was part of the issue, though it wasn't that it was not being
+reset, it was that ~orgstrap-init~ did not source the default value
+because ~orgstrap-norm-func~ was incorrectly marked as a global
+dynamic variable instead of as ~defvar-local~.
+
+The other part of the issue was the we were not using the current
+~orgstrap-norm-func-name~ for the buffer during ~orgstrap-init~.
 ** TODO data section
 base64 (or whatever) encode a compressed data blob, stick it in an
 archived heading and then add =--pack= and =--unpack= and =--repack=
@@ -3229,7 +3251,7 @@ or possibly to include it as a prop line local variable. More
 exploration would be required, but until there is some other
 implementation that has an extension language that is not elisp, this
 is a moot point.
-** Remove defun docstrings from hashing
+** DONE Remove defun docstrings from hashing
 One additional source of noise in addition to comments are defun and
 defmacro docstrings. These should be dropped from the tree if they are
 present. This is now partially implemented via =orgstrap--dedoc=.
@@ -3257,7 +3279,7 @@ function.
 4. One potential approach is to lift all defuns to the top, and then function calls
    or whatever the more generic procedure invocation means. The simple local rule
    is that all definitions must occur before usage except in the case where there is
-   a shadowing even that happens after a first invocation. This is annoying, but
+   a shadowing event that happens after a first invocation. This is annoying, but
    if a call to a function happens before that function is defined we have to assume
    that the call is calling some other function and those statements cannot be reordered.
    So the ordering is calls to functions with names matching any later defuns or
@@ -3381,7 +3403,8 @@ are present, do nothing, if they are absent run the block?
 ** TODO resolve the issue with tabs in < 26                        :noexport:
 ~prin1-to-string~ has inconsistent behavior when the string in question contains
 an escaped tab character ~\t~. This can make checksums inconsistent.
-** TODO command to checksum the file local variables               :noexport:
+** DONE command to checksum the file local variables               :noexport:
+This is now done as part of ~orgstrap-inspect-elvs~.
 ** TODO ruby org so that github can render footnotes correctly     :noexport:
 [[file:~/git/NOFORK/org-ruby]]
 ** DONE orgstrap-mode should not skip filter
@@ -3444,5 +3467,5 @@ the file is too old (i.e. < =9.3.8=).
 :END:
 
 # Local Variables:
-# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((actual (org-version)) (need orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not need) (string< need actual) (string= need actual) (error "Your Org is too old! %s < %s" actual need))) (defun orgstrap-norm-func--prp-1\.1 (body) (let (print-quoted print-length print-level) (prin1-to-string (read (concat "(progn\n" body "\n)"))))) (unless (boundp 'orgstrap-norm-func) (defvar orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap-org-src-coderef-regexp (_fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))) (unless (fboundp #'org-src-coderef-regexp) (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp)) (defun orgstrap--expand-body (info) (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1)))) (defun orgstrap--confirm-eval-portable (lang _body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (orgstrap-norm body)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum))))) (unless (fboundp #'orgstrap--confirm-eval) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable)) (let (enable-local-eval) (vc-find-file-hook)) (let ((ocbe org-confirm-babel-evaluate) (obs (org-babel-find-named-block "orgstrap"))) (if obs (unwind-protect (save-excursion (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (goto-char obs) (org-babel-execute-src-block)) (setq-local org-confirm-babel-evaluate ocbe) (org-set-startup-visibility)) (warn "No orgstrap block."))))
+# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((actual (org-version)) (need orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not need) (string< need actual) (string= need actual) (error "Your Org is too old! %s < %s" actual need))) (defun orgstrap-norm-func--dprp-1\.0 (body) (let ((p (read (concat "(progn\n" body "\n)"))) (m '(defun defun-local defmacro defvar defvar-local defconst defcustom)) print-quoted print-length print-level) (cl-labels ((f (b) (cl-loop for e in b when (listp e) do (or (and (memq (car e) m) (let ((n (cddddr e))) (and (stringp (nth 3 e)) (or (cl-subseq m 3) n) (f n) (or (setcdr (cddr e) n) t)))) (f e))) p)) (prin1-to-string (f p))))) (unless (boundp 'orgstrap-norm-func) (defvar orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap-org-src-coderef-regexp (_fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))) (unless (fboundp #'org-src-coderef-regexp) (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp)) (defun orgstrap--expand-body (info) (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1)))) (defun orgstrap--confirm-eval-portable (lang _body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (orgstrap-norm body)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum))))) (unless (fboundp #'orgstrap--confirm-eval) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable)) (let (enable-local-eval) (vc-find-file-hook)) (let ((ocbe org-confirm-babel-evaluate) (obs (org-babel-find-named-block "orgstrap"))) (if obs (unwind-protect (save-excursion (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (goto-char obs) (org-babel-execute-src-block)) (when (eq org-confirm-babel-evaluate #'orgstrap--confirm-eval) (setq-local org-confirm-babel-evaluate ocbe)) (org-set-startup-visibility)) (warn "No orgstrap block."))))
 # End:
