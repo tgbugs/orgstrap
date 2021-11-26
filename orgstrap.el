@@ -3,7 +3,7 @@
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.3
+;; Version: 1.4
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -49,6 +49,7 @@
 
 (require 'cl-lib)
 
+;;;###autoload
 (defvar orgstrap-mode nil
   "Variable to track whether `orgstrap-mode' is enabled.")
 
@@ -1103,7 +1104,7 @@ Insert BLOCK-CONTENTS if they are supplied."
   "Create the elvs for an orgstrapped file.
 INFO is the output of `org-babel-get-src-block-info' for the orgstrap block.
 MINIMAL determines whether a non-portable block has been requested.
-NORM-FUNC-NAME is the name of the function that will be used to normalize orgstrap blocks."
+NORM-FUNC-NAME names the function used to normalize orgstrap blocks."
   (let ((lv-cver (orgstrap--local-variables--check-version
                   info
                   minimal))
@@ -1154,20 +1155,75 @@ orgstrap elv is always added first."
               print-length print-level)
           (mapcar (lambda (sexp) (add-file-local-variable 'eval sexp)) eval-commands))))))
 
+(defun orgstrap--before-first-dull ()
+  "Goto the first non-empty line not starting with a sharp sign."
+  (goto-char (point-min))
+  (re-search-forward "\n[^#\n \t]")
+  (beginning-of-line))
+
+(defun orgstrap--goto-elvs ()
+  "Goto the start of the elvs for the current buffer.
+If no elvs are found goto `point-max' instead."
+  (widen)
+  (goto-char (point-max))
+  (search-backward "\n\^L" (max (- (point-max) 3000) (point-min)) 'move)
+  (when (let ((case-fold-search t))
+          (search-forward "Local Variables:" nil t))
+    (beginning-of-line)))
+
+(defconst orgstrap--shebang-body
+  "{ __p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > ${null=\"/dev/null\"}\n$file= $MyInvocation.MyCommand.Source\n$ErrorActionPreference= \"silentlycontinue\"\nfile=$0\nargs=$@\n$ErrorActionPreference= \"Continue\"\n{ PATH=$__op;rm ${__p}/=;rmdir ${__p};} > $null\nemacs -batch -no-site-file -eval \"(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))\" \"${file}\" -- $args\nexit\n<# powershell open"
+  "Shebang block body content.")
+
+(defun orgstrap--add-shebang-block ()
+  "Add a shebang block to the current buffer."
+  ;; goto correct location
+  ;; create empty bash block
+  ;; fill block
+  ;; go to start of elvs
+  ;; add powershell closing line
+  (let ((block-name "orgstrap-shebang")
+        (header-args '((eval . never) (results . none) (exports . none))))
+    (if (org-babel-find-named-block block-name)
+        (warn "A shebang block already exists. Not adding.")
+      (save-excursion
+        (orgstrap--before-first-dull)
+        (insert "\n#+name: " block-name "\n")
+        (insert "#+begin_src bash")
+        (mapc (lambda (header-arg-value)
+                (insert " :" (symbol-name (car header-arg-value))
+                        " " (symbol-name (cdr header-arg-value))))
+              header-args)
+        (insert "\n#+end_src\n")
+        (orgstrap-update-src-block "orgstrap-shebang" orgstrap--shebang-body)
+
+        (orgstrap--goto-elvs)
+        (insert "# close powershell comment #>\n")))))
+
 ;; init user facing functions
 
 ;;;###autoload
-(defun orgstrap-init (&optional prefix-argument)
+(defun orgstrap-init (&optional prefix-argument shebang)
   "Initialize orgstrap in a buffer and enable command `orgstrap-edit-mode'.
-PREFIX-ARGUMENT is essentially minimal from other functions, when non-nil
-the minimal local variables will be used if possible."
+If PREFIX-ARGUMENT is non-nil and has a value of 4 or 64 init will attempt
+to use the minimal local variables if possible.
+
+If SHEBANG is non-nil or PREFIX-ARGUMENT is greater than or equal to 16
+then a shebang block will also be added to the file.
+
+Example usage.
+            M-x orgstrap-init -> portable elvs
+C-u         M-x orgstrap-init -> minimal  elvs
+C-u C-u     M-x orgstrap-init -> portable elvs + shebang
+C-u C-u C-u M-x orgstrap-init -> minimal  elvs + shebang"
   (interactive "P")
   (unless (eq major-mode 'org-mode)
     (error "Cannot orgstrap, buffer not in `org-mode' it is in %s!" major-mode))
   ;; TODO option for no link?
   ;; TODO option for local variables in comments vs noexport
   (let (onf)
-    (let ((orgstrap-norm-func
+    (let ((shebang (or shebang (and prefix-argument (>= (car prefix-argument) 16))))
+          (orgstrap-norm-func
            (or (cdr (assoc 'orgstrap-norm-func-name (orgstrap--read-current-local-variables)))
                (default-value 'orgstrap-norm-func))))
       (save-excursion
@@ -1176,11 +1232,12 @@ the minimal local variables will be used if possible."
         (orgstrap--add-link-to-orgstrap-block)
         ;; FIXME sometimes local variables don't populate due to an out of range error
         (orgstrap--add-file-local-variables
-         (or prefix-argument orgstrap-use-minimal-local-variables))
+         (or (and prefix-argument (memq (car prefix-argument) '(4 64))) orgstrap-use-minimal-local-variables))
+        (when shebang (orgstrap--add-shebang-block))
         (orgstrap-edit-mode 1)
         (setq onf orgstrap-norm-func)))
-      ;; reset to ensure that a stale value is not inserted on next save
-      (setq-local orgstrap-norm-func onf)))
+    ;; reset to ensure that a stale value is not inserted on next save
+    (setq-local orgstrap-norm-func onf)))
 
 ;;; extra helpers
 
@@ -1228,7 +1285,8 @@ in the orgstrap block as NAME-CHECKSUM pairs."
 
 (defun orgstrap--get-elvs (&optional from-flv-alist)
   "Return the elvs as they are written in the current buffer.
-If FROM-FLV-ALIST is not null display the elvs that are in `file-local-variables-alist'."
+If FROM-FLV-ALIST is not null display the elvs that are in
+`file-local-variables-alist'."
   (cl-loop
    for var in
    (if from-flv-alist
@@ -1239,7 +1297,8 @@ If FROM-FLV-ALIST is not null display the elvs that are in `file-local-variables
 
 (defun orgstrap-inspect-elvs (&optional from-flv-alist)
   "Display the elvs for the current buffer.
-If FROM-FLV-ALIST is not null display the elvs that are in `file-local-variables-alist'."
+If FROM-FLV-ALIST is not null display the elvs that are in
+`file-local-variables-alist'."
   (interactive "P")
   (let ((buffer (get-buffer-create (format "%s orgstrap elvs" (buffer-file-name))))
         (elvs (orgstrap--get-elvs from-flv-alist))
