@@ -24,6 +24,20 @@
 # If you want to grow up to be a unicorn you're going to have to
 # pull yourself up by your own bootstraps!
 
+#+name: orgstrap-shebang
+#+begin_src bash :eval never :results none :exports none
+{ __p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > ${null="/dev/null"}
+$file= $MyInvocation.MyCommand.Source
+$ErrorActionPreference= "silentlycontinue"
+file=$0
+args=$@
+$ErrorActionPreference= "Continue"
+{ PATH=$__op;rm ${__p}/=;rmdir ${__p};} > $null
+emacs -batch -no-site-file -eval "(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))" "${file}" -- $args
+exit
+<# powershell open
+#+end_src
+
 =orgstrap= allows Org files to describe their own requirements and
 define their own functionality, making them self-contained standalone
 computational artifacts dependent only on Emacs or other
@@ -951,6 +965,7 @@ of any changes.
 #+begin_src elisp :noweb yes
 (require 'cl-lib)
 
+;;;###autoload
 (defvar orgstrap-mode nil
   "Variable to track whether `orgstrap-mode' is enabled.")
 
@@ -1598,6 +1613,17 @@ Not all functionality works in older versions of Org. For example see
 orgit-rev:~/git/NOFORK/org-mode::7d6b8f51ec1993a66a385b98b2df42d0853fe289
 which is not present in the versions of Org released with Emacs < 26.
 
+# We have to cache this result to avoid ocbe issues when tangling
+#+name: orgstrap-shebang-body
+#+begin_src elisp :results code :cache yes :exports none
+(orgstrap--with-block "orgstrap-shebang" body)
+#+end_src
+
+#+RESULTS[ed4829271f66df67f68ecfe831eaed67d1f08201]: orgstrap-shebang-body
+#+begin_src elisp
+"{ __p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > ${null=\"/dev/null\"}\n$file= $MyInvocation.MyCommand.Source\n$ErrorActionPreference= \"silentlycontinue\"\nfile=$0\nargs=$@\n$ErrorActionPreference= \"Continue\"\n{ PATH=$__op;rm ${__p}/=;rmdir ${__p};} > $null\nemacs -batch -no-site-file -eval \"(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))\" \"${file}\" -- $args\nexit\n<# powershell open"
+#+end_src
+
 #+caption: init helpers
 #+name: orgstrap-init-helper-defuns
 #+begin_src emacs-lisp :results none :lexical yes :noweb yes
@@ -1807,7 +1833,7 @@ Insert BLOCK-CONTENTS if they are supplied."
   "Create the elvs for an orgstrapped file.
 INFO is the output of `org-babel-get-src-block-info' for the orgstrap block.
 MINIMAL determines whether a non-portable block has been requested.
-NORM-FUNC-NAME is the name of the function that will be used to normalize orgstrap blocks."
+NORM-FUNC-NAME names the function used to normalize orgstrap blocks."
   (let ((lv-cver (orgstrap--local-variables--check-version
                   info
                   minimal))
@@ -1858,20 +1884,75 @@ orgstrap elv is always added first."
               print-length print-level)
           (mapcar (lambda (sexp) (add-file-local-variable 'eval sexp)) eval-commands))))))
 
+(defun orgstrap--before-first-dull ()
+  "Goto the first non-empty line not starting with a sharp sign."
+  (goto-char (point-min))
+  (re-search-forward "\n[^#\n \t]")
+  (beginning-of-line))
+
+(defun orgstrap--goto-elvs ()
+  "Goto the start of the elvs for the current buffer.
+If no elvs are found goto `point-max' instead."
+  (widen)
+  (goto-char (point-max))
+  (search-backward "\n\^L" (max (- (point-max) 3000) (point-min)) 'move)
+  (when (let ((case-fold-search t))
+          (search-forward "Local Variables:" nil t))
+    (beginning-of-line)))
+
+(defconst orgstrap--shebang-body
+  <<orgstrap-shebang-body()>>
+  "Shebang block body content.")
+
+(defun orgstrap--add-shebang-block ()
+  "Add a shebang block to the current buffer."
+  ;; goto correct location
+  ;; create empty bash block
+  ;; fill block
+  ;; go to start of elvs
+  ;; add powershell closing line
+  (let ((block-name "orgstrap-shebang")
+        (header-args '((eval . never) (results . none) (exports . none))))
+    (if (org-babel-find-named-block block-name)
+        (warn "A shebang block already exists. Not adding.")
+      (save-excursion
+        (orgstrap--before-first-dull)
+        (insert "\n#+name: " block-name "\n")
+        (insert "#+begin_src bash")
+        (mapc (lambda (header-arg-value)
+                (insert " :" (symbol-name (car header-arg-value))
+                        " " (symbol-name (cdr header-arg-value))))
+              header-args)
+        (insert "\n#+end_src\n")
+        (orgstrap-update-src-block "orgstrap-shebang" orgstrap--shebang-body)
+
+        (orgstrap--goto-elvs)
+        (insert "# close powershell comment #>\n")))))
+
 ;; init user facing functions
 
 ;;;###autoload
-(defun orgstrap-init (&optional prefix-argument)
+(defun orgstrap-init (&optional prefix-argument shebang)
   "Initialize orgstrap in a buffer and enable command `orgstrap-edit-mode'.
-PREFIX-ARGUMENT is essentially minimal from other functions, when non-nil
-the minimal local variables will be used if possible."
+If PREFIX-ARGUMENT is non-nil and has a value of 4 or 64 init will attempt
+to use the minimal local variables if possible.
+
+If SHEBANG is non-nil or PREFIX-ARGUMENT is greater than or equal to 16
+then a shebang block will also be added to the file.
+
+Example usage.
+            M-x orgstrap-init -> portable elvs
+C-u         M-x orgstrap-init -> minimal  elvs
+C-u C-u     M-x orgstrap-init -> portable elvs + shebang
+C-u C-u C-u M-x orgstrap-init -> minimal  elvs + shebang"
   (interactive "P")
   (unless (eq major-mode 'org-mode)
     (error "Cannot orgstrap, buffer not in `org-mode' it is in %s!" major-mode))
   ;; TODO option for no link?
   ;; TODO option for local variables in comments vs noexport
   (let (onf)
-    (let ((orgstrap-norm-func
+    (let ((shebang (or shebang (and prefix-argument (>= (car prefix-argument) 16))))
+          (orgstrap-norm-func
            (or (cdr (assoc 'orgstrap-norm-func-name (orgstrap--read-current-local-variables)))
                (default-value 'orgstrap-norm-func))))
       (save-excursion
@@ -1880,11 +1961,12 @@ the minimal local variables will be used if possible."
         (orgstrap--add-link-to-orgstrap-block)
         ;; FIXME sometimes local variables don't populate due to an out of range error
         (orgstrap--add-file-local-variables
-         (or prefix-argument orgstrap-use-minimal-local-variables))
+         (or (and prefix-argument (memq (car prefix-argument) '(4 64))) orgstrap-use-minimal-local-variables))
+        (when shebang (orgstrap--add-shebang-block))
         (orgstrap-edit-mode 1)
         (setq onf orgstrap-norm-func)))
-      ;; reset to ensure that a stale value is not inserted on next save
-      (setq-local orgstrap-norm-func onf)))
+    ;; reset to ensure that a stale value is not inserted on next save
+    (setq-local orgstrap-norm-func onf)))
 #+end_src
 
 # Note that multi-line strings cause issues with indentation if they are
@@ -1956,7 +2038,8 @@ in the orgstrap block as NAME-CHECKSUM pairs."
 
 (defun orgstrap--get-elvs (&optional from-flv-alist)
   "Return the elvs as they are written in the current buffer.
-If FROM-FLV-ALIST is not null display the elvs that are in `file-local-variables-alist'."
+If FROM-FLV-ALIST is not null display the elvs that are in
+`file-local-variables-alist'."
   (cl-loop
    for var in
    (if from-flv-alist
@@ -1967,7 +2050,8 @@ If FROM-FLV-ALIST is not null display the elvs that are in `file-local-variables
 
 (defun orgstrap-inspect-elvs (&optional from-flv-alist)
   "Display the elvs for the current buffer.
-If FROM-FLV-ALIST is not null display the elvs that are in `file-local-variables-alist'."
+If FROM-FLV-ALIST is not null display the elvs that are in
+`file-local-variables-alist'."
   (interactive "P")
   (let ((buffer (get-buffer-create (format "%s orgstrap elvs" (buffer-file-name))))
         (elvs (orgstrap--get-elvs from-flv-alist))
@@ -2036,7 +2120,7 @@ minimal as possible is critical.
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.3                               (ref:orgstrap.el-version)
+;; Version: 1.4                               (ref:orgstrap.el-version)
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -2122,6 +2206,7 @@ Newer version of =autoload-generate-file-autoloads= add functions that may not b
 supported by older versions of Emacs. Thus you should run this on the oldest version
 of Emacs you will be testing against.
 
+# XXX This must be run with emacs-26 to avoid bytecode compatibility issues
 #+name: generate-autoloads-for-test
 #+begin_src elisp :results none
 (require 'autoload)
@@ -2273,9 +2358,11 @@ Use ~flycheck-mode~ on [[file:./orgstrap.el]] to checkdoc for melpa.
 Don't forget to run ~flycheck-package-setup~ to get better reports.
 *** Byte compile
 Before a release run the following block and fix any byte compile
-errors and warnings.
+errors and warnings. Using Emacs 26 ensures that bytecode is forward
+and backward compatible.
 #+begin_src elisp :noweb yes :results drawer
 (ow-run-command "emacs" "-batch" "-f" "batch-byte-compile" "orgstrap.el")
+(ow-run-command "emacs-26" "-batch" "-f" "batch-byte-compile" "orgstrap.el")
 #+end_src
 *** Run test matrix
 Run ref:test-matrix-run.
@@ -2308,6 +2395,11 @@ Things that need to be done for a release.
 :PROPERTIES:
 :CUSTOM_ID: changelog
 :END:
+** 1.4
+- Update ~orgstrap-init~ so that it can insert a shebang block.
+
+  Use 2 or more prefix arguments to add a shebang block when using
+  ~orgsgrap-init~. For example =C-u C-u C-u M-x orgstrap-init=.
 ** 1.3
 - Remove all ~orgstrap-do~ variables.
 
@@ -3482,7 +3574,7 @@ the file is too old (i.e. < =9.3.8=).
 :PROPERTIES:
 :visibility: folded
 :END:
-
+# close powershell comment #>
 # Local Variables:
 # eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((actual (org-version)) (need orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not need) (string< need actual) (string= need actual) (error "Your Org is too old! %s < %s" actual need))) (defun orgstrap-norm-func--dprp-1\.0 (body) (let ((p (read (concat "(progn\n" body "\n)"))) (m '(defun defun-local defmacro defvar defvar-local defconst defcustom)) print-quoted print-length print-level) (cl-labels ((f (b) (cl-loop for e in b when (listp e) do (or (and (memq (car e) m) (let ((n (nthcdr 4 e))) (and (stringp (nth 3 e)) (or (cl-subseq m 3) n) (f n) (or (setcdr (cddr e) n) t)))) (f e))) p)) (prin1-to-string (f p))))) (unless (boundp 'orgstrap-norm-func) (defvar-local orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap-org-src-coderef-regexp (_fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))) (unless (fboundp #'org-src-coderef-regexp) (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp)) (defun orgstrap--expand-body (info) (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1)))) (defun orgstrap--confirm-eval-portable (lang _body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (orgstrap-norm body)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum))))) (unless (fboundp #'orgstrap--confirm-eval) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable)) (let (enable-local-eval) (vc-find-file-hook)) (let ((ocbe org-confirm-babel-evaluate) (obs (org-babel-find-named-block "orgstrap"))) (if obs (unwind-protect (save-excursion (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (goto-char obs) (org-babel-execute-src-block)) (when (eq org-confirm-babel-evaluate #'orgstrap--confirm-eval) (setq-local org-confirm-babel-evaluate ocbe)) (org-set-visibility-according-to-property)) (warn "No orgstrap block."))))
 # End:

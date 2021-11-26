@@ -69,7 +69,7 @@ There is a rare bug that can happen if you try to run a file with dos
 line endings on a system that expects posix line endings. If you do
 this you will encounter errors if there are any "blank" lines before
 the shebang block because bash and friends will try to run a command
-named the carriage return variables =\r=. To fix this either remove
+named the carriage return variable =\r=. To fix this either remove
 the blank lines or add a =#= at the start of the line.
 
 * Details
@@ -104,8 +104,8 @@ A breakdown of the elisp that appears in the =-eval= string.
       (let ((coding-system-for-read 'utf-8))
         (revert-buffer nil t t))))
 
-  (let ((enable-local-eval t) ; when running as a script other means
-        ;; there are other means of preventing arbitrary execution
+  (let ((enable-local-eval t) ; when running as a script there
+        ;; are other means of preventing arbitrary execution
         (enable-local-variables :all) ; allow all local variables
 
         ;; fake setting the major mode to org-mode so that
