@@ -212,6 +212,11 @@ Files that do not match the checksum are quarantined."
   ;; whatever is at that path must have passed the current checksum
   nil)
 
+(defmacro ow--setq (global &rest body)
+  `(if ,global
+       (setq ,@body)
+     (setq-local ,@body)))
+
 (defun ow-url-head-ok (url)
   "Check if URL is up and OK using HTTP HEAD.
 All errors are silenced."
@@ -241,7 +246,7 @@ All errors are silenced."
 This retains single confirmation at the entry point for the block."
   ;; TODO consider a header arg for a variant of this in org babel proper
   (interactive "P")
-  (let ((org-confirm-babel-evaluate (lambda (_l _b) nil)))
+  (let ((org-confirm-babel-evaluate (lambda (_l _b) nil))) ;; FIXME TODO set messages buffer size to nil
     (save-excursion
       (when (org-babel-find-named-block block-name)
         ;; goto won't raise an error which results in the block where
@@ -250,6 +255,7 @@ This retains single confirmation at the entry point for the block."
         (org-babel-goto-named-src-block block-name)
         (unwind-protect
             (progn
+              ;; FIXME optionally raise errors on failure here !?
               (advice-add #'org-babel-insert-result :around #'ow--results-silent)
               (org-babel-execute-src-block))
           (advice-remove #'org-babel-insert-result #'ow--results-silent))))))

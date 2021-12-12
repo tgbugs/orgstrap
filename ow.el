@@ -804,8 +804,7 @@ This retains single confirmation at the entry point for the block."
 
 (defvar ow-package-archives '(("gnu" . "https://elpa.gnu.org/packages/") ; < 26 has http
                               ("melpa" . "https://melpa.org/packages/")
-                              ("nongnu" . "https://elpa.nongnu.org/nongnu/")
-                              ("org" . "https://orgmode.org/elpa/")))
+                              ("nongnu" . "https://elpa.nongnu.org/nongnu/")))
 
 (when (< emacs-major-version 26)
   (setq gnutls-algorithm-priority "NORMAL:-VERS-TLS1.3"))
@@ -938,6 +937,7 @@ used to specify the command line option.
 For example
 ((:option default)) -> --option value -> (let ((option \"value\")) )
 ((:option default) option-internal) -> --option value -> (let ((option-internal \"value\")) )"
+;; FIXME ambiguity between (:option bind-to-name) and ((:option) bind-to-name)
   (declare (indent 2) (indent 1))
   (cl-destructuring-bind (defaults cases returns)
       (apply #'cl-mapcar #'list ; `cl-mapcar' required for this to work
