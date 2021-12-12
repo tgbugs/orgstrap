@@ -80,18 +80,18 @@
         (unless o
           (url-handler-mode 0)))))
   (defalias 'reval #'reval-minimal)
-  (reval 'sha256 '1eb9c155d89e5d1f14b3f62f6acdeb6ab03647662ff9473ad211c9e4e5e297ef
-         ;; "~/git/orgstrap/reval.el"
-         "https://raw.githubusercontent.com/tgbugs/orgstrap/2ee5438e6382786d1269310cef0315eca0d227be/reval.el"))
+  (reval 'sha256 '3620321396c967395913ff19ce507555acb92335b0545e4bd05ec0e673a0b33b
+         "https://raw.githubusercontent.com/tgbugs/orgstrap/300b1d5518af53d76d950097bcbcd7046cfa2285/reval.el"))
+
 
 (let ((ghost "https://raw.githubusercontent.com/tgbugs/orgstrap/"))
   ;; FIXME ghost breaks the reval helper code
   (unless (featurep 'ow)
-    (reval 'sha256 'f918c7d0a40da313fa36157a0cb386a2e89f71199a22d1e7b3be43c000cfbbe5
+    (reval 'sha256 'a3f04d3c136a69f92b220a79bb1074e7f7294b057438f10abe31f151f751f37c
            ;; "~/git/orgstrap/ow.el"
-           (concat ghost "70f599bea56f41d7da69ad4aa2b5e1fc30d5b81a" "/ow.el")))
-  (reval 'sha256 '0c5c6b5873c10e9a421df0d784850d97f1c51ef80a3f87151cf4d19c40a2c19c
+           (concat ghost "75a18955a97b1da2754bf43da6b26e22ec07dc52" "/ow.el")))
+  (reval 'sha256 'e6dce9d3e7861b4650f228a3b2835ece989e738921abad9f2a4ac3dcd93e2854
          ;; "~/git/orgstrap/init-content.el"
-         (concat ghost "7b80cd0e8210467227cbd2e46c27ffb0639f309f" "/init-content.el")))
+         (concat ghost "460030279c3553e67bd84872dd029d75368346a8" "/init-content.el")))
 
 ;;;; init-simple.el ends here
