@@ -77,6 +77,11 @@
 
 (ow-enable-use-package)
 
+;; hack to remove built-in org package so that we can download the
+;; version from gnu elpa
+(assq-delete-all 'org package--builtins)
+(assq-delete-all 'org package--builtin-versions)
+
 (ow-use-packages
  flycheck
  powershell
@@ -99,27 +104,6 @@
   (evil-mode 1)
   :config
   (evil-select-search-module 'evil-search-module 'evil-search))
- (org-plus-contrib
-   :mode ("\\.org\\'" . org-mode)
-   :bind (:map org-mode-map
-               ("<tab>" . org-cycle))
-   :custom
-   (org-adapt-indentation nil)
-   (org-edit-src-content-indentation 0)
-   :init
-   ;; FIXME Emacs 24 during the first pass byte compile of ob-core.el
-   ;; the bytecode file that is produced is mangled in such a way that
-   ;; org-babel-check-evaluate always returns nil, fix is to delete
-   ;; ob-core.elc and then recompile it
-   (require 'ob-core)
-   (org-babel-do-load-languages
-    'org-babel-load-languages
-    '((dot . t)
-      (lisp . t)
-      (python . t)
-      (shell . t)
-      (sparql . t)
-      (sql . t))))
  (sly
    :custom
    (sly-net-coding-system 'utf-8-unix)
@@ -140,6 +124,7 @@
 
 (if (>= emacs-major-version 25)
     (ow-use-packages
+     org
      magit
      racket-mode)
 
@@ -169,29 +154,89 @@
              :type git :host github
              :repo "emacs-straight/gnu-elpa-mirror"
              :build nil)))
+  (add-to-list 'straight-x-pinned-packages ; 9.4.6
+               '("org" . "652430128896e690dc6ef2a83891a1209094b3da"))
   (add-to-list 'straight-x-pinned-packages
                '("ghub" . "ae37bef2eb3afb8232bb0a6f7306a8da2390abf4"))
   (add-to-list 'straight-x-pinned-packages ; 2.13.0
                '("magit" . "e03685e813330a750c1d2e525a8f8c74901fccfb"))
   (add-to-list 'straight-x-pinned-packages
                '("racket-mode" . "f7917d7cb38f7faa03eb2146e21f2a2d4a3c0350"))
-  (straight-use-package 'ghub)
-  (straight-use-package 'magit)
-  (straight-use-package 'racket-mode)
-  (unless (string= (straight-vc-get-commit 'git (straight--repos-dir "magit"))
-                   (cdr (assoc "magit" straight-x-pinned-packages)))
-    (straight-x-pull-all)
-    ;;(straight-use-package 'magit)
-    ;;(straight-use-package 'racket-mode)
-    (straight-freeze-versions t) ; have to force due to the hackery of our setup
-    (straight-x-freeze-pinned-versions)
-    (straight--symlink-package (straight--convert-recipe 'magit))
-    (straight--symlink-package (straight--convert-recipe 'ghub))
-    (straight--symlink-package (straight--convert-recipe 'racket-mode)))
-  (use-package magit-popup)
+  ;;; clone
+  (straight-use-package 'ghub nil t)
+  (straight-use-package 'racket-mode nil t)
+  (let ((org-recipe
+         `(org :type git
+               :host nil
+               :repo "https://git.savannah.gnu.org/git/emacs/org-mode.git"
+               :local-repo "org"
+               :files ("lisp/*.el*")
+               :build ,(let ((make (if (eq system-type 'berkeley-unix)
+                                       "gmake"
+                                     "make"))
+                             (emacs (concat "EMACS="
+                                            invocation-directory
+                                            invocation-name)))
+                         `(,make "oldorg" ,emacs))))
+        (magit-recipe
+         '(magit :type git
+                 :host github
+                 :repo "magit/magit"
+                 :flavor melpa
+                 :files ("lisp/*.el*"))))
+    (straight-use-package magit-recipe nil t)
+    (straight-use-package org-recipe nil t)
+    ;;; checkout and freeze
+    (unless (string= (straight-vc-get-commit 'git (straight--repos-dir "magit"))
+                     (cdr (assoc "magit" straight-x-pinned-packages)))
+      (straight-x-pull-all)
+      (straight-freeze-versions t) ; have to force due to the hackery of our setup
+      (straight-x-freeze-pinned-versions)
+      (straight-x-thaw-pinned-versions) ; turns out thaw != unlock
+      (cl-loop
+       for recipe in (list magit-recipe 'ghub 'racket-mode org-recipe)
+       do (let ((sr (straight--convert-recipe magit-recipe)))
+            (straight--run-build-commands sr)
+            (straight--symlink-package sr))))
+    ;;; build and install
+    (straight-use-package 'ghub)
+    (straight-use-package magit-recipe)
+    (straight-use-package 'racket-mode)
+    (straight-use-package org-recipe))
 
+  (use-package with-editor) ; magit can only fetch after 2nd launch
+  (use-package magit-popup) ; magit
+  (use-package pos-tip) ; racket-mode
+
+  ;;(require 'org)
+  ; cl-defgeneric -> magit not at right commit
+  ; pos-tip -> racket-mode not at right commit
   (require 'magit)
   (require 'racket-mode))
+
+(ow-use-packages
+ (org
+  :no-require t
+  :mode ("\\.org\\'" . org-mode)
+  :bind (:map org-mode-map
+              ("<tab>" . org-cycle))
+  :custom
+  (org-adapt-indentation nil)
+  (org-edit-src-content-indentation 0)
+  :init
+  ;; FIXME Emacs 24 during the first pass byte compile of ob-core.el
+  ;; the bytecode file that is produced is mangled in such a way that
+  ;; org-babel-check-evaluate always returns nil, fix is to delete
+  ;; ob-core.elc and then recompile it
+  (require 'ob-core)
+  (org-babel-do-load-languages
+   'org-babel-load-languages
+   '((dot . t)
+     (lisp . t)
+     (python . t)
+     (shell . t)
+     (sparql . t)
+     (sql . t)))))
 
 ;;; themes
 ;;;; must come after packages so that require org-faces doesn't load
