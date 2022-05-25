@@ -1,4 +1,4 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1\.0; orgstrap-block-checksum: 1d459a3cb98486b95c8ad44fd5275022241a6bd60cb001e3fc1b4cf7ebf1eb9c; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1\.0; orgstrap-block-checksum: 513f556ec184d8f179b0e5846c885e04af8f495de21d1b1020672a3236d1f409; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Orgstrap: Executable Org files
 #+startup: showall
@@ -1614,15 +1614,17 @@ orgit-rev:~/git/NOFORK/org-mode::7d6b8f51ec1993a66a385b98b2df42d0853fe289
 which is not present in the versions of Org released with Emacs < 26.
 
 # We have to cache this result to avoid ocbe issues when tangling
-#+name: orgstrap-shebang-body
-#+begin_src elisp :results code :cache yes :exports none
+# XXX this also has to be manually converted to the : style because
+# old versions of org don't support :cache yes and we wind up with
+# circular dependencies
+#+name: orgstrap-shebang-body-command
+#+begin_src elisp :results code :exports none :cache yes
 (orgstrap--with-block "orgstrap-shebang" body)
 #+end_src
 
-#+RESULTS[ed4829271f66df67f68ecfe831eaed67d1f08201]: orgstrap-shebang-body
-#+begin_src elisp
-"{ __p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > ${null=\"/dev/null\"}\n$file= $MyInvocation.MyCommand.Source\n$ErrorActionPreference= \"silentlycontinue\"\nfile=$0\nargs=$@\n$ErrorActionPreference= \"Continue\"\n{ PATH=$__op;rm ${__p}/=;rmdir ${__p};} > $null\nemacs -batch -no-site-file -eval \"(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))\" \"${file}\" -- $args\nexit\n<# powershell open"
-#+end_src
+# XXX must keep this in sync manually to support old versions of org
+#+name: orgstrap-shebang-body
+: "{ __p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > ${null=\"/dev/null\"}\n$file= $MyInvocation.MyCommand.Source\n$ErrorActionPreference= \"silentlycontinue\"\nfile=$0\nargs=$@\n$ErrorActionPreference= \"Continue\"\n{ PATH=$__op;rm ${__p}/=;rmdir ${__p};} > $null\nemacs -batch -no-site-file -eval \"(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))\" \"${file}\" -- $args\nexit\n<# powershell open"
 
 #+caption: init helpers
 #+name: orgstrap-init-helper-defuns
@@ -2093,9 +2095,11 @@ Since -batch implies -q, `user-init-file' must be passed explicitly.
 emacs -batch -eval \\
 \"(let ((user-init-file (pop argv)) (file (pop argv))) (package-initialize) (orgstrap-whitelist-file file))\" \\
 ~/.emacs.d/init.el /path/to/whitelist.org"
-  (with-current-buffer (find-file-literally path)
-    (orgstrap--whitelist-current-buffer)
-    (kill-buffer)))
+  (let (enable-local-variables) ; < 28 don't run orgstrap block
+    ;; `find-file-literally' is broken on 27 so regularize behavior
+    (with-current-buffer (find-file-literally path)
+      (orgstrap--whitelist-current-buffer)
+      (kill-buffer))))
 #+end_src
 
 Ideally we want to call [[(oab)][orgstrap-run-additional-blocks]] as
@@ -2189,7 +2193,8 @@ emacs-24 -Q $THIS_FILE
 emacs-25 -Q $THIS_FILE
 emacs-26 -Q $THIS_FILE
 emacs-27 -Q $THIS_FILE
-emacs-28-vcs -Q $THIS_FILE
+emacs-28 -Q $THIS_FILE
+emacs-29-vcs -Q $THIS_FILE
 #+end_src
 
 #+name: test-minimal
@@ -2198,7 +2203,8 @@ emacs-24 -Q orgstrap-minimal.org
 emacs-25 -Q orgstrap-minimal.org
 emacs-26 -Q orgstrap-minimal.org
 emacs-27 -Q orgstrap-minimal.org
-emacs-28-vcs -Q orgstrap-minimal.org
+emacs-28 -Q orgstrap-minimal.org
+emacs-29-vcs -Q orgstrap-minimal.org
 #+end_src
 *** Matrix
 Before running the tests below you need to generate [[file:./orgstrap-autoloads.el]].
@@ -2228,7 +2234,7 @@ of Emacs you will be testing against.
 # XXX regenerate autoloads, it seems that the version in 26 works for everyone
 #+name: test-matrix-run
 #+begin_src bash :results drawer output
-versions=( 24 25 26 27 28-vcs )
+versions=( 24 25 26 27 28 29-vcs )
 test_files=( test-no-lv-list.org test-lv-list-portable test-lv-list-minimal )
 for v in ${versions[@]}; do
 [ -d test/emacs-$v ] || mkdir -p test/emacs-$v
@@ -2395,6 +2401,12 @@ Things that need to be done for a release.
 :PROPERTIES:
 :CUSTOM_ID: changelog
 :END:
+** 1.5
+- Regularize behavior of ~orgstrap-whitelist-file~.
+
+  An internal call to ~find-file-literally~ has different behavior in
+  27 vs 28 (see notes about that in [[./shebang.org]]).
+
 ** 1.4
 - Update ~orgstrap-init~ so that it can insert a shebang block.
 
