@@ -606,6 +606,78 @@
   ;;(advice-add #'fmakunbound :around #'defl--fmakunbound-local)
   )
 
+(defvar ow-forward-subprocess-streams t "Forward streams from subprocesses.")
+
+(defun ow--forward-stream (buffer point printcharfun)
+  "Use `princ' on BUFFER after POINT using PRINCHARFUN to output.
+Helper function to forward stderr and stdout from subprocesses."
+  ;; tried to add a prefix to clarify out/err distinctions but it
+  ;; turns out that even the simplest test cases show that that is a
+  ;; futile attempt ... thanks unix
+  (with-current-buffer buffer
+    (let ((new-point (point)))
+      (unless (= new-point point)
+        (princ (buffer-substring point new-point) printcharfun))
+      new-point)))
+
+(defun ow--my-balls (process princharfun &optional no-forward)
+  (let* ((buffer (process-buffer process))
+         (point (with-current-buffer buffer (point))))
+    (while (accept-process-output process)
+      (when (and noninteractive (not no-forward))
+        (let (message-log-max)
+          (setq point (ow--forward-stream buffer point princharfun)))))
+    ;; we don't actually want to print the junk in the buffer that
+    ;; shows up after the process exits, unfortunately the behavior is
+    ;; inconsistent and sometimes the junk prints and sometimes it
+    ;; does not depending on the exact interaction between the threads
+    ;; and the process, so we call this one last time to get everything
+    (ow--forward-stream buffer point princharfun)
+    nil))
+
+(defun ow--accept-and-forward-process-output (process stderr-process &optional no-forward)
+  "Accept output from PROCESS and STDERR-PROCESS when `noninteractive' forward streams.
+
+WARNING: does not gurantee sequencing of stdout and stderr events.
+
+If the optional NO-FORWARD argument is non-nil do not forward.
+
+An alternate approach might be to use `set-process-filter'."
+
+  ;; https://github.com/tkf/emacs-request/issues/203
+  (let ((tout (make-thread (lambda () (ow--my-balls process standard-output no-forward))))
+        (terr (make-thread (lambda () (ow--my-balls stderr-process #'external-debugging-output no-forward)))))
+    ;; we have to bind each process to the new threads so that they
+    ;; can be read by each thread, in this way we can nearly get
+    ;; behavior that matches wait for multiple objects
+
+    ;; XXX WARNING: even with this behavior the ordering of events
+    ;; IS NOT PRESERVED, see the stochastic behavior of the err-out
+    ;; alternating chain test, clearly shows a race condition
+    (set-process-thread process tout)
+    (set-process-thread stderr-process terr)
+    (thread-join tout)
+    (thread-join terr)))
+
+(defun ow--aafpo-<-26 (process stderr-process &optional no-forward)
+  "Variant of `ow--accept-and-forward-process-output' that works before Emacs 26."
+  (let ((stdout-buffer (process-buffer process))
+        (stderr-buffer (process-buffer stderr-process))
+        (stdout-point 1)
+        (stderr-point 1))
+    (cl-loop
+     for p in (list process stderr-process) do
+     (while (accept-process-output p)
+       (when (and noninteractive (not no-forward))
+         (let (message-log-max)
+           (setq stdout-point (ow--forward-stream stdout-buffer stdout-point standard-output))
+           (setq stderr-point (ow--forward-stream stderr-buffer stderr-point #'external-debugging-output))))))
+    (ow--forward-stream stdout-buffer stdout-point standard-output)
+    (ow--forward-stream stderr-buffer stderr-point #'external-debugging-output)))
+
+(when (< emacs-major-version 26)
+  (defalias 'ow--accept-and-forward-process-output #'ow--aafpo-<-26))
+
 (defun ow-run-command (command &rest args)
   "Run COMMAND with ARGS.
 Raise an error if the return code is not zero."
@@ -620,7 +692,10 @@ Raise an error if the return code is not zero."
                 :buffer stdout-buffer
                 :stderr stderr-buffer
                 :command (cons command args))))
-          (while (accept-process-output process)) ; don't use mutexes kids
+          (ow--accept-and-forward-process-output
+           process
+           (get-buffer-process stderr-buffer)
+           (not ow-forward-subprocess-streams))
           (let ((ex (process-exit-status process)))
             (if (= 0 ex)
                 (with-current-buffer stdout-buffer (buffer-string))
@@ -628,6 +703,11 @@ Raise an error if the return code is not zero."
                      command ex
                      (with-current-buffer stdout-buffer (buffer-string))
                      (with-current-buffer stderr-buffer (buffer-string))))))
+      (cl-loop ; workaround for bug#56002
+       for buffer in (list stdout-buffer stderr-buffer) do
+       (let ((p (get-buffer-process buffer)))
+         (when p
+           (set-process-query-on-exit-flag p nil))))
       (kill-buffer stdout-buffer)
       (kill-buffer stderr-buffer))))
 
