@@ -1402,6 +1402,9 @@ NEW-PARAMS.  If UPDATE is non-nil existing header arguments are updated."
 
 (defun orgstrap--check-portable-subset (body)
   "Ensure that BODY uses only symbols that are portable for `prin1-to-string'."
+  ;; XXX Note that [.] may diverge again because `.asdf' can be read without
+  ;; escaping the leading . whereas `\?asdf' cannot. This is an artifact of
+  ;; the c implementation of `prin1' being reused to handle both chars.
   (let* ((l (flatten-tree (read (concat "(progn" body ")"))))
          (symbols (cl-remove-duplicates (cl-remove-if-not #'symbolp l)))
          (bads (cl-remove-if-not
@@ -2418,6 +2421,24 @@ Things that need to be done for a release.
   An internal call to ~find-file-literally~ has different behavior in
   27 vs 28 (see notes about that in [[./shebang.org]]).
 
+- Rename all normalization functions to remove use of =.=.
+
+  See https://debbugs.gnu.org/cgi/bugreport.cgi?bug=55645 for details.
+
+  *You will need to update any orgstrapped files to use the new names.*
+  The simplest way to do this is to update to to 1.5 and then delete
+  the prop line local variables and then run ~orgstrap-init~.
+
+- Add a check to ensure that only portable symbol names are used.
+
+  Symbols with =[.?]= appearing anywhere other than at the start of
+  the symbol are banned since their prin1 representation diverges
+  across the 28/29 boundary.
+
+  If you have orgstrap blocks that contain such symbols you will need
+  to change the symbol names. An error will be raised when calling
+  ~orgstrap-add-block-checksum~ with a list of symbols that need to be
+  changed.
 ** 1.4
 - Update ~orgstrap-init~ so that it can insert a shebang block.
 
