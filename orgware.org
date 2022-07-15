@@ -1,4 +1,4 @@
-# -*- orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1\.0; orgstrap-block-checksum: 7e836f4992bca02efe323764607af9a1783ebb8e59beb539ba5298743f1fcf22; -*-
+# -*- orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1-0; orgstrap-block-checksum: 7e836f4992bca02efe323764607af9a1783ebb8e59beb539ba5298743f1fcf22; -*-
 # [[orgstrap][jump to the orgstrap block for this file]]
 #+title: Orgware: Tooling for interactive Org files
 
@@ -720,6 +720,31 @@ An alternate approach might be to use `set-process-filter'."
 (when (< emacs-major-version 26)
   (defalias 'ow--accept-and-forward-process-output #'ow--aafpo-<-26))
 
+(defun ow-run-command-no-thread (command &rest args)
+  "Run COMMAND with ARGS.
+Raise an error if the return code is not zero."
+  ;; TODO maybe implement this in terms of ow-run-command-async ?
+  ;; usually (defalias 'run-command #'ow-run-command)
+  (let ((stdout-buffer (generate-new-buffer " rc stdout"))
+        (stderr-buffer (generate-new-buffer " rc stderr")))
+    (unwind-protect
+        (let ((process
+               (make-process
+                :name (concat "run-command: " command)
+                :buffer stdout-buffer
+                :stderr stderr-buffer
+                :command (cons command args))))
+          (while (accept-process-output process)) ; don't use mutexes kids
+          (let ((ex (process-exit-status process)))
+            (if (= 0 ex)
+                (with-current-buffer stdout-buffer (buffer-string))
+              (error "Command %s failed code: %s stdout: %S stderr: %S"
+                     command ex
+                     (with-current-buffer stdout-buffer (buffer-string))
+                     (with-current-buffer stderr-buffer (buffer-string))))))
+      (kill-buffer stdout-buffer)
+      (kill-buffer stderr-buffer))))
+
 (defun ow-run-command (command &rest args)
   "Run COMMAND with ARGS.
 Raise an error if the return code is not zero."
@@ -881,18 +906,22 @@ Bind keyword lists may take the following forms.
 
 (:option default)
 ((:option default))
-((:option default) option-internal)"
+((:option default) option-internal)
+
+(subcmd)
+(subcmd subcmd-internal)"
   (unless (listp bind-keyword)
     (error "%s not a list! %s" bind-keyword (type-of bind-keyword)))
   (let* ((kw-or-element? (car bind-keyword))
-         (bind? (if (keywordp kw-or-element?) nil (cdr bind-keyword)))
-         (element (if (keywordp kw-or-element?) bind-keyword kw-or-element?))
+         (bind? (if (symbolp kw-or-element?) nil (cdr bind-keyword)))
+         (element (if (symbolp kw-or-element?) bind-keyword kw-or-element?))
          (_ (unless (listp element)
               (error "%s not a list! %s" element (type-of element))))
          (kw (car element))
-         (sl (ow-keyword-name kw))
-         (assign? (cdr element))
-         (real-assign (if bind? (car bind?) (intern (ow-keyword-name kw))))
+         (sl (and (keywordp kw) (ow-keyword-name kw)))
+         (subcmd? (not (keywordp kw)))
+         (assign? (and (not subcmd?) (cdr element)))
+         (real-assign (if bind? (car bind?) (if subcmd? kw (intern sl))))
          (default (if assign? (car assign?) assign?)) ; FIXME
          (p (if assign?
                 `(progn (setf ,real-assign (ow-cli--norm-arg (cadr args)))
@@ -902,7 +931,7 @@ Bind keyword lists may take the following forms.
                       ;; equivalent of bash shift
                       (setf args (cdr args))))))
     (list `(,real-assign ,default)  ; default
-          `(,(intern (format "--%s" sl)) ,p)  ; case
+          `(,(if subcmd? kw (intern (format "--%s" sl))) ,p)  ; case
           `(cons ',real-assign ,real-assign))))
 
 (defmacro ow-cli-parse-args (&rest keywords)
@@ -926,7 +955,7 @@ used to specify the command line option.
 For example
 ((:option default)) -> --option value -> (let ((option \"value\")) )
 ((:option default) option-internal) -> --option value -> (let ((option-internal \"value\")) )"
-;; FIXME ambiguity between (:option bind-to-name) and ((:option) bind-to-name)
+  ;; FIXME ambiguity between (:option bind-to-name) and ((:option) bind-to-name)
   (declare (indent 2) (indent 1))
   (cl-destructuring-bind (defaults cases returns)
       (apply #'cl-mapcar #'list ; `cl-mapcar' required for this to work
@@ -941,6 +970,21 @@ For example
                              (setf args (cdr args))))))
        (let (cases returns (parsed (list ,@returns)))
          ,@body))))
+
+(defun ow-cli-opt (opt)
+  "If OPT is in `argv' return the index of OPT in `argv'.
+
+If you need to set variables from `argv' early in load, (e.g.
+before a call to `reval' so you can set the cache location) then
+you need some absolutely minimal argv parsing machinery.
+
+Thus, this function is not particularly useful in a library because
+its primary use case is to check for and set `user-emacs-directory'
+if it is passed on the command line. It is kept here for reference
+so that it can be pasted into a file that needs to able to set
+`user-emacs-directory' before `reval' or `ow-cli-gen' are present."
+  (let ((index (cl-position opt argv :test #'string=)))
+    (and index (elt argv (1+ index)))))
 
 <<orthauth-minimal>>
 #+end_src
@@ -979,6 +1023,23 @@ emacs -q \
        ((:option-2 'lol))
        ((:flag) flag-internal)
        ((:other "default") other-internal))
+    parsed))
+
+;; TODO do we want to be able to do this? or at this point do we docopt and go home?
+;; yes, yes we do want this
+(let ((command-line-args-left '("--" "subcommand" "--option" "value" "--flag" "--other" "other" "rest-1")))
+  (ow-cli-gen
+      ((:option nil)
+       ((:option-2 'lol))
+       ((:flag) flag-internal)
+       ((:other "default") other-internal)
+       ;; (subcommand (subsubcommand-1) (subsubcommand-2)) ; this is too much work to parse
+       ;; it is easier to make it possible to accept subcommands and then deal with valid
+       ;; combinations in the body (separation of concerns is weird for macros)
+       (unique-subcommand)
+       (subcommand sc-internal)
+       (subsubcommand-1 ssc-1-int)
+       (subsubcommand-2 ssc-2-int))
     parsed))
 
 #+end_src
@@ -1132,6 +1193,31 @@ This retains single confirmation at the entry point for the block."
               (advice-add #'org-babel-insert-result :around #'ow--results-silent)
               (org-babel-execute-src-block))
           (advice-remove #'org-babel-insert-result #'ow--results-silent))))))
+
+(defun ow-babel-eval-closest-block (&optional universal-argument)
+  "WARNING this function is broken right now."
+  (interactive "P")
+  ;; FIXME should the distance be determined by start or end ? or what?
+  ;; I think start for next and end for prev
+  ;; FIXME also ... lines are likely to be significantly more important
+  ;; FIXME also if we are inside a src block ... just run that one
+  ;; FIXME also whether one of the blocks is visible
+  (org-element-at-point)
+  (let ((here (point))
+        (prev-end (save-excursion
+                    (org-babel-previous-src-block)
+                    (+ (point) (nth 5 (org-babel-get-src-block-info)))))
+        (next-beg (save-excursion
+                    (org-babel-next-src-block)
+                    (point))))
+    (let ((dp (count-lines prev-end here))
+          (dn (count-lines here next-start)))
+      (save-excursion
+        (goto-char
+         (if (> dp dn)
+             next-beg
+           prev-end))
+        (org-babel-execute-src-block)))))
 #+end_src
 
 * Emacs sandbox
@@ -1279,5 +1365,5 @@ persistent to prevent prompt fatigue.
 
 ** Local variables :ARCHIVE:
 # Local Variables:
-# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((actual (org-version)) (need orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not need) (string< need actual) (string= need actual) (error "Your Org is too old! %s < %s" actual need))) (defun orgstrap-norm-func--dprp-1\.0 (body) (let ((p (read (concat "(progn\n" body "\n)"))) (m '(defun defun-local defmacro defvar defvar-local defconst defcustom)) print-quoted print-length print-level) (cl-labels ((f (b) (cl-loop for e in b when (listp e) do (or (and (memq (car e) m) (let ((n (nthcdr 4 e))) (and (stringp (nth 3 e)) (or (cl-subseq m 3) n) (f n) (or (setcdr (cddr e) n) t)))) (f e))) p)) (prin1-to-string (f p))))) (unless (boundp 'orgstrap-norm-func) (defvar-local orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap-org-src-coderef-regexp (_fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))) (unless (fboundp #'org-src-coderef-regexp) (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp)) (defun orgstrap--expand-body (info) (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1)))) (defun orgstrap--confirm-eval-portable (lang _body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (orgstrap-norm body)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum))))) (unless (fboundp #'orgstrap--confirm-eval) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable)) (let (enable-local-eval) (vc-find-file-hook)) (let ((ocbe org-confirm-babel-evaluate) (obs (org-babel-find-named-block "orgstrap"))) (if obs (unwind-protect (save-excursion (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (goto-char obs) (org-babel-execute-src-block)) (when (eq org-confirm-babel-evaluate #'orgstrap--confirm-eval) (setq-local org-confirm-babel-evaluate ocbe)) (org-set-startup-visibility)) (warn "No orgstrap block."))))
+# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((a (org-version)) (n orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not n) (string< n a) (string= n a) (error "Your Org is too old! %s < %s" a n))) (defun orgstrap-norm-func--dprp-1-0 (body) (let ((p (read (concat "(progn\n" body "\n)"))) (m '(defun defun-local defmacro defvar defvar-local defconst defcustom)) print-quoted print-length print-level) (cl-labels ((f (b) (cl-loop for e in b when (listp e) do (or (and (memq (car e) m) (let ((n (nthcdr 4 e))) (and (stringp (nth 3 e)) (or (cl-subseq m 3) n) (f n) (or (setcdr (cddr e) n) t)))) (f e))) p)) (prin1-to-string (f p))))) (unless (boundp 'orgstrap-norm-func) (defvar-local orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap-org-src-coderef-regexp (_fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))) (unless (fboundp #'org-src-coderef-regexp) (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp)) (defun orgstrap--expand-body (info) (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1)))) (defun orgstrap--confirm-eval-portable (lang _body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (orgstrap-norm body)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum))))) (unless (fboundp #'orgstrap--confirm-eval) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable)) (let (enable-local-eval) (vc-find-file-hook)) (let ((ocbe org-confirm-babel-evaluate) (obs (org-babel-find-named-block "orgstrap"))) (if obs (unwind-protect (save-excursion (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (goto-char obs) (org-babel-execute-src-block)) (when (eq org-confirm-babel-evaluate #'orgstrap--confirm-eval) (setq-local org-confirm-babel-evaluate ocbe)) (org-set-visibility-according-to-property)) (warn "No orgstrap block."))))
 # End:
