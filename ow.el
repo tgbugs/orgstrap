@@ -223,32 +223,33 @@
   a return value from the buffer."
     (let (found-buffer (cache-path (reval-cache-path checksum (file-name-nondirectory path-or-url))))
       (with-url-handler-mode
-        (cl-loop for path-or-url in (cons cache-path (cons path-or-url alternates))
-                 do (if (file-exists-p path-or-url)
-                        (let* ((buffer (reval-id->buffer path-or-url))
-                               (_ (when (string= path-or-url cache-path)
-                                    (with-current-buffer buffer (emacs-lisp-mode))))
-                               ;; FIXME this is still not right ... can error due to not elisp
-                               (buffer-checksum (reval-resum cypher buffer)))
-                          (if (eq buffer-checksum checksum)
-                              (let ((buffer
-                                     (if (string= path-or-url cache-path)
-                                         buffer
-                                       ;; save to cache and switch buffer before eval for xrefs
-                                       (reval--write-cache buffer cache-path)
-                                       (find-file-noselect cache-path))))
-                                (when do-with-buffer
-                                  (with-current-buffer buffer
-                                    (funcall do-with-buffer)))
-                                (setq found-buffer buffer))
-                            (reval--add-buffer-to-list buffer 'reval-failed-buffer-list)
-                            (funcall (if alternates #'warn #'error)
-                                     ;; if alternates warn to prevent an early failure
-                                     ;; from blocking later potential successes otherwise
-                                     ;; signal an error
-                                     "reval: checksum mismatch! %s" path-or-url)))
-                      (warn "reval: file does not exist! %s" path-or-url))
-                 until found-buffer))
+        (cl-loop
+         for path-or-url in (cons cache-path (cons path-or-url alternates))
+         do (if (file-exists-p path-or-url)
+                (let* ((buffer (reval-id->buffer path-or-url))
+                       (_ (when (string= path-or-url cache-path)
+                            (with-current-buffer buffer (emacs-lisp-mode))))
+                       ;; FIXME this is still not right ... can error due to not elisp
+                       (buffer-checksum (reval-resum cypher buffer)))
+                  (if (eq buffer-checksum checksum)
+                      (let ((buffer
+                             (if (string= path-or-url cache-path)
+                                 buffer
+                               ;; save to cache and switch buffer before eval for xrefs
+                               (reval--write-cache buffer cache-path)
+                               (find-file-noselect cache-path))))
+                        (when do-with-buffer
+                          (with-current-buffer buffer
+                            (funcall do-with-buffer)))
+                        (setq found-buffer buffer))
+                    (reval--add-buffer-to-list buffer 'reval-failed-buffer-list)
+                    (funcall (if alternates #'warn #'error)
+                             ;; if alternates warn to prevent an early failure
+                             ;; from blocking later potential successes otherwise
+                             ;; signal an error
+                             "reval: checksum mismatch! %s" path-or-url)))
+              (warn "reval: file does not exist! %s" path-or-url))
+         until found-buffer))
       (unless found-buffer
         (error "reval: all paths failed!"))
       found-buffer))
@@ -678,6 +679,31 @@ An alternate approach might be to use `set-process-filter'."
 (when (< emacs-major-version 26)
   (defalias 'ow--accept-and-forward-process-output #'ow--aafpo-<-26))
 
+(defun ow-run-command-no-thread (command &rest args)
+  "Run COMMAND with ARGS.
+Raise an error if the return code is not zero."
+  ;; TODO maybe implement this in terms of ow-run-command-async ?
+  ;; usually (defalias 'run-command #'ow-run-command)
+  (let ((stdout-buffer (generate-new-buffer " rc stdout"))
+        (stderr-buffer (generate-new-buffer " rc stderr")))
+    (unwind-protect
+        (let ((process
+               (make-process
+                :name (concat "run-command: " command)
+                :buffer stdout-buffer
+                :stderr stderr-buffer
+                :command (cons command args))))
+          (while (accept-process-output process)) ; don't use mutexes kids
+          (let ((ex (process-exit-status process)))
+            (if (= 0 ex)
+                (with-current-buffer stdout-buffer (buffer-string))
+              (error "Command %s failed code: %s stdout: %S stderr: %S"
+                     command ex
+                     (with-current-buffer stdout-buffer (buffer-string))
+                     (with-current-buffer stderr-buffer (buffer-string))))))
+      (kill-buffer stdout-buffer)
+      (kill-buffer stderr-buffer))))
+
 (defun ow-run-command (command &rest args)
   "Run COMMAND with ARGS.
 Raise an error if the return code is not zero."
@@ -882,6 +908,31 @@ This retains single confirmation at the entry point for the block."
               (org-babel-execute-src-block))
           (advice-remove #'org-babel-insert-result #'ow--results-silent))))))
 
+(defun ow-babel-eval-closest-block (&optional universal-argument)
+  "WARNING this function is broken right now."
+  (interactive "P")
+  ;; FIXME should the distance be determined by start or end ? or what?
+  ;; I think start for next and end for prev
+  ;; FIXME also ... lines are likely to be significantly more important
+  ;; FIXME also if we are inside a src block ... just run that one
+  ;; FIXME also whether one of the blocks is visible
+  (org-element-at-point)
+  (let ((here (point))
+        (prev-end (save-excursion
+                    (org-babel-previous-src-block)
+                    (+ (point) (nth 5 (org-babel-get-src-block-info)))))
+        (next-beg (save-excursion
+                    (org-babel-next-src-block)
+                    (point))))
+    (let ((dp (count-lines prev-end here))
+          (dn (count-lines here next-start)))
+      (save-excursion
+        (goto-char
+         (if (> dp dn)
+             next-beg
+           prev-end))
+        (org-babel-execute-src-block)))))
+
 (defvar ow-package-archives '(("gnu" . "https://elpa.gnu.org/packages/") ; < 26 has http
                               ("melpa" . "https://melpa.org/packages/")
                               ("nongnu" . "https://elpa.nongnu.org/nongnu/")))
@@ -972,18 +1023,22 @@ Bind keyword lists may take the following forms.
 
 (:option default)
 ((:option default))
-((:option default) option-internal)"
+((:option default) option-internal)
+
+(subcmd)
+(subcmd subcmd-internal)"
   (unless (listp bind-keyword)
     (error "%s not a list! %s" bind-keyword (type-of bind-keyword)))
   (let* ((kw-or-element? (car bind-keyword))
-         (bind? (if (keywordp kw-or-element?) nil (cdr bind-keyword)))
-         (element (if (keywordp kw-or-element?) bind-keyword kw-or-element?))
+         (bind? (if (symbolp kw-or-element?) nil (cdr bind-keyword)))
+         (element (if (symbolp kw-or-element?) bind-keyword kw-or-element?))
          (_ (unless (listp element)
               (error "%s not a list! %s" element (type-of element))))
          (kw (car element))
-         (sl (ow-keyword-name kw))
-         (assign? (cdr element))
-         (real-assign (if bind? (car bind?) (intern (ow-keyword-name kw))))
+         (sl (and (keywordp kw) (ow-keyword-name kw)))
+         (subcmd? (not (keywordp kw)))
+         (assign? (and (not subcmd?) (cdr element)))
+         (real-assign (if bind? (car bind?) (if subcmd? kw (intern sl))))
          (default (if assign? (car assign?) assign?)) ; FIXME
          (p (if assign?
                 `(progn (setf ,real-assign (ow-cli--norm-arg (cadr args)))
@@ -993,7 +1048,7 @@ Bind keyword lists may take the following forms.
                       ;; equivalent of bash shift
                       (setf args (cdr args))))))
     (list `(,real-assign ,default)  ; default
-          `(,(intern (format "--%s" sl)) ,p)  ; case
+          `(,(if subcmd? kw (intern (format "--%s" sl))) ,p)  ; case
           `(cons ',real-assign ,real-assign))))
 
 (defmacro ow-cli-parse-args (&rest keywords)
@@ -1007,7 +1062,7 @@ Bind keyword lists may take the following forms.
    AND it will eat the next kwarg this is probably a misdesign"
   `(ow-cli-gen ,keywords parsed))
 
-(defmacro ow-cli-gen (bind-keywords &rest body) ; (ref:cli-gen)
+(defmacro ow-cli-gen (bind-keywords &rest body)
   "All the machinery needed for simple cli specification.
 
 BIND-KEYWORDS follow a reverse let pattern because if the name to
@@ -1017,7 +1072,7 @@ used to specify the command line option.
 For example
 ((:option default)) -> --option value -> (let ((option \"value\")) )
 ((:option default) option-internal) -> --option value -> (let ((option-internal \"value\")) )"
-;; FIXME ambiguity between (:option bind-to-name) and ((:option) bind-to-name)
+  ;; FIXME ambiguity between (:option bind-to-name) and ((:option) bind-to-name)
   (declare (indent 2) (indent 1))
   (cl-destructuring-bind (defaults cases returns)
       (apply #'cl-mapcar #'list ; `cl-mapcar' required for this to work
@@ -1032,6 +1087,21 @@ For example
                              (setf args (cdr args))))))
        (let (cases returns (parsed (list ,@returns)))
          ,@body))))
+
+(defun ow-cli-opt (opt)
+  "If OPT is in `argv' return the index of OPT in `argv'.
+
+If you need to set variables from `argv' early in load, (e.g.
+before a call to `reval' so you can set the cache location) then
+you need some absolutely minimal argv parsing machinery.
+
+Thus, this function is not particularly useful in a library because
+its primary use case is to check for and set `user-emacs-directory'
+if it is passed on the command line. It is kept here for reference
+so that it can be pasted into a file that needs to able to set
+`user-emacs-directory' before `reval' or `ow-cli-gen' are present."
+  (let ((index (cl-position opt argv :test #'string=)))
+    (and index (elt argv (1+ index)))))
 
 ;; orthauth-minimal
 
