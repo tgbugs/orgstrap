@@ -21,6 +21,13 @@
 
 ;;; Code:
 
+;;; testing helper
+
+;; don't compile packages since it is faster to run interpreted
+;; than to wait for compile unless we pre-build an image
+;(require 'package)
+;(defun package--compile (p) (ignore p))
+
 ;;; preamble
 
 (setq gc-cons-threshold 80000000)
@@ -108,6 +115,9 @@
    :custom
    (sly-net-coding-system 'utf-8-unix)
    (inferior-lisp-program "sbcl")
+   :bind (:map sly-mrepl-mode-map
+               ("C-<up>" . sly-mrepl-previous-input-or-button)
+               ("C-<down>" . sly-mrepl-next-input-or-button))
    :init
    (add-to-list 'sly-contribs 'sly-repl-ansi-color)
    (setq sly-lisp-implementations
