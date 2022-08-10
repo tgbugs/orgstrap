@@ -1491,7 +1491,7 @@ If a UNIVERSAL-ARGUMENT is supplied then the orgstrap block is always used."
 
 (defun orgstrap-stamp (&optional universal-argument overwrite)
   "Stamp orgstrap block via `orgstrap-clone' to current buffer.
-If UNIVERSAL-ARGUMENT is '(16) aka (C-u C-u) this will OVERWRITE any existing
+If UNIVERSAL-ARGUMENT is \\='(16) aka (C-u C-u) this will OVERWRITE any existing
 block.  If you are not calling this interactively all as (orgstrap-stamp nil t)
 for calirty.  You cannot stamp an orgstrap block into its own buffer."
   (interactive "P")
@@ -2175,7 +2175,7 @@ minimal as possible is critical.
 ;; README.org which is also the literate source for this orgstrap.el
 ;; file in the git repo at
 ;; https://github.com/tgbugs/orgstrap/blob/master/README.org
-;; or whever you can find git:c1b28526ef9931654b72dff559da2205feb87f75
+;; or wherever you can find git:c1b28526ef9931654b72dff559da2205feb87f75
 
 ;; Code in an orgstrap block is usually meant to be executed directly by its
 ;; containing Org file.  However, if the code is something that will be reused
