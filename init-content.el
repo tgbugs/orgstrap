@@ -132,6 +132,16 @@
    :init
    (global-undo-tree-mode)))
 
+(if (>= emacs-major-version 26)
+  (ow-use-packages
+   markdown-mode)
+
+  ;; support for Emacs 25
+
+  ;; TODO
+
+  )
+
 (if (>= emacs-major-version 25)
     (ow-use-packages
      org
@@ -168,13 +178,20 @@
                '("org" . "652430128896e690dc6ef2a83891a1209094b3da"))
   (add-to-list 'straight-x-pinned-packages
                '("ghub" . "ae37bef2eb3afb8232bb0a6f7306a8da2390abf4"))
+  (add-to-list 'straight-x-pinned-packages ; last before dropping 24.4 support
+               ;; "cf6b7e1c713f1dfd18340253d218cb006720dd91" ; this is the last 25.1 supporting for when we need it above
+               '("markdown-mode" . "365697302345f8b9dc10bc975477452a282f7ae0"))
+  (add-to-list 'straight-x-pinned-packages ; 3.2.0ish right before dropping 24 support
+               '("with-editor" . "8c7672c04bb606f01a41b558a922dee1127568cc"))
   (add-to-list 'straight-x-pinned-packages ; 2.13.0
                '("magit" . "e03685e813330a750c1d2e525a8f8c74901fccfb"))
   (add-to-list 'straight-x-pinned-packages
                '("racket-mode" . "f7917d7cb38f7faa03eb2146e21f2a2d4a3c0350"))
   ;;; clone
   (straight-use-package 'ghub nil t)
+  (straight-use-package 'markdown-mode nil t)
   (straight-use-package 'racket-mode nil t)
+  (straight-use-package 'with-editor nil t)
   (let ((org-recipe
          `(org :type git
                :host nil
@@ -204,17 +221,19 @@
       (straight-x-freeze-pinned-versions)
       (straight-x-thaw-pinned-versions) ; turns out thaw != unlock
       (cl-loop
-       for recipe in (list magit-recipe 'ghub 'racket-mode org-recipe)
+       for recipe in (list 'with-editor magit-recipe 'ghub 'markdown-mode 'racket-mode org-recipe)
        do (let ((sr (straight--convert-recipe magit-recipe)))
             (straight--run-build-commands sr)
             (straight--symlink-package sr))))
     ;;; build and install
     (straight-use-package 'ghub)
+    (straight-use-package 'with-editor)
     (straight-use-package magit-recipe)
+    (straight-use-package 'markdown-mode)
     (straight-use-package 'racket-mode)
     (straight-use-package org-recipe))
 
-  (use-package with-editor) ; magit can only fetch after 2nd launch
+  ;;(use-package with-editor) ; magit can only fetch after 2nd launch
   (use-package magit-popup) ; magit
   (use-package pos-tip) ; racket-mode
 
@@ -222,6 +241,7 @@
   ; cl-defgeneric -> magit not at right commit
   ; pos-tip -> racket-mode not at right commit
   (require 'magit)
+  (require 'markdown-mode)
   (require 'racket-mode))
 
 (ow-use-packages
