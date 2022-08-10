@@ -19,11 +19,9 @@
 ;; random systems. init-simple.el acts as a stub that points to a
 ;; remote init-content.el file which is what is kept up to date and
 ;; can be synchronized across multiple deployments. Since we use reval
-;; to do this init-simple.el will only update if `reval-update' is
+;; to do this, init-simple.el will only update if `reval-update' is
 ;; invoked explicitly. For this reason we do not include the machinery
-;; for updating init-simple.el itself using reval. At some point I
-;; will get caching implemented as part of reval, at which point we
-;; will only have to go to network once per update.
+;; for updating init-simple.el itself using reval.
 
 ;;; Code:
 
@@ -49,6 +47,14 @@
                             working-dir))))
 
 ;;; load remote code
+
+(when (< emacs-major-version 26)
+  ;; we used to be able to set this in ow.el and everything would
+  ;; succeed, but it seems that at some point something change and
+  ;; the 25 now waits infinitely trying to connect to github so we
+  ;; never get to ow.el where this is also set, for some reason 24
+  ;; does not have this issue
+  (setq gnutls-algorithm-priority "NORMAL:-VERS-TLS1.3"))
 
 (unless (featurep 'reval)
   (defvar reval-cache-directory (concat user-emacs-directory "reval/cache/"))
@@ -90,8 +96,8 @@
     (reval 'sha256 'b3b26172d8e54abd0d3c4503d1b5438e0fc29d05fb6275a6da17d4d1b628a38a
            ;; "~/git/orgstrap/ow.el"
            (concat ghost "f4df67e94926f9d389f4a456a9cbf721c9b22b89" "/ow.el")))
-  (reval 'sha256 'b98086955489e65da307d775d1b7ec5e52ae4b4207711feeee151fa93854ac9e
+  (reval 'sha256 'abba6204fb3584b5a47af53d9a061a025d8a24d0eba152a21c11ae0c99b980be
          ;; "~/git/orgstrap/init-content.el"
-         (concat ghost "d19b923408c52e504c0be68bc78f501d54034f1e" "/init-content.el")))
+         (concat ghost "03c8f3ffd481ed6c80b2fdeabb1f8a506c749cce" "/init-content.el")))
 
 ;;;; init-simple.el ends here
