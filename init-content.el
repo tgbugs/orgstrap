@@ -89,6 +89,9 @@
 (assq-delete-all 'org package--builtins)
 (assq-delete-all 'org package--builtin-versions)
 
+;; `org-assert-version' is a nightmare when trying to use orgstrap and a newer version of org
+(defmacro org-assert-version () 't) ; SILENCE (reminder, don't byte compile org)
+
 (ow-use-packages
  flycheck
  powershell
@@ -129,6 +132,9 @@
  (undo-tree
    :custom
    (undo-tree-enable-undo-in-region nil)
+   (undo-tree-auto-save-history nil)
+   (undo-tree-history-directory-alist
+    (list (cons "." (expand-file-name "undo-tree-backup" user-emacs-directory))))
    :init
    (global-undo-tree-mode)))
 
@@ -143,10 +149,11 @@
   )
 
 (if (>= emacs-major-version 25)
-    (ow-use-packages
-     org
-     magit
-     racket-mode)
+    (progn
+      (let ((no-byte-compile t)) (ow-use-packages org))
+      (ow-use-packages
+       magit
+       racket-mode))
 
   ;; support for Emacs 24
 
@@ -212,7 +219,8 @@
                  :flavor melpa
                  :files ("lisp/*.el*"))))
     (straight-use-package magit-recipe nil t)
-    (straight-use-package org-recipe nil t)
+    (let ((no-byte-compile t))
+      (straight-use-package org-recipe nil t))
     ;;; checkout and freeze
     (unless (string= (straight-vc-get-commit 'git (straight--repos-dir "magit"))
                      (cdr (assoc "magit" straight-x-pinned-packages)))
@@ -231,7 +239,8 @@
     (straight-use-package magit-recipe)
     (straight-use-package 'markdown-mode)
     (straight-use-package 'racket-mode)
-    (straight-use-package org-recipe))
+    (let ((no-byte-compile t))
+      (straight-use-package org-recipe)))
 
   ;;(use-package with-editor) ; magit can only fetch after 2nd launch
   (use-package magit-popup) ; magit
