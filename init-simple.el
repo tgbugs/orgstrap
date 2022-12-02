@@ -49,6 +49,8 @@
 ;;; load remote code
 
 (when (< emacs-major-version 26)
+  ;; apparently org switched to the function form at some point
+  (defun temporary-file-directory () temporary-file-directory)
   ;; we used to be able to set this in ow.el and everything would
   ;; succeed, but it seems that at some point something change and
   ;; the 25 now waits infinitely trying to connect to github so we
@@ -96,8 +98,8 @@
     (reval 'sha256 'b3b26172d8e54abd0d3c4503d1b5438e0fc29d05fb6275a6da17d4d1b628a38a
            ;; "~/git/orgstrap/ow.el"
            (concat ghost "f4df67e94926f9d389f4a456a9cbf721c9b22b89" "/ow.el")))
-  (reval 'sha256 'abba6204fb3584b5a47af53d9a061a025d8a24d0eba152a21c11ae0c99b980be
+  (reval 'sha256 'e3341e8b84acc2ac06bfd469f6ba72630a8a0f2906e53b13297ccc30eac2001d
          ;; "~/git/orgstrap/init-content.el"
-         (concat ghost "03c8f3ffd481ed6c80b2fdeabb1f8a506c749cce" "/init-content.el")))
+         (concat ghost "056d7397e835cc896f0cece498729370fb9822f4" "/init-content.el")))
 
 ;;;; init-simple.el ends here
