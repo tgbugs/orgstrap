@@ -1,4 +1,4 @@
-# -*- mode: org; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1-0; orgstrap-block-checksum: 7471d2eeba9ea4df25c7051d8620ac09590e48e997c89d655464dc1e4e3260a7; -*-
+# -*- mode: org; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1-0; orgstrap-block-checksum: 4c63d6c8e7530621cb615685c2321a931fe20fa4ea206ed97df4b0d9ae69d8a4; -*-
 # [[orgstrap][jump to the orgstrap block for this file]]
 #+title: Executable Org files
 
@@ -17,7 +17,7 @@ file=$0
 args=$@
 $ErrorActionPreference= "Continue"
 { PATH=$__op;rm ${__p}/=;rmdir ${__p};} > $null
-emacs-28 -batch -no-site-file -eval "(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))" "${file}" -- $args
+emacs -batch -no-site-file -eval "(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))" "${file}" -- $args
 exit
 <# powershell open
 #+end_src
@@ -185,10 +185,11 @@ emacs -q -Q -eval "(let ((file (pop argv))) (find-file-literally file) (hack-loc
 #+name: orgstrap
 #+begin_src elisp :results none :lexical yes :noweb yes
 (defvar sigh 0)
+(defvar --test t)
 (setq sigh (1+ sigh))
 ;(toggle-debug-on-error)
-(when noninteractive
-  (setq user-emacs-directory "~/.emacs.d/orgstrap-test-6/")
+(when (or noninteractive --test)
+  (setq user-emacs-directory "~/.emacs.d/orgstrap-test-17/")
   (setq package-user-dir (concat user-emacs-directory (format "elpa-%s" emacs-major-version)))
   )
 
@@ -244,7 +245,11 @@ the call to reload would need to be after the new org version was downloaded."
   (cl-loop for f in ow--org-to-reload
            do (progn
                 (message "f: %s" f)
-                (require f)
+                (condition-case nil
+                    (require f)
+                  (error
+                   (message "failed to load %s" f)
+                   nil))
                 (message "asserting version ... %s" f)
                 (org-assert-version))))
 
@@ -276,9 +281,11 @@ the call to reload would need to be after the new org version was downloaded."
 <<nowhere>>
 (unless (featurep 'ow) (load "~/git/orgstrap/ow.el"))
 
-(when noninteractive
+(when (or noninteractive --test)
   (setq ow--org-to-reload (ow--org-unload-all-features))
-  (message "ootr: %s" ow--org-to-reload))
+  (message "ootr: %s" ow--org-to-reload)
+  (when (featurep 'org-macs) (error "YOU SHOULD HAVE BEEN REMOVED 1"))
+  )
 
 '
 (let ((sigh (org-release)))
@@ -300,13 +307,32 @@ the call to reload would need to be after the new org version was downloaded."
   ;; reload before anyone tries to load org again because org-macs
   ;; will not be required correctly
   ;; this will destroy the universe
-  (let ((no-byte-compile nil))
+  (when (featurep 'org-macs) (error "YOU SHOULD HAVE BEEN REMOVED 2"))
+  (let ((no-byte-compile
+         (> emacs-major-version 28) ; cannot byte compile on 29 otherwise breaks on 2..n run
+         ))
     ;; XXX so apparently byte compiling can happen, but we need to build and install org up here
     ;; before or something to avoid some issue below or something ??!
-    (ow-use-packages org ;(org :no-require t)
+    (ow-use-packages
+     ;;org
+     (org
+      :no-require t ; XXX strictly required on 29 for some reason ??? but requires no-byte-compile as well ???
+      :init
+      (when (featurep 'org-macs)
+        ;; I have no idea how, but somehow this thing gets loaded again despite no-require
+        ;; being set, and it is the stale version that gets loaded, likely due to some
+        ;; autoload sequencing issue that pulls in the old versions, which tells me that
+        ;; there might be other issues lurking related to that so should test all of them
+        (unload-feature 'org-macs 'force))
+      (when (featurep 'org-macs) (error "YOU SHOULD HAVE BEEN REMOVED 3"))
+          )
+     ;; lol amazing a segfault
                                 ))
   (when (assq 'org package-alist)
      (message "wat weheheheheh")
+     (when (featurep 'org-macs) (error "YOU SHOULD HAVE BEEN REMOVED 4"))
+     (require 'org-macs)
+     (org-assert-version)
      (ow--org-reload-features)
      )
   ;;(mapcar #'require ow--org-to-reload)
