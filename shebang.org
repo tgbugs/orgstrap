@@ -17,12 +17,18 @@ file=$0
 args=$@
 $ErrorActionPreference= "Continue"
 { PATH=$__op;rm ${__p}/=;rmdir ${__p};} > $null
-emacs -batch -no-site-file -eval "(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))" "${file}" -- $args
+emacs-28 -batch -no-site-file -eval "(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))" "${file}" -- $args
 exit
 <# powershell open
 #+end_src
 
 #+call: shebang-elisp() :exports none
+
+# FIXME TODO need a way to override the emacs command so that
+# a specific version of emacs can be specified via the environment
+# instead of via PATH ? or what, modify the path? a nasty shortcoming
+# admittedly the way I test this is by manually change the text in
+# the block which is bad, but also critical for portability I think?
 
 This block acts as a shebang that makes Org files executable on
 =bash=, =bash --posix=, =zsh=, =dash=, =pwsh=, and =powershell=.  It
@@ -178,15 +184,192 @@ emacs -q -Q -eval "(let ((file (pop argv))) (find-file-literally file) (hack-loc
 
 #+name: orgstrap
 #+begin_src elisp :results none :lexical yes :noweb yes
+(defvar sigh 0)
+(setq sigh (1+ sigh))
+;(toggle-debug-on-error)
+(when noninteractive
+  (setq user-emacs-directory "~/.emacs.d/orgstrap-test-6/")
+  (setq package-user-dir (concat user-emacs-directory (format "elpa-%s" emacs-major-version)))
+  )
+
+(when (> sigh 2)
+ (toggle-debug-on-error)
+ (error "WHAT HAVE YOU DONE"))
+;(require 'cl-lib)
+;(require 'cl-generic)
+;(require 'loadhist)
+
+(defvar ow--org-to-reload '())
+
+(defun org-compat-unload-function ()
+  (message "WHAEEEEEEEEEEEEEEEEEEEEEEEE")
+  ;; `org-compat' is the first require for org and it itself requires org-macs
+  ;; if it is not fake unloaded then org-macs will not be rerequired, however
+  ;; we cannot unload org-compat itself because it defines variables that are
+  ;; also defined elsewhere, bug in org-compat wrt `pcomplete-uniqify-list'?
+  (setq features (cl-delete-if (lambda (s) (eq s 'org-compat)) features)))
+
+(defun ow--org-unload-all-features ()
+  "I'm pretty sure we only need to call this inside `ow-enable-use-package'.
+Verify that this is actually the case. It seems that sometimes on a first run
+the call to reload would need to be after the new org version was downloaded."
+  ;; apparently unload-feature has a giant blast radius
+  ;; and somehow its things like the alias for `pcomplete-uniqify-list'
+  ;; (see comment below on `org-compat')
+  (let ((out (cl-loop
+              for f in features
+              ;; XXX `org-compat' redefinitions can remove definitions that have been defined elsewhere
+              ;; and since emacs doesn't keep track of how many times something has been defined in a
+              ;; separate place (ie 1 + 1 = 1) it removes an alias defined and needed elsewhere
+              ;; SUPER unforunately `org-compat' is absolutely critical for reloading `org-macs'
+              when (or (and (string-match "^\\(org\\|ob\\)-" (symbol-name f)) '(not (eq f 'org-compat)))
+                       ;;(eq f 'org) ; WAT somehow this causes infinite attempts to rerun this file !? ; ah right because require 'org will cause local variables to be re-executed duh
+                       nil)
+              collect (progn (message "org feature: %s" f) (unload-feature f 'force) f))))
+
+    (let (major-mode) ; enable-local-eval
+      ;; for some reason unloading org causes the buffer to reload itself?
+      ;; an not quite, it is `unload--set-major-mode' is causing all the issues here
+      ;; it looks like setting `major-mode' to nil for a moment will resolve the issue
+      (unload-feature 'org))
+    ;; on rerequire org must be last so that `org-macs' is already loaded, otherwise `org-assert-version' will fail
+    '
+    (cons 'org-macs (append out '(org)))
+    (cons 'org-macs (cons 'org out))
+    ))
+
+(defun ow--org-reload-features ()
+  ;; I swear we had this all working ... and now something to tweaked and is broken again
+  ;; XX oh ... its the bloody bytecode it would seem
+  (cl-loop for f in ow--org-to-reload
+           do (progn
+                (message "f: %s" f)
+                (require f)
+                (message "asserting version ... %s" f)
+                (org-assert-version))))
+
+'
+(defun loadhist-unload-element (e)
+;(cl-defmethod loadhist-unload-element ((e (head cl-defmethod)))
+  "this runs over every bloody symbol wtf"
+  ;;(message "the wat %S %S" e (type-of e))
+  '
+  (cond
+   ((consp e)
+    ;;(message "watoff cons %s" e)
+    (pcase (car e)
+      ('defun (fmakunbound (cdr e)))
+      ('require (message "don't bother require"))
+      ('provide (message "don't bother provide"))
+      ('defface (message "can't really remove defface"))
+      (t (message "unhanded %s" e))))
+   ((symbol-function e) (fmakunbound e))
+   ((symbolp e) (progn (message "WHAT THE WAT ARE YOU DOING %S" e) (makunbound e)))
+   (t (message "wating what %S" e))
+   )
+  nil)
+
+
 (message "I am an executable Org file!") ; (ref:test)
 (message "file name is: %S" buffer-file-name)
 (message "file truename is: %S" buffer-file-truename)
 <<nowhere>>
 (unless (featurep 'ow) (load "~/git/orgstrap/ow.el"))
+
+(when noninteractive
+  (setq ow--org-to-reload (ow--org-unload-all-features))
+  (message "ootr: %s" ow--org-to-reload))
+
+'
+(let ((sigh (org-release)))
+  (message "WATING SIGH %s" sigh)
+  (defun old-org-release () sigh))
+'
+(defmacro org-assert-version () 't)
+
+;org-confirm-babel-evaluate
+(when t
+  (ow-enable-use-package)
+  ;;(assq-delete-all 'org package-alist)
+  (message "wat-pal: %s" (assq 'org package-alist))
+  (message "wat-pactl: %s" (assq 'org package-activated-list))
+  (message "wat-psp: %s" (assq 'org package-selected-packages))
+  (assq-delete-all 'org package--builtins)
+  (assq-delete-all 'org package--builtin-versions)
+  ;; yep, if org is already installed at this point we need to call
+  ;; reload before anyone tries to load org again because org-macs
+  ;; will not be required correctly
+  ;; this will destroy the universe
+  (let ((no-byte-compile nil))
+    ;; XXX so apparently byte compiling can happen, but we need to build and install org up here
+    ;; before or something to avoid some issue below or something ??!
+    (ow-use-packages org ;(org :no-require t)
+                                ))
+  (when (assq 'org package-alist)
+     (message "wat weheheheheh")
+     (ow--org-reload-features)
+     )
+  ;;(mapcar #'require ow--org-to-reload)
+  (message "we're done here?" )
+                                        ;(message "%s" features)
+                                        ;(cl-loop for f in features when (regexp-match-string (symbol-name f)))
+                                        ;(unload-feature 'org-macs 'force)
+                                        ;(unload-feature 'org 'force)
+  ;;(require 'org))
+  (let ((gt26 (>= emacs-major-version 26)))
+    (ow-use-packages
+     csv-mode
+     rainbow-delimiters
+     orgstrap ; XXX unload of org causes issues here
+     (when gt26 jupyter)
+     (cypher-mode
+      :init
+      (defface cypher-pattern-face
+        '((t :foreground "DeepPink" :background unspecified :bold t))
+        "Face for pattern struct." :group 'cypher-faces))
+     sparql-mode
+     ob-cypher
+     (org
+      :no-require t ; when loading via orgstrap have to use no-require to avoid missing def issues ??
+      :mode ("\\.org\\'" . org-mode)
+      :bind ("<f5>" . ow-babel-eval-closest-block)
+      :init
+                                        ;(require 'org)
+                                        ;(require 'ob)
+                                        ;(toggle-debug-on-error)
+                                        ;(require 'org-macs)
+                                        ;(defalias 'org-release #'old-org-release)
+                                        ;(message "ffs or %s" (org-release))
+                                        ;(require 'ob-python)
+                                        ;(message "WAT")
+                                        ;(message "ffs %s" (org-version))
+      ;(require 'org)
+      (message "not quiet it seems?")
+      ;(symbol-function #'org-babel-do-load-languages)
+      ;; some aliasing asdfwatery it seems?
+      ;; #'pcomplete-uniquify-list
+      ;; #'pcomplete-uniq^ify-list
+      ;tramp-use-absolute-autoload-file-names
+      ;(require 'pcomplete)
+      ;'org-macs
+      (message "what the asdfwatery is this? %S" (symbol-function #'pcomplete-uniquify-list))
+      ;(require 'python)
+      (message "here?")
+      ;org-babel-tangle-lang-exts
+      ;(require 'ob-tangle) ; not needed if we do the reload above ?
+      (org-babel-do-load-languages
+       'org-babel-load-languages
+       `((cypher . t)
+         (sparql . t)
+         (python . t)
+         ,(when gt26 '(jupyter . t))))))))
+
 (ow-cli-gen
     ((:test))
   (message "running ow-cli-gen block ..."))
 (message "post cli-gen")
+;(require 'ob)
+;(require 'ob-core)
 #+end_src
 
 [[(test)]] Make sure coderefs work.
