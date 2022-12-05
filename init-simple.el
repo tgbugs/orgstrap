@@ -48,6 +48,14 @@
 
 ;;; load remote code
 
+;; emacs tries to be smart about coding systems for things loaded
+;; via url handler mode, and/or github decided to try to be smart
+;; and modify the contents of the blob they send based on which os
+;; they detect, either way, this breaks reval completely, so we set
+;; `prefer-coding-system' to avoid the issue
+
+(prefer-coding-system 'utf-8-unix)
+
 (when (< emacs-major-version 26)
   ;; apparently org switched to the function form at some point
   (defun temporary-file-directory () temporary-file-directory)
