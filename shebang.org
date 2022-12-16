@@ -1,4 +1,4 @@
-# -*- mode: org; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1-0; orgstrap-block-checksum: 7471d2eeba9ea4df25c7051d8620ac09590e48e997c89d655464dc1e4e3260a7; -*-
+# -*- orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1-0; orgstrap-block-checksum: 9b9b6600dac6b3d6432bb22afaad88fa13e4b32bba29550bdb4ef541bb101b8b; -*-
 # [[orgstrap][jump to the orgstrap block for this file]]
 #+title: Executable Org files
 
@@ -12,12 +12,12 @@
 #+begin_src bash :eval never :results none :exports none
 { __p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > ${null="/dev/null"}
 $file= $MyInvocation.MyCommand.Source
-$ErrorActionPreference= "silentlycontinue"
+$ErrorActionPreference= "SilentlyContinue"
 file=$0
-args=$@
+args=
 $ErrorActionPreference= "Continue"
 { PATH=$__op;rm ${__p}/=;rmdir ${__p};} > $null
-emacs -batch -no-site-file -eval "(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))" "${file}" -- $args
+emacs -batch -no-site-file -eval "(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))" "${file}" -- ${args} "${@}"
 exit
 <# powershell open
 #+end_src
@@ -38,11 +38,12 @@ In this file the block is visible to illustrate how it works.  It uses
 block into other files with =:exports none= set so that it is
 invisible for export.
 
-Annoyingly we have to use =mktemp -d= in order to add ~=~ to the path
-because not only does =dash= not support the =function= keyword, but
-it also arbitrarily prevents defining a function with the name ~=~. As
-a result the only portable way to get ~=~ on path is to create an
-executable file for it.
+This block is know not to work on =tcsh= and =csh= due to the use of
+~"${@}"~. However, you can work around the issue by putting a single
+space at the start of the file before the =# -*- mode: org -*-= line.
+This causes the file to run via the default shell (usually =/bin/sh=).
+
+For more see the [[https://emacsconf.org/2021/talks/exec/][EmacsConf 2021 talk]] on executable org files.
 
 * Windows
 On windows org files must be symlinked to have a =.ps1= file
@@ -73,6 +74,142 @@ named the carriage return variable =\r=. To fix this either remove
 the blank lines or add a =#= at the start of the line.
 
 * Details
+** Shell
+The following is an explication of the shell lines that make the shebang block portable.
+*** =sh= make sure that a function named ~=~ is in =PATH=
+In =powershell= this is effectively a noop.
+#+begin_src bash :eval never :results none :exports none
+{ __p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > ${null="/dev/null"}
+#+end_src
+
+Annoyingly we have to use =mktemp -d= in order to add ~=~ to the path
+because not only does =dash= not support the =function= keyword, but
+it also arbitrarily prevents defining a function with the name ~=~. As
+a result the only portable way to get ~=~ on path is to create an
+executable file for it.
+
+=mktemp= has not been standardized as part of posix. However, I have
+tested the default behavior of =mktemp -d= for the variants provided
+by =gnu=, =busybox=, =macos=, and =FreeBSD= and they all produce paths
+with no spaces. This means that the use of =${__p}= without quotes
+should be safe. See https://unix.stackexchange.com/q/614808 for more.
+
+In =powerhsell= the curly braces demarcate a script block which defers
+evaluation. This means that as long as you don't put anything too
+syntactically evil inside, =powershell= won't do anything except
+try to print it stdout, which we squash by dumping to =$null=.
+
+We silence the output in =sh= by assigning =$null= to ="/dev/null"=
+using =sh= parameter substitution.
+
+*** =powershell= assign to =$file=
+In =sh= this line is effectively a noop.
+#+begin_src powershell
+$file= $MyInvocation.MyCommand.Source
+#+end_src
+
+We assign both =powerhsell= and =sh= equivalents to the same variable
+to simplify passing it to =emacs= later in the block.
+
+When ~=~ is on path as an empty file calling ~=~ returns =0= and since
+=$file= is null this line is equivalent to running =/bin/true
+$MyInvocation.MyCommand.Source= which prevents the presence of the
+periods on the line from causing errors.
+
+The space after ~=~ is valid for assignments in =powerhsell= and is
+critical for this line to be effectively a noop in =sh=.
+*** =powerhsell= make errors silent
+In =sh= this line is effectively a noop.
+#+begin_src powershell
+$ErrorActionPreference= "SilentlyContinue"
+#+end_src
+
+We don't want the machinery of the shebang block to produce any output
+so that we don't pollute stdout for the user.
+
+See the Microsoft docs for details about ="SilentlyContinue"=.
+<https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/
+about_preference_variables?view=powershell-7.3#erroractionpreference>
+
+*** =sh= assign to =$file=
+In =powershell= this produces an error (which we silenced above).
+#+begin_src bash
+file=$0
+#+end_src
+
+*** =sh= ensure that =$args= is null
+In =powershell= this produces an error (which we silenced above).
+#+begin_src bash
+args=
+#+end_src
+
+Both =$args= and ="${@}"= are passed to =emacs= and they should always
+xor because powerhsell uses =$args= and =sh= and friends use =$@=.
+This ensures =$args= is null if for whatever reason it was set.
+
+*** =powerhsell= restore display of errors
+In =sh= this line is effectively a noop.
+#+begin_src powershell
+$ErrorActionPreference= "Continue"
+#+end_src
+
+*** =sh= remove ~=~ from =PATH= and clean up after =mktemp=
+#+begin_src bash
+{ PATH=$__op;rm ${__p}/=;rmdir ${__p};} > $null
+#+end_src
+
+*** Invoke =emacs=
+#+begin_src bash
+emacs -batch -no-site-file -eval "(org-shebang)" "${file}" -- ${args} "${@}"
+#+end_src
+
+The exact use of =$args= or =${args}= and ="${@}"= is critical for =emacs=
+to receive the correct values in =argv=.
+
+=${args}= is used instead of =$args= in the event that in =sh= someone
+somehow has =a=, =ar=, or =arg= bound as a variable.
+
+Critically =${args}= must NOT be quoted, otherwise =powershell= will
+pass a single string rather than an array.
+
+Critically ="${@}"= must BE quoted, otherwise =sh= will split args
+with spaces and pass them as individual arguments to =emacs=.
+
+Note that =$@= MUST NOT BE ASSIGNED TO ANOTHER VARIABLE. The behavior
+of assigning =$@= to another variable is unspecified. See
+https://unix.stackexchange.com/a/532163 and
+<https://pubs.opengroup.org/onlinepubs/9699919799.2018edition/
+utilities/V3_chap02.html#tag_18_05_02>
+
+Note that ="(org-shebang)"= is an imagined future builtin
+implementation of the elisp that is explicated below.
+
+#+begin_src bash :results code :wrap example
+bash shebang.org --test "w s" 1 2>&1
+dash shebang.org --test "w s" 1 2>&1
+zsh  shebang.org --test "w s" 1 2>&1
+pwsh shebang.ps1 --test "w s" 1 2>&1
+#+end_src
+
+*** Exit after we finish running the file in emacs
+#+begin_src bash
+exit
+#+end_src
+
+*** Keep powershell syntax checking happy
+In =sh= this line never runs and is never parsed.
+#+begin_src powershell
+<# powershell open
+#+end_src
+
+=powershell= parses the entire contents of a =.ps1= file to ensure
+that it is well formed before running any individual command.
+
+In =sh= we don't have to worry about this because the semantics of
+=sh= are to operate line by line, so in principle we can put anything
+we want after the call to =exit= and =sh= won't ever care.
+
+** Emacs Lisp
 A breakdown of the elisp that appears in the =-eval= string.
 #+name: shebang-explication
 #+begin_src elisp :lexical yes
@@ -181,8 +318,9 @@ emacs -q -Q -eval "(let ((file (pop argv))) (find-file-literally file) (hack-loc
 (message "I am an executable Org file!") ; (ref:test)
 (message "file name is: %S" buffer-file-name)
 (message "file truename is: %S" buffer-file-truename)
+(message "argv is: %S" argv)
 <<nowhere>>
-(unless (featurep 'ow) (load "~/git/orgstrap/ow.el"))
+(unless (featurep 'ow) (load (expand-file-name "ow.el" default-directory)))
 (ow-cli-gen
     ((:test))
   (message "running ow-cli-gen block ..."))
