@@ -10,13 +10,11 @@
 #+header: :exports code
 #+name: orgstrap-shebang
 #+begin_src bash :eval never :results none :exports none
-{ __p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > ${null="/dev/null"}
-$file= $MyInvocation.MyCommand.Source
-$ErrorActionPreference= "SilentlyContinue"
-file=$0
-args=
-$ErrorActionPreference= "Continue"
-{ PATH=$__op;rm ${__p}/=;rmdir ${__p};} > $null
+set -e "-C" "-e" "-e"
+{ null=/dev/null;} > "${null:=/dev/null}"
+{ args=;file=;MyInvocation=;__p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > "${null}"
+$file = $MyInvocation.MyCommand.Source
+{ file=$0;PATH=$__op;rm ${__p}/=;rmdir ${__p};} > "${null}"
 emacs -batch -no-site-file -eval "(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))" "${file}" -- ${args} "${@}"
 exit
 <# powershell open
@@ -27,8 +25,8 @@ exit
 This block acts as a shebang that makes Org files executable on
 =bash=, =bash --posix=, =zsh=, =dash=, =pwsh=, and =powershell=.  It
 may also work on other posix shells, but they have not been tested.
-For =pwsh= and =powershell= the file should be symlinked to have a
-=.ps1= file extension.
+See the [[#support-matrix][support matrix]] for the most up-to-date accounting.  For =pwsh=
+and =powershell= you must symlink to have a =.ps1= file extension.
 
 The shebang block must come before the first line of the file that
 does not start with =#=.
@@ -38,12 +36,56 @@ In this file the block is visible to illustrate how it works.  It uses
 block into other files with =:exports none= set so that it is
 invisible for export.
 
-This block is know not to work on =tcsh= and =csh= due to the use of
-~"${@}"~. However, you can work around the issue by putting a single
-space at the start of the file before the =# -*- mode: org -*-= line.
-This causes the file to run via the default shell (usually =/bin/sh=).
-
 For more see the [[https://emacsconf.org/2021/talks/exec/][EmacsConf 2021 talk]] on executable org files.
+
+* Support matrix
+:PROPERTIES:
+:CUSTOM_ID: support-matrix
+:END:
+
+| shell          | status     | =${shell} shebang.org=              | =./shebang.org=     | runs via       |
+|----------------+------------+-------------------------------------+---------------------+----------------|
+| =bash=         | supported  | yes                                 | yes                 | =bash=         |
+| =bash --posix= | supported  | yes                                 | yes                 | =bash --posix= |
+| =zsh=          | supported  | yes                                 | yes                 | =sh=           |
+| =dash=         | supported  | yes >= 0.5.12 [fn:dashorg]          | yes                 | =sh=           |
+| =pwsh=         | supported  | use =pwsh shebang.ps1= [fn:pwshorg] | use =./shebang.ps1= | =pwsh=         |
+| =powershell=   | supported  | use =powershell shebang.ps1=        | use =./shebang.ps1= | =powershell=   |
+| =tcsh=         | workaround | no                                  | ish [fn:cshorg]     | =sh=           |
+| =fish=         | partial    | no                                  | yes                 | =sh=           |
+
+[fn:pwshorg] In principle =pwsh shebang.org= could work, however there
+is no way to get the file name to pass to emacs without digging around
+in =/proc/$PID/cmdline= and that will only work on linux. This is more
+or less what you need, the problem is the parens in the call to split.
+Also this is almost completely irrelevant because none of this is
+possible on windows powershell and there is pretty much zero chance
+that anyone would be running =pwsh= as their user shell on linux and
+not be entirely ok with symlinking to =.ps1=.
+#+begin_src powershell
+$file = (Get-Content /proc/${PID}/cmdline).Split([char]0x00)[1]
+#+end_src
+
+[fn:dashorg] If you are on a system that has =dash= as =sh= there is a
+bug in versions =<dash-0.5.12= where =set -e= is not honored when a
+redirect failed to be created from a non-forking command grouping.
+
+#+begin_src sh
+set -e; { echo -run;} > ""; echo +print bug $?
+#+end_src
+
+Fix is =f42ee97f9e6fa15b7b6d85bb2faace4cadc1613e= on the =dash= repo.
+It looks like debian already has a patch to backport the fix.
+
+The shebang block will work on versions =<=dash-0.5.12= but beware
+that if the variable =$null= is set then =set -e= will not be honored
+and variables can leak in from the environment. See the explication
+for more details.
+
+[fn:cshorg] This block is know not to work on =tcsh= and =csh= due to
+the use of ~"${@}"~. However, there is a workaround which is to put a
+single space at the start of the file before =# -*- mode: org -*-= on
+the first line. The space causes =tcsh= to run the file via =sh=.
 
 * Windows
 On windows org files must be symlinked to have a =.ps1= file
@@ -76,11 +118,68 @@ the blank lines or add a =#= at the start of the line.
 * Details
 ** Shell
 The following is an explication of the shell lines that make the shebang block portable.
-*** =sh= make sure that a function named ~=~ is in =PATH=
-In =powershell= this is effectively a noop.
-#+begin_src bash :eval never :results none :exports none
-{ __p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > ${null="/dev/null"}
+*** =sh= exit on error
+In =powershell= the is effectively a noop.
+#+begin_src bash
+set -e "-C" "-e" "-e"
 #+end_src
+This is a real doozy. We want to run =set -Ce= for posix =sh= so that
+if something is assigned to the variable =$null= we don't overwrite
+a file with the same name, and we immediately want to exit if null is
+set in that case. We also want to exit if null is set to a path that
+cannot be created .e.g =null=does/not/exist=. Doing this is sufficient
+to protect the rest of the block from further shell insanity.
+
+In =powershell= this calls the =Set-Variable= commandlet and it
+assigns a value of =-e= to the variable =${-e}=. Ideally we
+wouldn't do anything at all here but =Set-Value= requires that
+=-e= (exclude) receive an argument, and then it requires that
+a variable name and a variable value also be passed, otherwise
+it will grab stdin.
+
+We exploit the fact that set accepts repetition of the same
+option multiple times, so we pass ="-e"= twice more so that
+we don't overwrite any elements of the argv.
+
+*** =sh= set value of variable =$null= to point to =/dev/null=
+In =powershell= this is effectively a noop.
+#+begin_src bash
+{ null=/dev/null;} > "${null:=/dev/null}"
+#+end_src
+
+In =sh= this line ensures that if for some insane reason the variable
+=$null= has been set that we override it to point to =/dev/null=.
+
+Under normal circumstances when =$null= is unset, this will merely
+assign =/dev/null= to the variable =$null= twice.
+
+Under the unlikely circumstance that the variable =$null= is set to
+some value an empty file bearing the name that is the value stored in
+the variable =$null= will be created and that file will remain empty.
+
+If for some crazy reason the value in =$null= is a name that cannot be
+created, e.g. because it points to a non-existent directory (e.g.
+=export null=does/not/exist=), then =set -e= will exit and no further
+commands will run due to a failure to create the redirect file.
+
+In =powershell= this creates a script block and redirects it without
+evaluating it to the variable named =null:=/dev/null= which is assumed
+to be undefined on =powershell=. It does NOT redirect to the variable
+=$null= which IS always bound in =powershell= and is what we are
+trying to replicate in =sh= with this line.
+
+*** =sh= make sure that variables are empty and that ~=~ is on the path
+In =powershell= this is effectively a noop.
+#+begin_src bash
+{ args=;file=;MyInvocation=;__p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > "${null}"
+#+end_src
+
+We set variables to the empty string so that there is no chance that
+an existing value might sneak through from the environment.
+
+Both =$args= and ="${@}"= are passed to =emacs= and they should always
+xor because powerhsell uses =$args= and =sh= and friends use =$@=.
+This ensures =$args= is null if for whatever reason it was set.
 
 Annoyingly we have to use =mktemp -d= in order to add ~=~ to the path
 because not only does =dash= not support the =function= keyword, but
@@ -99,13 +198,23 @@ evaluation. This means that as long as you don't put anything too
 syntactically evil inside, =powershell= won't do anything except
 try to print it stdout, which we squash by dumping to =$null=.
 
-We silence the output in =sh= by assigning =$null= to ="/dev/null"=
-using =sh= parameter substitution.
+#+begin_src bash
+{
+    args=;
+    file=;
+    MyInvocation=;
+    __p=$(mktemp -d);
+    touch ${__p}/=;
+    chmod +x ${__p}/=;
+    __op=$PATH;
+    PATH=${__p}:$PATH;
+} > "${null}"
+#+end_src
 
-*** =powershell= assign to =$file=
+*** =powershell= assign =$file=
 In =sh= this line is effectively a noop.
 #+begin_src powershell
-$file= $MyInvocation.MyCommand.Source
+$file = $MyInvocation.MyCommand.Source
 #+end_src
 
 We assign both =powerhsell= and =sh= equivalents to the same variable
@@ -116,46 +225,21 @@ When ~=~ is on path as an empty file calling ~=~ returns =0= and since
 $MyInvocation.MyCommand.Source= which prevents the presence of the
 periods on the line from causing errors.
 
-The space after ~=~ is valid for assignments in =powerhsell= and is
-critical for this line to be effectively a noop in =sh=.
-*** =powerhsell= make errors silent
-In =sh= this line is effectively a noop.
-#+begin_src powershell
-$ErrorActionPreference= "SilentlyContinue"
-#+end_src
+The spaces before and after ~=~ are valid for assignments in
+=powerhsell= important for this line to be a noop in =sh=.
 
-We don't want the machinery of the shebang block to produce any output
-so that we don't pollute stdout for the user.
-
-See the Microsoft docs for details about ="SilentlyContinue"=.
-<https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/
-about_preference_variables?view=powershell-7.3#erroractionpreference>
-
-*** =sh= assign to =$file=
-In =powershell= this produces an error (which we silenced above).
+*** =sh= assign =$file=, remove ~=~ from =PATH=, and clean up after =mktemp=
 #+begin_src bash
-file=$0
+{ file=$0;PATH=$__op;rm ${__p}/=;rmdir ${__p};} > "${null}"
 #+end_src
 
-*** =sh= ensure that =$args= is null
-In =powershell= this produces an error (which we silenced above).
 #+begin_src bash
-args=
-#+end_src
-
-Both =$args= and ="${@}"= are passed to =emacs= and they should always
-xor because powerhsell uses =$args= and =sh= and friends use =$@=.
-This ensures =$args= is null if for whatever reason it was set.
-
-*** =powerhsell= restore display of errors
-In =sh= this line is effectively a noop.
-#+begin_src powershell
-$ErrorActionPreference= "Continue"
-#+end_src
-
-*** =sh= remove ~=~ from =PATH= and clean up after =mktemp=
-#+begin_src bash
-{ PATH=$__op;rm ${__p}/=;rmdir ${__p};} > $null
+{
+    file=$0;
+    PATH=$__op;
+    rm ${__p}/=;
+    rmdir ${__p};
+} > "${null}"
 #+end_src
 
 *** Invoke =emacs=
@@ -188,6 +272,7 @@ implementation of the elisp that is explicated below.
 bash shebang.org --test "w s" 1 2>&1
 dash shebang.org --test "w s" 1 2>&1
 zsh  shebang.org --test "w s" 1 2>&1
+sh   shebang.org --test "w s" 1 2>&1
 pwsh shebang.ps1 --test "w s" 1 2>&1
 #+end_src
 
