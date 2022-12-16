@@ -1,4 +1,4 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1-0; orgstrap-block-checksum: 9ebe57543321887e7de51a74ca285638fc21abdf28f9dbdb8b3d41b49c175316; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1-0; orgstrap-block-checksum: 60dd95bde306a314a45b0c309649e2791fba7d66b8f2def9c35d25714b7c2668; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Orgstrap: Executable Org files
 #+startup: showall
@@ -28,12 +28,12 @@
 #+begin_src bash :eval never :results none :exports none
 { __p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > ${null="/dev/null"}
 $file= $MyInvocation.MyCommand.Source
-$ErrorActionPreference= "silentlycontinue"
+$ErrorActionPreference= "SilentlyContinue"
 file=$0
-args=$@
+args=
 $ErrorActionPreference= "Continue"
 { PATH=$__op;rm ${__p}/=;rmdir ${__p};} > $null
-emacs -batch -no-site-file -eval "(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))" "${file}" -- $args
+emacs -batch -no-site-file -eval "(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))" "${file}" -- ${args} "${@}"
 exit
 <# powershell open
 #+end_src
@@ -1651,7 +1651,7 @@ which is not present in the versions of Org released with Emacs < 26.
 
 # XXX must keep this in sync manually to support old versions of org
 #+name: orgstrap-shebang-body
-: "{ __p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > ${null=\"/dev/null\"}\n$file= $MyInvocation.MyCommand.Source\n$ErrorActionPreference= \"silentlycontinue\"\nfile=$0\nargs=$@\n$ErrorActionPreference= \"Continue\"\n{ PATH=$__op;rm ${__p}/=;rmdir ${__p};} > $null\nemacs -batch -no-site-file -eval \"(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))\" \"${file}\" -- $args\nexit\n<# powershell open"
+: "{ __p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > ${null=\"/dev/null\"}\n$file= $MyInvocation.MyCommand.Source\n$ErrorActionPreference= \"SilentlyContinue\"\nfile=$0\nargs=\n$ErrorActionPreference= \"Continue\"\n{ PATH=$__op;rm ${__p}/=;rmdir ${__p};} > $null\nemacs -batch -no-site-file -eval \"(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))\" \"${file}\" -- ${args} \"${@}\"\nexit\n<# powershell open"
 
 #+caption: init helpers
 #+name: orgstrap-init-helper-defuns
@@ -2151,7 +2151,7 @@ minimal as possible is critical.
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.5                               (ref:orgstrap.el-version)
+;; Version: 1.5.1                             (ref:orgstrap.el-version)
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -2429,6 +2429,13 @@ Things that need to be done for a release.
 :PROPERTIES:
 :CUSTOM_ID: changelog
 :END:
+** 1.5.1
+- Update ~orgstrap--shebang-body~ so that shebang blocks pass args correctly.
+
+  If you use shebang blocks you should update them so that they pass
+  the correct args to emacs. See [[./shebang.org]] for more details on
+  the changes.
+
 ** 1.5
 - Regularize behavior of ~orgstrap-whitelist-file~.
 
