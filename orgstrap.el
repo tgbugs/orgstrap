@@ -3,7 +3,7 @@
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.5
+;; Version: 1.5.1
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -27,7 +27,7 @@
 ;; README.org which is also the literate source for this orgstrap.el
 ;; file in the git repo at
 ;; https://github.com/tgbugs/orgstrap/blob/master/README.org
-;; or whever you can find git:c1b28526ef9931654b72dff559da2205feb87f75
+;; or wherever you can find git:c1b28526ef9931654b72dff559da2205feb87f75
 
 ;; Code in an orgstrap block is usually meant to be executed directly by its
 ;; containing Org file.  However, if the code is something that will be reused
@@ -761,7 +761,7 @@ If a UNIVERSAL-ARGUMENT is supplied then the orgstrap block is always used."
 
 (defun orgstrap-stamp (&optional universal-argument overwrite)
   "Stamp orgstrap block via `orgstrap-clone' to current buffer.
-If UNIVERSAL-ARGUMENT is '(16) aka (C-u C-u) this will OVERWRITE any existing
+If UNIVERSAL-ARGUMENT is \\='(16) aka (C-u C-u) this will OVERWRITE any existing
 block.  If you are not calling this interactively all as (orgstrap-stamp nil t)
 for calirty.  You cannot stamp an orgstrap block into its own buffer."
   (interactive "P")
@@ -1199,7 +1199,7 @@ If no elvs are found goto `point-max' instead."
     (beginning-of-line)))
 
 (defconst orgstrap--shebang-body
-  "{ __p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > ${null=\"/dev/null\"}\n$file= $MyInvocation.MyCommand.Source\n$ErrorActionPreference= \"silentlycontinue\"\nfile=$0\nargs=$@\n$ErrorActionPreference= \"Continue\"\n{ PATH=$__op;rm ${__p}/=;rmdir ${__p};} > $null\nemacs -batch -no-site-file -eval \"(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))\" \"${file}\" -- $args\nexit\n<# powershell open"
+  "{ __p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > ${null=\"/dev/null\"}\n$file= $MyInvocation.MyCommand.Source\n$ErrorActionPreference= \"SilentlyContinue\"\nfile=$0\nargs=\n$ErrorActionPreference= \"Continue\"\n{ PATH=$__op;rm ${__p}/=;rmdir ${__p};} > $null\nemacs -batch -no-site-file -eval \"(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))\" \"${file}\" -- ${args} \"${@}\"\nexit\n<# powershell open"
   "Shebang block body content.")
 
 (defun orgstrap--add-shebang-block ()
