@@ -26,10 +26,6 @@ instead of creating one in the same folder as this init.el file")
    'package-archives
    (cons "melpa" (concat proto "://melpa.org/packages/")) t)
 
-  (add-to-list
-   'package-archives
-   (cons "org" (concat proto "://orgmode.org/elpa/")))
-
   (when no-ssl
     (setq package-check-signature nil)
     (setq tls-program
@@ -68,8 +64,10 @@ instead of creating one in the same folder as this init.el file")
 (setq use-package-always-ensure t)
 
 ;; * org-mode
-(use-package org-plus-contrib
+(use-package org
   :mode ("\\.org\\'" . org-mode))
+
+(use-package orgstrap)
 
 (use-package htmlize)
 
@@ -99,6 +97,7 @@ instead of creating one in the same folder as this init.el file")
 
 (defmacro defpipefun (name &rest body)
   "define a new function for modifying things piped through std* == FUN!"
+  (declare (indent 1))
   `(defun ,name ()
      ;; from https://joelmccracken.github.io/entries/reading-writing-data-in-emacs-batch-via-stdin-stdout/
      ;; NOTE writing a comile-org-forever doesn't seem to work because read-from-minibuffer cannot block
@@ -109,7 +108,7 @@ instead of creating one in the same folder as this init.el file")
            this-read)
        (while (setq this-read (ignore-errors
                                 (read-from-minibuffer "")))
-         (setq to-be-inserted-into-buffer (concat to-be-inserted-into-buffer "\n" this-read)))
+         (setq to-be-inserted-into-buffer (concat to-be-inserted-into-buffer this-read "\n")))
        (with-temp-buffer
          (insert to-be-inserted-into-buffer)
          ,@body
@@ -117,6 +116,13 @@ instead of creating one in the same folder as this init.el file")
 
 (defpipefun compile-org-file
   (org-mode)
+  (org-html-export-as-html))
+(defpipefun compile-org-file-hlv
+  (org-mode)
+  ;; if a file absolutely must have local variables run or set
+  ;; e.g. requires an orgstrap block must call hlv explicitly
+  ;; buffer must be in org-mode otherwise fold region will barf
+  (hack-local-variables)
   (org-html-export-as-html))
 (defpipefun align-tables-org-file
   (org-mode)
