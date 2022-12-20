@@ -67,6 +67,8 @@ instead of creating one in the same folder as this init.el file")
 (use-package org
   :mode ("\\.org\\'" . org-mode))
 
+(use-package org-contrib)
+
 (use-package orgstrap)
 
 (use-package htmlize)
