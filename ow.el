@@ -607,6 +607,8 @@
   ;;(advice-add #'fmakunbound :around #'defl--fmakunbound-local)
   )
 
+(require 'cl-lib)
+
 (defvar ow-forward-subprocess-streams t "Forward streams from subprocesses.")
 
 (defun ow--forward-stream (buffer point printcharfun)
@@ -933,6 +935,69 @@ This retains single confirmation at the entry point for the block."
            prev-end))
         (org-babel-execute-src-block)))))
 
+(defvar ow--org-reloaded nil)
+(defvar ow--org-to-reload '())
+
+(when (< emacs-major-version 26)
+  ;; temp fix for issue in `ob-core'
+  (defun ow--temporary-file-directory ()
+    temporary-file-directory)
+  (defalias 'temporary-file-directory #'ow--temporary-file-directory))
+
+(defun ow-unload-org ()
+  "Unload the builtin version of org used by orgstrap.
+
+On emacs-28 the first time you call this Emacs will likely exit
+will a segfault if you have enabled `native-compile' because it
+tries to return into a native function that was unloaded. This
+does not seem to happen on 29, and it does not happen on all
+subsequent runs."
+  (cl-letf (((symbol-function 'org-compat-unload-function)
+             (lambda ()
+               (setq features (cl-delete-if (lambda (s) (eq s 'org-compat)) features)))))
+    (let ((org-features
+           (cl-loop
+            for f in features
+            ;; XXX `org-compat' redefinitions can remove definitions that have been defined elsewhere
+            ;; and since emacs doesn't keep track of how many times something has been defined in a
+            ;; separate place (ie 1 + 1 = 1) it removes an alias defined and needed elsewhere
+            ;; SUPER unforunately `org-compat' is absolutely critical for reloading `org-macs'
+            when (let ((sn (symbol-name f)))
+                   (or (and (string-match "^\\(org\\|ob\\|ol\\|oc\\)-" sn)
+                            ;; ob-emacs-lisp contains `org-babel-execute:emacs-lisp' which calls this
+                            ;; function, if native-compile is enabled then calling `unload-feature'
+                            ;; on it will cause a segfault when eval tries to jump to the return value
+                            ;; and that memory has be deallocated
+                            (or (not (featurep 'native-compile))
+                                (not (eq f 'ob-emacs-lisp))))
+                       (member sn '("ol" "oc"))))
+            collect (progn '(message "unloading org feature: %s" f) (unload-feature f 'force) f))))
+                                        ;font-lock-unfontify-region-function
+                                        ;font-lock-unfontify-region
+                                        ;org-link--description-folding-spec
+      (let (major-mode)
+        ;; set `major-mode' to nil to avoid `unload--set-major-mode' from triggering
+        ;; a reload of the buffer into `org-mode' causing an infinite loop
+        (unload-feature 'org))
+      (setq ow--org-to-reload (cons 'org-macs (cons 'org org-features))))))
+
+(defun ow-reload-org ()
+  "Reload the version of org on `load-path' after unloading."
+  (cl-loop
+   for f in ow--org-to-reload
+   do (progn
+        ;;(message "f: %s" f)
+        (condition-case nil
+            (require f)
+          (error
+           (format "failed to load %s" f)
+           nil))
+        ;;(message "asserting version ... %s" f)
+        (unless (< emacs-major-version 29)
+          (org-assert-version))))
+  ;; set very early in the call to `org-mode' needed when restarting `org-mode'
+  (setq-local font-lock-unfontify-region-function #'org-unfontify-region))
+
 (defvar ow-package-archives '(("gnu" . "https://elpa.gnu.org/packages/") ; < 26 has http
                               ("melpa" . "https://melpa.org/packages/")
                               ("nongnu" . "https://elpa.nongnu.org/nongnu/")))
@@ -940,7 +1005,7 @@ This retains single confirmation at the entry point for the block."
 (when (< emacs-major-version 26)
   (setq gnutls-algorithm-priority "NORMAL:-VERS-TLS1.3"))
 
-(defun ow-enable-use-package ()
+(defun ow-enable-use-package (&optional want-builtin-org)
   "Do all the setup needed for `use-package'.
 This needs to be called with (eval-when-compile ...) to the top level prior
 to any use of `use-package' otherwise it will be missing and fail"
@@ -948,30 +1013,64 @@ to any use of `use-package' otherwise it will be missing and fail"
   ;; there is only one place that needs to be updated if an archive location
   ;; changes, namely this library, updating that is easier to get right using
   ;; the `reval-update' machinery
-  (require 'package)
-  (when (< emacs-major-version 26)
-    (setq package-archives
-          (cl-remove-if (lambda (p) (equal p '("gnu" . "http://elpa.gnu.org/packages/")))
-                        package-archives))
-    (add-to-list 'package-archives (assoc "gnu" ow-package-archives))
-    (package-initialize)
-    (unless (package-installed-p 'gnu-elpa-keyring-update)
-      (let (os package-check-signature)
-        (setq package-check-signature nil)
-        (package-refresh-contents)
-        (package-install 'gnu-elpa-keyring-update)
-        (warn "You need to restart Emacs for package keyring changes to take effect.")
-        (setq package-check-signature os)))
-    (setq package--initialized nil))
-  (dolist (pair ow-package-archives)
-    (add-to-list 'package-archives pair t))
-  (unless package--initialized
-    (package-initialize))
-  (unless (package-installed-p 'use-package)
-    (package-refresh-contents)
-    (package-install 'use-package))
-  (require 'use-package)
-  (setq use-package-always-ensure t))
+  (let* ((in-elisp-block org-babel-current-src-block-location)
+         (to-reload (and
+                     (not want-builtin-org)
+                     in-elisp-block
+                     (not ow--org-reloaded)
+                     (ow-unload-org)))
+         success)
+    (unwind-protect
+        (progn
+          (require 'package)
+          (when (< emacs-major-version 26)
+            (setq package-archives
+                  (cl-remove-if (lambda (p) (equal p '("gnu" . "http://elpa.gnu.org/packages/")))
+                                package-archives))
+            (add-to-list 'package-archives (assoc "gnu" ow-package-archives))
+            (package-initialize)
+            (unless (package-installed-p 'gnu-elpa-keyring-update)
+              (let (os package-check-signature)
+                (setq package-check-signature nil)
+                (package-refresh-contents)
+                (package-install 'gnu-elpa-keyring-update)
+                (warn "You need to restart Emacs for package keyring changes to take effect.")
+                (setq package-check-signature os)))
+            (setq package--initialized nil))
+          (dolist (pair ow-package-archives)
+            (add-to-list 'package-archives pair t))
+          (unless package--initialized
+            (package-initialize))
+          (unless (package-installed-p 'use-package)
+            (package-refresh-contents)
+            (let (font-lock-global-modes) ; insane stuff in 26
+              (package-install 'use-package)))
+          (require 'use-package)
+          (setq use-package-always-ensure t)
+          (setq success t))
+      (when (and to-reload (not success))
+        (ow-reload-org)))
+    (when (and (not want-builtin-org) in-elisp-block)
+      (unless (assq 'org package-alist)
+        ;; prevent the byte compiler from compiling
+        ;; the org from elpa with the old `org-macs'
+        (require 'org-macs)
+        (unless (< emacs-major-version 29)
+          (org-assert-version))
+        (unload-feature 'org-macs 'force))
+      (let ((ow-file (symbol-file 'ow)) success)
+        (assq-delete-all 'org package--builtins)
+        (assq-delete-all 'org package--builtin-versions)
+        (unwind-protect ; :no-required needed on 29 it seems?
+            (progn (use-package org :no-require t) (setq success t))
+          (when success
+            (unload-feature 'ow) ; need the new org-macs
+            (load ow-file nil t)
+            (setq ow--org-to-reload to-reload))
+          (ow-reload-org)
+          (setq ow--org-reloaded t)
+          (let (enable-local-eval)
+            (org-mode)))))))
 
 (defmacro ow-use-packages (&rest names)
   "enable multiple calls to `use-package' during bootstrap
