@@ -1,4 +1,4 @@
-# -*- mode: org; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1-0; orgstrap-block-checksum: 4c63d6c8e7530621cb615685c2321a931fe20fa4ea206ed97df4b0d9ae69d8a4; -*-
+# -*- mode: org; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1-0; orgstrap-block-checksum: 70fba77659e78be5d617d4340ba5a3b419e11163f6db15e61b763acf43e994e7; -*-
 # [[orgstrap][jump to the orgstrap block for this file]]
 #+title: Executable Org files
 
@@ -10,14 +10,12 @@
 #+header: :exports code
 #+name: orgstrap-shebang
 #+begin_src bash :eval never :results none :exports none
-{ __p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > ${null="/dev/null"}
-$file= $MyInvocation.MyCommand.Source
-$ErrorActionPreference= "silentlycontinue"
-file=$0
-args=$@
-$ErrorActionPreference= "Continue"
-{ PATH=$__op;rm ${__p}/=;rmdir ${__p};} > $null
-emacs -batch -no-site-file -eval "(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))" "${file}" -- $args
+set -e "-C" "-e" "-e"
+{ null=/dev/null;} > "${null:=/dev/null}"
+{ args=;file=;MyInvocation=;__p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > "${null}"
+$file = $MyInvocation.MyCommand.Source
+{ file=$0;PATH=$__op;rm ${__p}/=;rmdir ${__p};} > "${null}"
+emacs -batch -no-site-file -eval "(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))" "${file}" -- ${args} "${@}"
 exit
 <# powershell open
 #+end_src
@@ -44,11 +42,56 @@ In this file the block is visible to illustrate how it works.  It uses
 block into other files with =:exports none= set so that it is
 invisible for export.
 
-Annoyingly we have to use =mktemp -d= in order to add ~=~ to the path
-because not only does =dash= not support the =function= keyword, but
-it also arbitrarily prevents defining a function with the name ~=~. As
-a result the only portable way to get ~=~ on path is to create an
-executable file for it.
+For more see the [[https://emacsconf.org/2021/talks/exec/][EmacsConf 2021 talk]] on executable org files.
+
+* Support matrix
+:PROPERTIES:
+:CUSTOM_ID: support-matrix
+:END:
+
+| shell          | status     | =${shell} shebang.org=              | =./shebang.org=     | runs via       |
+|----------------+------------+-------------------------------------+---------------------+----------------|
+| =bash=         | supported  | yes                                 | yes                 | =bash=         |
+| =bash --posix= | supported  | yes                                 | yes                 | =bash --posix= |
+| =zsh=          | supported  | yes                                 | yes                 | =sh=           |
+| =dash=         | supported  | yes >= 0.5.12 [fn:dashorg]          | yes                 | =sh=           |
+| =pwsh=         | supported  | use =pwsh shebang.ps1= [fn:pwshorg] | use =./shebang.ps1= | =pwsh=         |
+| =powershell=   | supported  | use =powershell shebang.ps1=        | use =./shebang.ps1= | =powershell=   |
+| =tcsh=         | workaround | no                                  | ish [fn:cshorg]     | =sh=           |
+| =fish=         | partial    | no                                  | yes                 | =sh=           |
+
+[fn:pwshorg] In principle =pwsh shebang.org= could work, however there
+is no way to get the file name to pass to emacs without digging around
+in =/proc/$PID/cmdline= and that will only work on linux. This is more
+or less what you need, the problem is the parens in the call to split.
+Also this is almost completely irrelevant because none of this is
+possible on windows powershell and there is pretty much zero chance
+that anyone would be running =pwsh= as their user shell on linux and
+not be entirely ok with symlinking to =.ps1=.
+#+begin_src powershell
+$file = (Get-Content /proc/${PID}/cmdline).Split([char]0x00)[1]
+#+end_src
+
+[fn:dashorg] If you are on a system that has =dash= as =sh= there is a
+bug in versions =<dash-0.5.12= where =set -e= is not honored when a
+redirect failed to be created from a non-forking command grouping.
+
+#+begin_src sh
+set -e; { echo -run;} > ""; echo +print bug $?
+#+end_src
+
+Fix is =f42ee97f9e6fa15b7b6d85bb2faace4cadc1613e= on the =dash= repo.
+It looks like debian already has a patch to backport the fix.
+
+The shebang block will work on versions =<=dash-0.5.12= but beware
+that if the variable =$null= is set then =set -e= will not be honored
+and variables can leak in from the environment. See the explication
+for more details.
+
+[fn:cshorg] This block is know not to work on =tcsh= and =csh= due to
+the use of ~"${@}"~. However, there is a workaround which is to put a
+single space at the start of the file before =# -*- mode: org -*-= on
+the first line. The space causes =tcsh= to run the file via =sh=.
 
 * Windows
 On windows org files must be symlinked to have a =.ps1= file
@@ -79,6 +122,185 @@ named the carriage return variable =\r=. To fix this either remove
 the blank lines or add a =#= at the start of the line.
 
 * Details
+** Shell
+The following is an explication of the shell lines that make the shebang block portable.
+*** =sh= exit on error
+In =powershell= the is effectively a noop.
+#+begin_src bash
+set -e "-C" "-e" "-e"
+#+end_src
+This is a real doozy. We want to run =set -Ce= for posix =sh= so that
+if something is assigned to the variable =$null= we don't overwrite
+a file with the same name, and we immediately want to exit if null is
+set in that case. We also want to exit if null is set to a path that
+cannot be created .e.g =null=does/not/exist=. Doing this is sufficient
+to protect the rest of the block from further shell insanity.
+
+In =powershell= this calls the =Set-Variable= commandlet and it
+assigns a value of =-e= to the variable =${-e}=. Ideally we
+wouldn't do anything at all here but =Set-Value= requires that
+=-e= (exclude) receive an argument, and then it requires that
+a variable name and a variable value also be passed, otherwise
+it will grab stdin.
+
+We exploit the fact that set accepts repetition of the same
+option multiple times, so we pass ="-e"= twice more so that
+we don't overwrite any elements of the argv.
+
+*** =sh= set value of variable =$null= to point to =/dev/null=
+In =powershell= this is effectively a noop.
+#+begin_src bash
+{ null=/dev/null;} > "${null:=/dev/null}"
+#+end_src
+
+In =sh= this line ensures that if for some insane reason the variable
+=$null= has been set that we override it to point to =/dev/null=.
+
+Under normal circumstances when =$null= is unset, this will merely
+assign =/dev/null= to the variable =$null= twice.
+
+Under the unlikely circumstance that the variable =$null= is set to
+some value an empty file bearing the name that is the value stored in
+the variable =$null= will be created and that file will remain empty.
+
+If for some crazy reason the value in =$null= is a name that cannot be
+created, e.g. because it points to a non-existent directory (e.g.
+=export null=does/not/exist=), then =set -e= will exit and no further
+commands will run due to a failure to create the redirect file.
+
+In =powershell= this creates a script block and redirects it without
+evaluating it to the variable named =null:=/dev/null= which is assumed
+to be undefined on =powershell=. It does NOT redirect to the variable
+=$null= which IS always bound in =powershell= and is what we are
+trying to replicate in =sh= with this line.
+
+*** =sh= make sure that variables are empty and that ~=~ is on the path
+In =powershell= this is effectively a noop.
+#+begin_src bash
+{ args=;file=;MyInvocation=;__p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > "${null}"
+#+end_src
+
+We set variables to the empty string so that there is no chance that
+an existing value might sneak through from the environment.
+
+Both =$args= and ="${@}"= are passed to =emacs= and they should always
+xor because powerhsell uses =$args= and =sh= and friends use =$@=.
+This ensures =$args= is null if for whatever reason it was set.
+
+Annoyingly we have to use =mktemp -d= in order to add ~=~ to the path
+because not only does =dash= not support the =function= keyword, but
+it also arbitrarily prevents defining a function with the name ~=~. As
+a result the only portable way to get ~=~ on path is to create an
+executable file for it.
+
+=mktemp= has not been standardized as part of posix. However, I have
+tested the default behavior of =mktemp -d= for the variants provided
+by =gnu=, =busybox=, =macos=, and =FreeBSD= and they all produce paths
+with no spaces. This means that the use of =${__p}= without quotes
+should be safe. See https://unix.stackexchange.com/q/614808 for more.
+
+In =powerhsell= the curly braces demarcate a script block which defers
+evaluation. This means that as long as you don't put anything too
+syntactically evil inside, =powershell= won't do anything except
+try to print it stdout, which we squash by dumping to =$null=.
+
+#+begin_src bash
+{
+    args=;
+    file=;
+    MyInvocation=;
+    __p=$(mktemp -d);
+    touch ${__p}/=;
+    chmod +x ${__p}/=;
+    __op=$PATH;
+    PATH=${__p}:$PATH;
+} > "${null}"
+#+end_src
+
+*** =powershell= assign =$file=
+In =sh= this line is effectively a noop.
+#+begin_src powershell
+$file = $MyInvocation.MyCommand.Source
+#+end_src
+
+We assign both =powerhsell= and =sh= equivalents to the same variable
+to simplify passing it to =emacs= later in the block.
+
+When ~=~ is on path as an empty file calling ~=~ returns =0= and since
+=$file= is null this line is equivalent to running =/bin/true
+$MyInvocation.MyCommand.Source= which prevents the presence of the
+periods on the line from causing errors.
+
+The spaces before and after ~=~ are valid for assignments in
+=powerhsell= important for this line to be a noop in =sh=.
+
+*** =sh= assign =$file=, remove ~=~ from =PATH=, and clean up after =mktemp=
+#+begin_src bash
+{ file=$0;PATH=$__op;rm ${__p}/=;rmdir ${__p};} > "${null}"
+#+end_src
+
+#+begin_src bash
+{
+    file=$0;
+    PATH=$__op;
+    rm ${__p}/=;
+    rmdir ${__p};
+} > "${null}"
+#+end_src
+
+*** Invoke =emacs=
+#+begin_src bash
+emacs -batch -no-site-file -eval "(org-shebang)" "${file}" -- ${args} "${@}"
+#+end_src
+
+The exact use of =$args= or =${args}= and ="${@}"= is critical for =emacs=
+to receive the correct values in =argv=.
+
+=${args}= is used instead of =$args= in the event that in =sh= someone
+somehow has =a=, =ar=, or =arg= bound as a variable.
+
+Critically =${args}= must NOT be quoted, otherwise =powershell= will
+pass a single string rather than an array.
+
+Critically ="${@}"= must BE quoted, otherwise =sh= will split args
+with spaces and pass them as individual arguments to =emacs=.
+
+Note that =$@= MUST NOT BE ASSIGNED TO ANOTHER VARIABLE. The behavior
+of assigning =$@= to another variable is unspecified. See
+https://unix.stackexchange.com/a/532163 and
+<https://pubs.opengroup.org/onlinepubs/9699919799.2018edition/
+utilities/V3_chap02.html#tag_18_05_02>
+
+Note that ="(org-shebang)"= is an imagined future builtin
+implementation of the elisp that is explicated below.
+
+#+begin_src bash :results code :wrap example
+bash shebang.org --test "w s" 1 2>&1
+dash shebang.org --test "w s" 1 2>&1
+zsh  shebang.org --test "w s" 1 2>&1
+sh   shebang.org --test "w s" 1 2>&1
+pwsh shebang.ps1 --test "w s" 1 2>&1
+#+end_src
+
+*** Exit after we finish running the file in emacs
+#+begin_src bash
+exit
+#+end_src
+
+*** Keep powershell syntax checking happy
+In =sh= this line never runs and is never parsed.
+#+begin_src powershell
+<# powershell open
+#+end_src
+
+=powershell= parses the entire contents of a =.ps1= file to ensure
+that it is well formed before running any individual command.
+
+In =sh= we don't have to worry about this because the semantics of
+=sh= are to operate line by line, so in principle we can put anything
+we want after the call to =exit= and =sh= won't ever care.
+
+** Emacs Lisp
 A breakdown of the elisp that appears in the =-eval= string.
 #+name: shebang-explication
 #+begin_src elisp :lexical yes
@@ -184,12 +406,55 @@ emacs -q -Q -eval "(let ((file (pop argv))) (find-file-literally file) (hack-loc
 
 #+name: orgstrap
 #+begin_src elisp :results none :lexical yes :noweb yes
+;;(message "in-elisp-block: %s" org-babel-current-src-block-location)
+(defvar sigh 0)
+(defvar --test t)
+(setq sigh (1+ sigh))
+(when (or noninteractive --test)
+  (setq user-emacs-directory "~/.emacs.d/orgstrap-test-10/")
+  (setq package-user-dir (concat user-emacs-directory (format "elpa-%s" emacs-major-version))))
+
+(when (> sigh 2)
+  (toggle-debug-on-error)
+  (error "WHAT HAVE YOU DONE"))
+
+;(message "I am an executable Org file!") ; (ref:test)
+;(message "file name is: %S" buffer-file-name)
+;(message "file truename is: %S" buffer-file-truename)
+;<<nowhere>>
+
+(unless (featurep 'ow) (load "~/git/orgstrap/ow.el"))
+
+;(ow-unload-org)
+(toggle-debug-on-error)
+;(ow-enable-use-package 'want-builtin-org)
+(ow-enable-use-package)
+;(unless (assq 'org package-alist)
+;  ;; prevent the byte compiler from compiling
+;  ;; the org from elpa with the old `org-macs'
+;  (require 'org-macs)
+;  (org-assert-version)
+;  (unload-feature 'org-macs 'force))
+(assq-delete-all 'org package--builtins)
+(assq-delete-all 'org package--builtin-versions)
+(ow-use-packages
+ org)
+;(yes-or-no-p "continue?\n")
+;(load "~/git/orgstrap/ow.el") ; have to reload this with the new version of org present
+;(ow-reload-org)
+;;(ow-unload-reload-org)
+(require 'org)
+(message "ov: %s" (org-version))
+#+end_src
+
+#+name: orgstrap-
+#+begin_src elisp :results none :lexical yes :noweb yes
 (defvar sigh 0)
 (defvar --test t)
 (setq sigh (1+ sigh))
 ;(toggle-debug-on-error)
 (when (or noninteractive --test)
-  (setq user-emacs-directory "~/.emacs.d/orgstrap-test-17/")
+  (setq user-emacs-directory "~/.emacs.d/orgstrap-test-5/")
   (setq package-user-dir (concat user-emacs-directory (format "elpa-%s" emacs-major-version)))
   )
 
@@ -200,107 +465,116 @@ emacs -q -Q -eval "(let ((file (pop argv))) (find-file-literally file) (hack-loc
 ;(require 'cl-generic)
 ;(require 'loadhist)
 
-(defvar ow--org-to-reload '())
+;(defvar ow--org-to-reload '())
 
-(defun org-compat-unload-function ()
-  (message "WHAEEEEEEEEEEEEEEEEEEEEEEEE")
-  ;; `org-compat' is the first require for org and it itself requires org-macs
-  ;; if it is not fake unloaded then org-macs will not be rerequired, however
-  ;; we cannot unload org-compat itself because it defines variables that are
-  ;; also defined elsewhere, bug in org-compat wrt `pcomplete-uniqify-list'?
-  (setq features (cl-delete-if (lambda (s) (eq s 'org-compat)) features)))
-
-(defun ow--org-unload-all-features ()
-  "I'm pretty sure we only need to call this inside `ow-enable-use-package'.
-Verify that this is actually the case. It seems that sometimes on a first run
-the call to reload would need to be after the new org version was downloaded."
-  ;; apparently unload-feature has a giant blast radius
-  ;; and somehow its things like the alias for `pcomplete-uniqify-list'
-  ;; (see comment below on `org-compat')
-  (let ((out (cl-loop
-              for f in features
-              ;; XXX `org-compat' redefinitions can remove definitions that have been defined elsewhere
-              ;; and since emacs doesn't keep track of how many times something has been defined in a
-              ;; separate place (ie 1 + 1 = 1) it removes an alias defined and needed elsewhere
-              ;; SUPER unforunately `org-compat' is absolutely critical for reloading `org-macs'
-              when (or (and (string-match "^\\(org\\|ob\\)-" (symbol-name f)) '(not (eq f 'org-compat)))
-                       ;;(eq f 'org) ; WAT somehow this causes infinite attempts to rerun this file !? ; ah right because require 'org will cause local variables to be re-executed duh
-                       nil)
-              collect (progn (message "org feature: %s" f) (unload-feature f 'force) f))))
-
-    (let (major-mode) ; enable-local-eval
-      ;; for some reason unloading org causes the buffer to reload itself?
-      ;; an not quite, it is `unload--set-major-mode' is causing all the issues here
-      ;; it looks like setting `major-mode' to nil for a moment will resolve the issue
-      (unload-feature 'org))
-    ;; on rerequire org must be last so that `org-macs' is already loaded, otherwise `org-assert-version' will fail
-    '
-    (cons 'org-macs (append out '(org)))
-    (cons 'org-macs (cons 'org out))
-    ))
-
-(defun ow--org-reload-features ()
-  ;; I swear we had this all working ... and now something to tweaked and is broken again
-  ;; XX oh ... its the bloody bytecode it would seem
-  (cl-loop for f in ow--org-to-reload
-           do (progn
-                (message "f: %s" f)
-                (condition-case nil
-                    (require f)
-                  (error
-                   (message "failed to load %s" f)
-                   nil))
-                (message "asserting version ... %s" f)
-                (org-assert-version))))
-
-'
-(defun loadhist-unload-element (e)
-;(cl-defmethod loadhist-unload-element ((e (head cl-defmethod)))
-  "this runs over every bloody symbol wtf"
-  ;;(message "the wat %S %S" e (type-of e))
-  '
-  (cond
-   ((consp e)
-    ;;(message "watoff cons %s" e)
-    (pcase (car e)
-      ('defun (fmakunbound (cdr e)))
-      ('require (message "don't bother require"))
-      ('provide (message "don't bother provide"))
-      ('defface (message "can't really remove defface"))
-      (t (message "unhanded %s" e))))
-   ((symbol-function e) (fmakunbound e))
-   ((symbolp e) (progn (message "WHAT THE WAT ARE YOU DOING %S" e) (makunbound e)))
-   (t (message "wating what %S" e))
-   )
-  nil)
-
-
-(message "I am an executable Org file!") ; (ref:test)
-(message "file name is: %S" buffer-file-name)
-(message "file truename is: %S" buffer-file-truename)
-<<nowhere>>
+;(defun ow--org-compat-unload-function ()
+;  ;;(message "WHAEEEEEEEEEEEEEEEEEEEEEEEE")
+;  ;; this function is called implicitly when calling `unload-feature' on `org-compat'
+;  ;; `org-compat' is the first require for org and it itself requires org-macs
+;  ;; if it is not fake unloaded then org-macs will not be rerequired, however
+;  ;; we cannot unload org-compat itself because it defines variables that are
+;  ;; also defined elsewhere, bug in org-compat wrt `pcomplete-uniqify-list'?
+;  (setq features (cl-delete-if (lambda (s) (eq s 'org-compat)) features)))
+;
+;(defun ow--org-unload-all-features ()
+;  "I'm pretty sure we only need to call this inside `ow-enable-use-package'.
+;Verify that this is actually the case. It seems that sometimes on a first run
+;the call to reload would need to be after the new org version was downloaded."
+;  ;; apparently `unload-feature' has a giant blast radius
+;  ;; and somehow its things like the alias for `pcomplete-uniqify-list'
+;  ;; (see comment below on `org-compat')
+;  (defalias 'org-compat-unload-function 'ow--org-compat-unload-function)
+;  (let ((out (cl-loop
+;              for f in features
+;              ;; XXX `org-compat' redefinitions can remove definitions that have been defined elsewhere
+;              ;; and since emacs doesn't keep track of how many times something has been defined in a
+;              ;; separate place (ie 1 + 1 = 1) it removes an alias defined and needed elsewhere
+;              ;; SUPER unforunately `org-compat' is absolutely critical for reloading `org-macs'
+;              when (or (and (string-match "^\\(org\\|ob\\)-" (symbol-name f))
+;                            '(not (eq f 'org-compat))
+;                            ;; ob-emacs-lisp contains `org-babel-execute:emacs-lisp' which calls this
+;                            ;; function, if native-compile is enabled then calling `unload-feature'
+;                            ;; on it will cause a segfault when eval tries to jump to the return value
+;                            ;; and that memory has be deallocated
+;                            (and (featurep 'native-compile)
+;                                 (not (eq f 'ob-emacs-lisp))))
+;                       ;;(eq f 'org) ; WAT somehow this causes infinite attempts to rerun this file !? ; ah right because require 'org will cause local variables to be re-executed duh
+;                       nil)
+;              collect (progn (message "org feature: %s" f) (unload-feature f 'force) f))))
+;
+;    (let (major-mode) ; enable-local-eval
+;      ;; for some reason unloading org causes the buffer to reload itself?
+;      ;; an not quite, it is `unload--set-major-mode' is causing all the issues here
+;      ;; it looks like setting `major-mode' to nil for a moment will resolve the issue
+;      (unload-feature 'org))
+;    ;; on rerequire org must be last so that `org-macs' is already loaded, otherwise `org-assert-version' will fail
+;    '
+;    (cons 'org-macs (append out '(org)))
+;    (cons 'org-macs (cons 'org out))
+;    ))
+;
+;(defun ow--org-reload-features ()
+;  (message "FUCK %S" ow--org-to-reload)
+;  ;; I swear we had this all working ... and now something to tweaked and is broken again
+;  ;; XX oh ... its the bloody bytecode it would seem
+;  (cl-loop for f in ow--org-to-reload
+;           do (progn
+;                (message "f: %s" f)
+;                (condition-case nil
+;                    (require f)
+;                  (error
+;                   (format "failed to load %s" f)
+;                   nil))
+;                (message "asserting version ... %s" f)
+;                (org-assert-version))))
+;
+;'
+;(defun loadhist-unload-element (e)
+;;(cl-defmethod loadhist-unload-element ((e (head cl-defmethod)))
+;  "this runs over every bloody symbol wtf"
+;  ;;(message "the wat %S %S" e (type-of e))
+;  '
+;  (cond
+;   ((consp e)
+;    ;;(message "watoff cons %s" e)
+;    (pcase (car e)
+;      ('defun (fmakunbound (cdr e)))
+;      ('require (message "don't bother require"))
+;      ('provide (message "don't bother provide"))
+;      ('defface (message "can't really remove defface"))
+;      (t (message "unhanded %s" e))))
+;   ((symbol-function e) (fmakunbound e))
+;   ((symbolp e) (progn (message "WHAT THE WAT ARE YOU DOING %S" e) (makunbound e)))
+;   (t (message "wating what %S" e))
+;   )
+;  nil)
+;
+;
+;(message "I am an executable Org file!") ; (ref:test)
+;(message "file name is: %S" buffer-file-name)
+;(message "file truename is: %S" buffer-file-truename)
+;<<nowhere>>
 (unless (featurep 'ow) (load "~/git/orgstrap/ow.el"))
 
 (when (or noninteractive --test)
-  (setq ow--org-to-reload (ow--org-unload-all-features))
-  (message "ootr: %s" ow--org-to-reload)
+  (ow-unload-org)
+  ;(setq ow--org-to-reload (ow--org-unload-all-features))
+  ;;(message "ootr: %s" ow--org-to-reload)
   (when (featurep 'org-macs) (error "YOU SHOULD HAVE BEEN REMOVED 1"))
   )
 
-'
-(let ((sigh (org-release)))
-  (message "WATING SIGH %s" sigh)
-  (defun old-org-release () sigh))
-'
-(defmacro org-assert-version () 't)
+;(let ((sigh (org-release)))
+;  (message "WATING SIGH %s" sigh)
+;  (defun old-org-release () sigh))
+;(defmacro org-assert-version () 't)
 
 ;org-confirm-babel-evaluate
 (when t
   (ow-enable-use-package)
   ;;(assq-delete-all 'org package-alist)
-  (message "wat-pal: %s" (assq 'org package-alist))
-  (message "wat-pactl: %s" (assq 'org package-activated-list))
-  (message "wat-psp: %s" (assq 'org package-selected-packages))
+  ;;(message "wat-pal: %s" (assq 'org package-alist))
+  ;;(message "wat-pactl: %s" (assq 'org package-activated-list))
+  ;;(message "wat-psp: %s" (assq 'org package-selected-packages))
   (assq-delete-all 'org package--builtins)
   (assq-delete-all 'org package--builtin-versions)
   ;; yep, if org is already installed at this point we need to call
@@ -308,53 +582,57 @@ the call to reload would need to be after the new org version was downloaded."
   ;; will not be required correctly
   ;; this will destroy the universe
   (when (featurep 'org-macs) (error "YOU SHOULD HAVE BEEN REMOVED 2"))
-  (let ((no-byte-compile
-         (> emacs-major-version 28) ; cannot byte compile on 29 otherwise breaks on 2..n run
-         ))
-    ;; XXX so apparently byte compiling can happen, but we need to build and install org up here
-    ;; before or something to avoid some issue below or something ??!
-    (ow-use-packages
-     ;;org
-     (org
-      :no-require t ; XXX strictly required on 29 for some reason ??? but requires no-byte-compile as well ???
-      :init
-      (when (featurep 'org-macs)
-        ;; I have no idea how, but somehow this thing gets loaded again despite no-require
-        ;; being set, and it is the stale version that gets loaded, likely due to some
-        ;; autoload sequencing issue that pulls in the old versions, which tells me that
-        ;; there might be other issues lurking related to that so should test all of them
-        (unload-feature 'org-macs 'force))
-      (when (featurep 'org-macs) (error "YOU SHOULD HAVE BEEN REMOVED 3"))
-          )
-     ;; lol amazing a segfault
-                                ))
+;'
+;  (let ((no-byte-compile
+;         (and nil
+;              (> emacs-major-version 28) ; cannot byte compile on 29 otherwise breaks on 2..n run
+;              )))
+;    ;; XXX so apparently byte compiling can happen, but we need to build and install org up here
+;    ;; before or something to avoid some issue below or something ??!
+;    (ow-use-packages
+;     ;;org
+;     (org
+;      :no-require t ; XXX strictly required on 29 for some reason ??? but requires no-byte-compile as well ???
+;      :init
+;      (when (featurep 'org-macs)
+;        ;; I have no idea how, but somehow this thing gets loaded again despite no-require
+;        ;; being set, and it is the stale version that gets loaded, likely due to some
+;        ;; autoload sequencing issue that pulls in the old versions, which tells me that
+;        ;; there might be other issues lurking related to that so should test all of them
+;        (unload-feature 'org-macs 'force))
+;      (when (featurep 'org-macs) (error "YOU SHOULD HAVE BEEN REMOVED 3"))
+;      )
+;     ;; lol amazing a segfault (see notes below for why it is probably happening, re: unloading a function calling this code)
+;     ))
   (when (assq 'org package-alist)
-     (message "wat weheheheheh")
+     ;;(message "wat weheheheheh")
      (when (featurep 'org-macs) (error "YOU SHOULD HAVE BEEN REMOVED 4"))
      (require 'org-macs)
      (org-assert-version)
-     (ow--org-reload-features)
+     (progn (load "~/git/orgstrap/ow.el") (ow-reload-org)) ; NOW AINT THAT SOME SHIT
+     ;(ow--org-reload-features)
      )
   ;;(mapcar #'require ow--org-to-reload)
-  (message "we're done here?" )
+;  (message "we're done here?")
                                         ;(message "%s" features)
                                         ;(cl-loop for f in features when (regexp-match-string (symbol-name f)))
                                         ;(unload-feature 'org-macs 'force)
                                         ;(unload-feature 'org 'force)
   ;;(require 'org))
+  (require 'org)
   (let ((gt26 (>= emacs-major-version 26)))
     (ow-use-packages
-     csv-mode
-     rainbow-delimiters
-     orgstrap ; XXX unload of org causes issues here
-     (when gt26 jupyter)
-     (cypher-mode
-      :init
-      (defface cypher-pattern-face
-        '((t :foreground "DeepPink" :background unspecified :bold t))
-        "Face for pattern struct." :group 'cypher-faces))
-     sparql-mode
-     ob-cypher
+;     csv-mode
+;     rainbow-delimiters
+;     orgstrap ; XXX unload of org causes issues here
+;     (when gt26 jupyter)
+;     (cypher-mode
+;      :init
+;      (defface cypher-pattern-face
+;        '((t :foreground "DeepPink" :background unspecified :bold t))
+;        "Face for pattern struct." :group 'cypher-faces))
+;     sparql-mode
+;     ob-cypher
      (org
       :no-require t ; when loading via orgstrap have to use no-require to avoid missing def issues ??
       :mode ("\\.org\\'" . org-mode)
@@ -370,7 +648,7 @@ the call to reload would need to be after the new org version was downloaded."
                                         ;(message "WAT")
                                         ;(message "ffs %s" (org-version))
       ;(require 'org)
-      (message "not quiet it seems?")
+;      (message "not quiet it seems?")
       ;(symbol-function #'org-babel-do-load-languages)
       ;; some aliasing asdfwatery it seems?
       ;; #'pcomplete-uniquify-list
@@ -378,9 +656,9 @@ the call to reload would need to be after the new org version was downloaded."
       ;tramp-use-absolute-autoload-file-names
       ;(require 'pcomplete)
       ;'org-macs
-      (message "what the asdfwatery is this? %S" (symbol-function #'pcomplete-uniquify-list))
+;      (message "what the asdfwatery is this? %S" (symbol-function #'pcomplete-uniquify-list))
       ;(require 'python)
-      (message "here?")
+;      (message "here?")
       ;org-babel-tangle-lang-exts
       ;(require 'ob-tangle) ; not needed if we do the reload above ?
       (org-babel-do-load-languages
@@ -392,10 +670,28 @@ the call to reload would need to be after the new org version was downloaded."
 
 (ow-cli-gen
     ((:test))
-  (message "running ow-cli-gen block ..."))
-(message "post cli-gen")
+  (message "running ow-cli-gen block ...")
+;  (ow-babel-eval "test-block")
+)
+;(message "post cli-gen")
+(message "ov: %s" (org-version))
+;; segfault happens in native-lisp rfc2045 eln
+;; /usr/lib64/emacs/29.0.60/native-lisp/29.0.60-a809dc46/rfc2045-713c994b-f037c7c2.eln
+;; (require 'rfc2045) ; uhhhh this is a really small file !?
+
+;(error "segfault will happen on >= 28 if we don't error here? something in the post cleanup?")
+; I think this happens because we unload org-babel-execute:emacs-lisp in the middle of calling it
+; because it was a compiled version coming from the builtin ob-emacs-lisp.eln, ugh what a fucking
+; mess this is
+;(org-babel-execute:elisp)
+;(org-babel-execute-src-block) ; look for `result' in here
 ;(require 'ob)
 ;(require 'ob-core)
+#+end_src
+
+#+name: test-block
+#+begin_src elisp
+(message "evaling elisp ok")
 #+end_src
 
 [[(test)]] Make sure coderefs work.
