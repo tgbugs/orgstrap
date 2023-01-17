@@ -1013,12 +1013,16 @@ to any use of `use-package' otherwise it will be missing and fail"
   ;; there is only one place that needs to be updated if an archive location
   ;; changes, namely this library, updating that is easier to get right using
   ;; the `reval-update' machinery
-  (let* ((in-elisp-block org-babel-current-src-block-location)
-         (to-reload (and
-                     (not want-builtin-org)
-                     in-elisp-block
-                     (not ow--org-reloaded)
-                     (ow-unload-org)))
+  (let* ((in-elisp-block
+          (and
+           (boundp 'org-babel-current-src-block-location)
+           org-babel-current-src-block-location))
+         (to-reload
+          (and
+           (not want-builtin-org)
+           in-elisp-block
+           (not ow--org-reloaded)
+           (ow-unload-org)))
          success)
     (unwind-protect
         (progn
