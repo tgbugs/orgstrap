@@ -1285,9 +1285,11 @@ All errors are silenced."
         result
       (apply fun args))))
 
-(defun ow-babel-eval (block-name &optional universal-argument)
+(defun ow-babel-eval (block-name &optional universal-argument error-on-fail)
   "Use to confirm running a chain of dependent blocks starting with BLOCK-NAME.
-This retains single confirmation at the entry point for the block."
+This retains single confirmation at the entry point for the block.
+If ERROR-ON-FAIL is non-nil then an error will be raised by overriding
+`org-babel-eval-error-notify' via cl-letf."
   ;; TODO consider a header arg for a variant of this in org babel proper
   (interactive "P")
   (let ((org-confirm-babel-evaluate (lambda (_l _b) nil))) ;; FIXME TODO set messages buffer size to nil
@@ -1301,7 +1303,17 @@ This retains single confirmation at the entry point for the block."
             (progn
               ;; FIXME optionally raise errors on failure here !?
               (advice-add #'org-babel-insert-result :around #'ow--results-silent)
-              (org-babel-execute-src-block))
+              (if error-on-fail
+                  (cl-letf
+                      (((symbol-function 'org-babel-eval-error-notify)
+                        (lambda (exit-code stderr)
+                          (error "Babel evaluation of %S failed with %s%s%s"
+                                 block-name
+                                 exit-code
+                                 (if stderr "\n" "")
+                                 (if stderr stderr "")))))
+                    (org-babel-execute-src-block))
+                (org-babel-execute-src-block)))
           (advice-remove #'org-babel-insert-result #'ow--results-silent))))))
 
 (defun ow-babel-eval-closest-block (&optional universal-argument)
