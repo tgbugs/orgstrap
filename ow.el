@@ -1034,11 +1034,14 @@ to any use of `use-package' otherwise it will be missing and fail"
            (not want-builtin-org)
            in-elisp-block
            (not ow--org-reloaded)
+           (or (featurep 'package) (require 'package))
+           (assq 'org package--builtins) ; trying to reload a non-builtin org e.g. from elpa a nightmare
            (ow-unload-org)))
          success)
     (unwind-protect
         (progn
-          (require 'package)
+          (unless to-reload
+            (require 'package))
           (when (< emacs-major-version 26)
             (setq package-archives
                   (cl-remove-if (lambda (p) (equal p '("gnu" . "http://elpa.gnu.org/packages/")))
@@ -1066,7 +1069,7 @@ to any use of `use-package' otherwise it will be missing and fail"
           (setq success t))
       (when (and to-reload (not success))
         (ow-reload-org)))
-    (when (and (not want-builtin-org) in-elisp-block)
+    (when to-reload
       (unless (assq 'org package-alist)
         ;; prevent the byte compiler from compiling
         ;; the org from elpa with the old `org-macs'
