@@ -3543,7 +3543,7 @@ This saves about 300 chars over the current minimal version.
    (string< n a)
    (string= n a)
    (error "Org too old! %s < %s" a n))
-  (defun orgstrap-norm-func--prp-1\.1 (body)
+  (defun orgstrap-norm-func--prp-1-1 (body)
     (let (print-quoted print-length print-level)
       (prin1-to-string (read (concat "(progn\n" body "\n)")))))
   (unless (fboundp #'orgstrap-norm)
