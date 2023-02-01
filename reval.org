@@ -1,4 +1,3 @@
-# -*- orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--prp-1\.1; orgstrap-block-checksum: fb8352bcba83b3cc06916b3e456c930ee2e9a790fd575f1c7552e004d823560b; -*-
 #+title: Reval: Evaluate remote elisp code
 
 * Introduction
