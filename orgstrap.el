@@ -3,7 +3,7 @@
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.5.2
+;; Version: 1.5.3
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -293,7 +293,8 @@ unsafe-vars risky-vars dir-name)."
              (when (eq org-confirm-babel-evaluate #'orgstrap--confirm-eval)
                ;; XXX allow orgstrap blocks to set ocbe so audit for that
                (setq-local org-confirm-babel-evaluate ocbe))
-             (org-set-visibility-according-to-property))
+             (ignore-errors
+               (org-set-visibility-according-to-property)))
          ;; FIXME warn or error here?
          (warn "No orgstrap block.")))))
 
@@ -1024,7 +1025,8 @@ _BODY is rederived for portability and thus not used."
             (when (eq org-confirm-babel-evaluate #'orgstrap--confirm-eval)
               ;; XXX allow orgstrap blocks to set ocbe so audit for that
               (setq-local org-confirm-babel-evaluate ocbe))
-            (org-set-visibility-according-to-property))
+            (ignore-errors
+              (org-set-visibility-according-to-property)))
         ;; FIXME warn or error here?
         (warn "No orgstrap block.")))))
 
