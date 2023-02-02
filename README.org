@@ -1,4 +1,4 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1-0; orgstrap-block-checksum: 5848dfa705815f0145c2453a8b9162a0c879b462027018d70db0b88506974afb; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1-0; orgstrap-block-checksum: d33bdc8924478fedbd92ff73836c43e136d90e4c18393ff7c5e0aeda37f892d2; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Orgstrap: Executable Org files
 #+startup: showall
@@ -142,7 +142,7 @@ The bare minimum needed to make an =org-mode= file executable (with a bit of saf
 =orgstrap= a plain-text executable format. Powered by Org mode and Emacs.
 
 # Local Variables:
-# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((a (org-version)) (n orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not n) (string< n a) (string= n a) (error "Your Org is too old! %s < %s" a n))) (defun orgstrap-norm-func--dprp-1-0 (body) (let ((p (read (concat "(progn\n" body "\n)"))) (m '(defun defun-local defmacro defvar defvar-local defconst defcustom)) print-quoted print-length print-level) (cl-labels ((f (b) (cl-loop for e in b when (listp e) do (or (and (memq (car e) m) (let ((n (nthcdr 4 e))) (and (stringp (nth 3 e)) (or (cl-subseq m 3) n) (f n) (or (setcdr (cddr e) n) t)))) (f e))) p)) (prin1-to-string (f p))))) (unless (boundp 'orgstrap-norm-func) (defvar-local orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap--confirm-eval-minimal (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (eq orgstrap-block-checksum (intern (secure-hash orgstrap-cypher (orgstrap-norm body))))))) (unless (fboundp #'orgstrap--confirm-eval) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-minimal)) (let (enable-local-eval) (vc-find-file-hook)) (let ((ocbe org-confirm-babel-evaluate) (obs (org-babel-find-named-block "orgstrap"))) (if obs (unwind-protect (save-excursion (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (goto-char obs) (org-babel-execute-src-block)) (when (eq org-confirm-babel-evaluate #'orgstrap--confirm-eval) (setq-local org-confirm-babel-evaluate ocbe)) (org-set-visibility-according-to-property)) (warn "No orgstrap block."))))
+# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((a (org-version)) (n orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not n) (string< n a) (string= n a) (error "Your Org is too old! %s < %s" a n))) (defun orgstrap-norm-func--dprp-1-0 (body) (let ((p (read (concat "(progn\n" body "\n)"))) (m '(defun defun-local defmacro defvar defvar-local defconst defcustom)) print-quoted print-length print-level) (cl-labels ((f (b) (cl-loop for e in b when (listp e) do (or (and (memq (car e) m) (let ((n (nthcdr 4 e))) (and (stringp (nth 3 e)) (or (cl-subseq m 3) n) (f n) (or (setcdr (cddr e) n) t)))) (f e))) p)) (prin1-to-string (f p))))) (unless (boundp 'orgstrap-norm-func) (defvar-local orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap--confirm-eval-minimal (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (eq orgstrap-block-checksum (intern (secure-hash orgstrap-cypher (orgstrap-norm body))))))) (unless (fboundp #'orgstrap--confirm-eval) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-minimal)) (let (enable-local-eval) (vc-find-file-hook)) (let ((ocbe org-confirm-babel-evaluate) (obs (org-babel-find-named-block "orgstrap"))) (if obs (unwind-protect (save-excursion (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (goto-char obs) (org-babel-execute-src-block)) (when (eq org-confirm-babel-evaluate #'orgstrap--confirm-eval) (setq-local org-confirm-babel-evaluate ocbe)) (ignore-errors (org-set-visibility-according-to-property))) (warn "No orgstrap block."))))
 # End:
 #+end_src
 * Inspiration
@@ -812,7 +812,8 @@ Once =orgstrap--confirm-eval= is defined the rest of the =eval:= local variables
         (when (eq org-confirm-babel-evaluate #'orgstrap--confirm-eval)
           ;; XXX allow orgstrap blocks to set ocbe so audit for that
           (setq-local org-confirm-babel-evaluate ocbe))
-        (org-set-visibility-according-to-property))
+        (ignore-errors
+          (org-set-visibility-according-to-property)))
     ;; FIXME warn or error here?
     (warn "No orgstrap block.")))
 #+end_src
@@ -861,7 +862,7 @@ Here is the prop line from the first line of this file that
 includes the cypher and checksum of the =orgstrap= block.
 #+name: local-variables-prop-line-example
 #+begin_src org :eval never
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1-0; orgstrap-block-checksum: 9ebe57543321887e7de51a74ca285638fc21abdf28f9dbdb8b3d41b49c175316; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1-0; orgstrap-block-checksum: d33bdc8924478fedbd92ff73836c43e136d90e4c18393ff7c5e0aeda37f892d2; -*-
 #+end_src
 
 # BE VERY CAREFUL WITH MANUAL EDITS
@@ -870,7 +871,7 @@ Here are the portable local variables from the end of the file.
 #+name: local-variables-portable-example
 #+begin_src org :eval never
 # Local Variables:
-# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((a (org-version)) (n orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not n) (string< n a) (string= n a) (error "Your Org is too old! %s < %s" a n))) (defun orgstrap-norm-func--dprp-1-0 (body) (let ((p (read (concat "(progn\n" body "\n)"))) (m '(defun defun-local defmacro defvar defvar-local defconst defcustom)) print-quoted print-length print-level) (cl-labels ((f (b) (cl-loop for e in b when (listp e) do (or (and (memq (car e) m) (let ((n (nthcdr 4 e))) (and (stringp (nth 3 e)) (or (cl-subseq m 3) n) (f n) (or (setcdr (cddr e) n) t)))) (f e))) p)) (prin1-to-string (f p))))) (unless (boundp 'orgstrap-norm-func) (defvar-local orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap-org-src-coderef-regexp (_fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))) (unless (fboundp #'org-src-coderef-regexp) (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp)) (defun orgstrap--expand-body (info) (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1)))) (defun orgstrap--confirm-eval-portable (lang _body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (orgstrap-norm body)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum))))) (unless (fboundp #'orgstrap--confirm-eval) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable)) (let (enable-local-eval) (vc-find-file-hook)) (let ((ocbe org-confirm-babel-evaluate) (obs (org-babel-find-named-block "orgstrap"))) (if obs (unwind-protect (save-excursion (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (goto-char obs) (org-babel-execute-src-block)) (when (eq org-confirm-babel-evaluate #'orgstrap--confirm-eval) (setq-local org-confirm-babel-evaluate ocbe)) (org-set-visibility-according-to-property)) (warn "No orgstrap block."))))
+# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((a (org-version)) (n orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not n) (string< n a) (string= n a) (error "Your Org is too old! %s < %s" a n))) (defun orgstrap-norm-func--dprp-1-0 (body) (let ((p (read (concat "(progn\n" body "\n)"))) (m '(defun defun-local defmacro defvar defvar-local defconst defcustom)) print-quoted print-length print-level) (cl-labels ((f (b) (cl-loop for e in b when (listp e) do (or (and (memq (car e) m) (let ((n (nthcdr 4 e))) (and (stringp (nth 3 e)) (or (cl-subseq m 3) n) (f n) (or (setcdr (cddr e) n) t)))) (f e))) p)) (prin1-to-string (f p))))) (unless (boundp 'orgstrap-norm-func) (defvar-local orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap-org-src-coderef-regexp (_fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))) (unless (fboundp #'org-src-coderef-regexp) (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp)) (defun orgstrap--expand-body (info) (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1)))) (defun orgstrap--confirm-eval-portable (lang _body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (orgstrap-norm body)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum))))) (unless (fboundp #'orgstrap--confirm-eval) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable)) (let (enable-local-eval) (vc-find-file-hook)) (let ((ocbe org-confirm-babel-evaluate) (obs (org-babel-find-named-block "orgstrap"))) (if obs (unwind-protect (save-excursion (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (goto-char obs) (org-babel-execute-src-block)) (when (eq org-confirm-babel-evaluate #'orgstrap--confirm-eval) (setq-local org-confirm-babel-evaluate ocbe)) (ignore-errors (org-set-visibility-according-to-property))) (warn "No orgstrap block."))))
 # End:
 #+end_src
 
@@ -878,7 +879,7 @@ Here are the minimal local variables from the end of the file.
 #+name: local-variables-minimal-example
 #+begin_src org :eval never
 # Local Variables:
-# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((a (org-version)) (n orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not n) (string< n a) (string= n a) (error "Your Org is too old! %s < %s" a n))) (defun orgstrap-norm-func--dprp-1-0 (body) (let ((p (read (concat "(progn\n" body "\n)"))) (m '(defun defun-local defmacro defvar defvar-local defconst defcustom)) print-quoted print-length print-level) (cl-labels ((f (b) (cl-loop for e in b when (listp e) do (or (and (memq (car e) m) (let ((n (nthcdr 4 e))) (and (stringp (nth 3 e)) (or (cl-subseq m 3) n) (f n) (or (setcdr (cddr e) n) t)))) (f e))) p)) (prin1-to-string (f p))))) (unless (boundp 'orgstrap-norm-func) (defvar-local orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap--confirm-eval-minimal (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (eq orgstrap-block-checksum (intern (secure-hash orgstrap-cypher (orgstrap-norm body))))))) (unless (fboundp #'orgstrap--confirm-eval) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-minimal)) (let (enable-local-eval) (vc-find-file-hook)) (let ((ocbe org-confirm-babel-evaluate) (obs (org-babel-find-named-block "orgstrap"))) (if obs (unwind-protect (save-excursion (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (goto-char obs) (org-babel-execute-src-block)) (when (eq org-confirm-babel-evaluate #'orgstrap--confirm-eval) (setq-local org-confirm-babel-evaluate ocbe)) (org-set-visibility-according-to-property)) (warn "No orgstrap block."))))
+# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((a (org-version)) (n orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not n) (string< n a) (string= n a) (error "Your Org is too old! %s < %s" a n))) (defun orgstrap-norm-func--dprp-1-0 (body) (let ((p (read (concat "(progn\n" body "\n)"))) (m '(defun defun-local defmacro defvar defvar-local defconst defcustom)) print-quoted print-length print-level) (cl-labels ((f (b) (cl-loop for e in b when (listp e) do (or (and (memq (car e) m) (let ((n (nthcdr 4 e))) (and (stringp (nth 3 e)) (or (cl-subseq m 3) n) (f n) (or (setcdr (cddr e) n) t)))) (f e))) p)) (prin1-to-string (f p))))) (unless (boundp 'orgstrap-norm-func) (defvar-local orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap--confirm-eval-minimal (lang body) (not (and (member lang '("elisp" "emacs-lisp")) (eq orgstrap-block-checksum (intern (secure-hash orgstrap-cypher (orgstrap-norm body))))))) (unless (fboundp #'orgstrap--confirm-eval) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-minimal)) (let (enable-local-eval) (vc-find-file-hook)) (let ((ocbe org-confirm-babel-evaluate) (obs (org-babel-find-named-block "orgstrap"))) (if obs (unwind-protect (save-excursion (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (goto-char obs) (org-babel-execute-src-block)) (when (eq org-confirm-babel-evaluate #'orgstrap--confirm-eval) (setq-local org-confirm-babel-evaluate ocbe)) (ignore-errors (org-set-visibility-according-to-property))) (warn "No orgstrap block."))))
 # End:
 #+end_src
 
@@ -2159,7 +2160,7 @@ minimal as possible is critical.
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.5.2                             (ref:orgstrap.el-version)
+;; Version: 1.5.3                             (ref:orgstrap.el-version)
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -2437,6 +2438,19 @@ Things that need to be done for a release.
 :PROPERTIES:
 :CUSTOM_ID: changelog
 :END:
+** 1.5.3
+- Ignore errors from ~org-set-visibility-according-to-property~.
+
+  Recent changes to ~org-set-visibility-according-to-property~ result
+  in errors if it is called when a file is not in ~org-mode~ and/or
+  when a buffer is in ~org-mode~ but Emacs is ~noninteractive~.
+
+  This requires and update to the elvs which wraps the call in
+  ~ignore-errors~ which is more space efficient than e.g. testing
+  whether we are non-interactive and also mostly +fool+ future proof.
+
+  If you use orgstrap shebang blocks you should updated your elvs.
+
 ** 1.5.2
 - Update ~orgstrap--shebang-body~ to simplify and improve safety.
 
@@ -3031,6 +3045,25 @@ take nearly 3 hours to complete and debug.
 :CUSTOM_ID: future-work
 :visibility: children
 :END:
+** TODO separate user-emacs-directory
+:PROPERTIES:
+:CREATED:  [2023-02-01 Wed 21:22]
+:END:
+Emacs 29 introduces the long desired command line option
+~--init-directory=DIR~. This solves a number of issues related to
+sandboxing the impact on existing Emacs configurations of using
+orgstrap for various things. That is somewhat secondary however.
+
+More importantly, after a significant amount of experience working
+with this setup, it seems fairly clear to me that the default behavior
+when using orgstrap shebang blocks is that orgstrap configuration
+files and more importantly packages should be kept separate from the
+default ~user-emacs-directory~ to avoid a wide variety of issues.
+
+Probably add this to ~ow-enable-use-packages~ with options to use
+something like ~~/.config/orgstrap/~ or ~~/.orgstrap.d/~ and
+additionally to sandbox packages for the whole file. I'm thinking that
+probably won't be necessary for most use cases.
 ** TODO detect whether dprp-1.0 is needed, otherwise use prp-1.1
 :PROPERTIES:
 :CREATED:  [2021-09-26 Sun 14:26]
@@ -3665,5 +3698,5 @@ the file is too old (i.e. < =9.3.8=).
 :END:
 # close powershell comment #>
 # Local Variables:
-# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((a (org-version)) (n orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not n) (string< n a) (string= n a) (error "Your Org is too old! %s < %s" a n))) (defun orgstrap-norm-func--dprp-1-0 (body) (let ((p (read (concat "(progn\n" body "\n)"))) (m '(defun defun-local defmacro defvar defvar-local defconst defcustom)) print-quoted print-length print-level) (cl-labels ((f (b) (cl-loop for e in b when (listp e) do (or (and (memq (car e) m) (let ((n (nthcdr 4 e))) (and (stringp (nth 3 e)) (or (cl-subseq m 3) n) (f n) (or (setcdr (cddr e) n) t)))) (f e))) p)) (prin1-to-string (f p))))) (unless (boundp 'orgstrap-norm-func) (defvar-local orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap-org-src-coderef-regexp (_fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))) (unless (fboundp #'org-src-coderef-regexp) (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp)) (defun orgstrap--expand-body (info) (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1)))) (defun orgstrap--confirm-eval-portable (lang _body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (orgstrap-norm body)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum))))) (unless (fboundp #'orgstrap--confirm-eval) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable)) (let (enable-local-eval) (vc-find-file-hook)) (let ((ocbe org-confirm-babel-evaluate) (obs (org-babel-find-named-block "orgstrap"))) (if obs (unwind-protect (save-excursion (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (goto-char obs) (org-babel-execute-src-block)) (when (eq org-confirm-babel-evaluate #'orgstrap--confirm-eval) (setq-local org-confirm-babel-evaluate ocbe)) (org-set-visibility-according-to-property)) (warn "No orgstrap block."))))
+# eval: (progn (setq-local orgstrap-min-org-version "8.2.10") (let ((a (org-version)) (n orgstrap-min-org-version)) (or (fboundp #'orgstrap--confirm-eval) (not n) (string< n a) (string= n a) (error "Your Org is too old! %s < %s" a n))) (defun orgstrap-norm-func--dprp-1-0 (body) (let ((p (read (concat "(progn\n" body "\n)"))) (m '(defun defun-local defmacro defvar defvar-local defconst defcustom)) print-quoted print-length print-level) (cl-labels ((f (b) (cl-loop for e in b when (listp e) do (or (and (memq (car e) m) (let ((n (nthcdr 4 e))) (and (stringp (nth 3 e)) (or (cl-subseq m 3) n) (f n) (or (setcdr (cddr e) n) t)))) (f e))) p)) (prin1-to-string (f p))))) (unless (boundp 'orgstrap-norm-func) (defvar-local orgstrap-norm-func orgstrap-norm-func-name)) (defun orgstrap-norm-embd (body) (funcall orgstrap-norm-func body)) (unless (fboundp #'orgstrap-norm) (defalias 'orgstrap-norm #'orgstrap-norm-embd)) (defun orgstrap-org-src-coderef-regexp (_fmt &optional label) (let ((fmt org-coderef-label-format)) (format "\\([:blank:]*\\(%s\\)[:blank:]*\\)$" (replace-regexp-in-string "%s" (if label (regexp-quote label) "\\([-a-zA-Z0-9_][-a-zA-Z0-9_ ]*\\)") (regexp-quote fmt) nil t)))) (unless (fboundp #'org-src-coderef-regexp) (defalias 'org-src-coderef-regexp #'orgstrap-org-src-coderef-regexp)) (defun orgstrap--expand-body (info) (let ((coderef (nth 6 info)) (expand (if (org-babel-noweb-p (nth 2 info) :eval) (org-babel-expand-noweb-references info) (nth 1 info)))) (if (not coderef) expand (replace-regexp-in-string (org-src-coderef-regexp coderef) "" expand nil nil 1)))) (defun orgstrap--confirm-eval-portable (lang _body) (not (and (member lang '("elisp" "emacs-lisp")) (let* ((body (orgstrap--expand-body (org-babel-get-src-block-info))) (body-normalized (orgstrap-norm body)) (content-checksum (intern (secure-hash orgstrap-cypher body-normalized)))) (eq orgstrap-block-checksum content-checksum))))) (unless (fboundp #'orgstrap--confirm-eval) (defalias 'orgstrap--confirm-eval #'orgstrap--confirm-eval-portable)) (let (enable-local-eval) (vc-find-file-hook)) (let ((ocbe org-confirm-babel-evaluate) (obs (org-babel-find-named-block "orgstrap"))) (if obs (unwind-protect (save-excursion (setq-local orgstrap-norm-func orgstrap-norm-func-name) (setq-local org-confirm-babel-evaluate #'orgstrap--confirm-eval) (goto-char obs) (org-babel-execute-src-block)) (when (eq org-confirm-babel-evaluate #'orgstrap--confirm-eval) (setq-local org-confirm-babel-evaluate ocbe)) (ignore-errors (org-set-visibility-according-to-property))) (warn "No orgstrap block."))))
 # End:
