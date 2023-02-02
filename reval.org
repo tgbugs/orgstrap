@@ -205,23 +205,23 @@ reduced complexity everywhere else.
     (url-handler-mode)
     (unwind-protect
         (cl-loop for path-or-url in (cons cache-path (cons path-or-url alternates))
-                 do (when (file-exists-p path-or-url)
-                      (let* ((buffer (find-file-noselect path-or-url))
-                             (buffer-checksum (intern (secure-hash cypher buffer))))
-                        (if (eq buffer-checksum checksum)
-                            (progn
-                              (unless (string= path-or-url cache-path)
-                                (let ((parent-path (file-name-directory cache-path))
-                                      make-backup-files)
-                                  (unless (file-directory-p parent-path)
-                                    (make-directory parent-path t))
-                                  (with-current-buffer buffer
-                                    (write-file cache-path))))
-                              (eval-buffer buffer)
-                              (setq done t))
-                          (kill-buffer buffer) ; kill so cannot accidentally evaled
-                          (error "reval: checksum mismatch! %s" path-or-url))))
-                 until done)
+         do (when (file-exists-p path-or-url)
+              (let* ((buffer (find-file-noselect path-or-url))
+                     (buffer-checksum (intern (secure-hash cypher buffer))))
+                (if (eq buffer-checksum checksum)
+                    (progn
+                      (unless (string= path-or-url cache-path)
+                        (let ((parent-path (file-name-directory cache-path))
+                              make-backup-files)
+                          (unless (file-directory-p parent-path)
+                            (make-directory parent-path t))
+                          (with-current-buffer buffer
+                            (write-file cache-path))))
+                      (eval-buffer buffer)
+                      (setq done t))
+                  (kill-buffer buffer) ; kill so cannot accidentally evaled
+                  (error "reval: checksum mismatch! %s" path-or-url))))
+         until done)
       (unless o
         (url-handler-mode 0)))))
 #+end_src
@@ -425,31 +425,31 @@ a return value from the buffer."
   (let (found-buffer (cache-path (reval-cache-path checksum (file-name-nondirectory path-or-url))))
     (with-url-handler-mode
       (cl-loop for path-or-url in (cons cache-path (cons path-or-url alternates))
-               do (if (file-exists-p path-or-url)
-                      (let* ((buffer (reval-id->buffer path-or-url))
-                             (_ (when (string= path-or-url cache-path)
-                                  (with-current-buffer buffer (emacs-lisp-mode))))
-                             ;; FIXME this is still not right ... can error due to not elisp
-                             (buffer-checksum (reval-resum cypher buffer)))
-                        (if (eq buffer-checksum checksum)
-                            (let ((buffer
-                                   (if (string= path-or-url cache-path)
-                                       buffer
-                                     ;; save to cache and switch buffer before eval for xrefs
-                                     (reval--write-cache buffer cache-path)
-                                     (find-file-noselect cache-path))))
-                              (when do-with-buffer
-                                (with-current-buffer buffer
-                                  (funcall do-with-buffer)))
-                              (setq found-buffer buffer))
-                          (reval--add-buffer-to-list buffer 'reval-failed-buffer-list)
-                          (funcall (if alternates #'warn #'error)
-                                   ;; if alternates warn to prevent an early failure
-                                   ;; from blocking later potential successes otherwise
-                                   ;; signal an error
-                                   "reval: checksum mismatch! %s" path-or-url)))
-                    (warn "reval: file does not exist! %s" path-or-url))
-               until found-buffer))
+       do (if (file-exists-p path-or-url)
+              (let* ((buffer (reval-id->buffer path-or-url))
+                     (_ (when (string= path-or-url cache-path)
+                          (with-current-buffer buffer (emacs-lisp-mode))))
+                     ;; FIXME this is still not right ... can error due to not elisp
+                     (buffer-checksum (reval-resum cypher buffer)))
+                (if (eq buffer-checksum checksum)
+                    (let ((buffer
+                           (if (string= path-or-url cache-path)
+                               buffer
+                             ;; save to cache and switch buffer before eval for xrefs
+                             (reval--write-cache buffer cache-path)
+                             (find-file-noselect cache-path))))
+                      (when do-with-buffer
+                        (with-current-buffer buffer
+                          (funcall do-with-buffer)))
+                      (setq found-buffer buffer))
+                  (reval--add-buffer-to-list buffer 'reval-failed-buffer-list)
+                  (funcall (if alternates #'warn #'error)
+                           ;; if alternates warn to prevent an early failure
+                           ;; from blocking later potential successes otherwise
+                           ;; signal an error
+                           "reval: checksum mismatch! %s" path-or-url)))
+            (warn "reval: file does not exist! %s" path-or-url))
+       until found-buffer))
     (unless found-buffer
       (error "reval: all paths failed!"))
     found-buffer))
