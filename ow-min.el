@@ -136,6 +136,31 @@ An alternate approach might be to use `set-process-filter'."
 (when (< emacs-major-version 26)
   (defalias 'ow--accept-and-forward-process-output #'ow--aafpo-<-26))
 
+(defun ow-run-command-no-thread (command &rest args)
+  "Run COMMAND with ARGS.
+Raise an error if the return code is not zero."
+  ;; TODO maybe implement this in terms of ow-run-command-async ?
+  ;; usually (defalias 'run-command #'ow-run-command)
+  (let ((stdout-buffer (generate-new-buffer " rc stdout"))
+        (stderr-buffer (generate-new-buffer " rc stderr")))
+    (unwind-protect
+        (let ((process
+               (make-process
+                :name (concat "run-command: " command)
+                :buffer stdout-buffer
+                :stderr stderr-buffer
+                :command (cons command args))))
+          (while (accept-process-output process)) ; don't use mutexes kids
+          (let ((ex (process-exit-status process)))
+            (if (= 0 ex)
+                (with-current-buffer stdout-buffer (buffer-string))
+              (error "Command %s failed code: %s stdout: %S stderr: %S"
+                     command ex
+                     (with-current-buffer stdout-buffer (buffer-string))
+                     (with-current-buffer stderr-buffer (buffer-string))))))
+      (kill-buffer stdout-buffer)
+      (kill-buffer stderr-buffer))))
+
 (defun ow-run-command (command &rest args)
   "Run COMMAND with ARGS.
 Raise an error if the return code is not zero."
@@ -258,6 +283,25 @@ come before rest when calling a cl-defun."
 (when (< emacs-major-version 25)
   (defalias 'ow-run-command-async #'ow-run-command-async-24))
 
+(defun ow-call-process (command &rest args)
+  "`call-process' and do not wait, fork it an let it be freeeee!"
+  (apply #'call-process command nil 0 nil args))
+
+(defun ow-find-file-new-process (file)
+  "`find-file' in a separate Emacs process.
+
+`user-emacs-directory' and `user-init-file' are passed
+to the new process if they are non-nil, otherwise default
+values are provided."
+  (apply
+   #'ow-call-process
+   `(,(expand-file-name (invocation-name) (invocation-directory))
+     ,@(when user-emacs-directory
+         `("-eval" "(setq user-emacs-directory (pop argv))" ,user-emacs-directory))
+     ,@(if user-init-file
+           `("-eval" "(progn (setq user-init-file (pop argv)) (load user-init-file))" ,user-init-file)
+         '("-q"))
+     "-visit" ,file)))
 
 (defalias 'run-command #'ow-run-command)
 
@@ -323,7 +367,7 @@ All errors are silenced."
         result
       (apply fun args))))
 
-(defun ow-babel-eval (block-name &optional universal-argument error-on-fail)
+(defun ow-babel-execute-src-block (block-name &optional universal-argument error-on-fail)
   "Use to confirm running a chain of dependent blocks starting with BLOCK-NAME.
 This retains single confirmation at the entry point for the block.
 If ERROR-ON-FAIL is non-nil then an error will be raised by overriding
@@ -353,6 +397,64 @@ If ERROR-ON-FAIL is non-nil then an error will be raised by overriding
                     (org-babel-execute-src-block))
                 (org-babel-execute-src-block)))
           (advice-remove #'org-babel-insert-result #'ow--results-silent))))))
+
+(defalias 'ow-babel-exec #'ow-babel-execute-src-block)
+(define-obsolete-function-alias
+  'ow-babel-eval #'ow-babel-execute-src-block "29.1"
+"Support for orgstrap blocks that have not updated.
+Better to use `ow-babel-exec' alias to match terminology.")
+
+(defun ow-babel-execute-closest-src-block (&optional universal-argument)
+  "Execute the block that is closest to the cursor line.
+
+If `org-element-at-point' is a src-block run that block.
+
+Distance is `count-lines' between `point' and the end of the
+previous block and `point' and the beginning of the next block.
+
+If the distance is equal run the next block."
+  (interactive "P")
+  ;; FIXME also whether one of the blocks is visible
+  ;; FIXME also whether we cross a heading ...
+  (let ((elem (save-excursion
+                (forward-char) ; issues with line after block counting as block
+                (org-element-at-point))))
+    (if (eq (org-element-type elem) 'src-block)
+        (save-excursion
+          (goto-char (cl-getf (nth 1 elem) :begin))
+          (org-babel-execute-src-block))
+      (let ((here (point))
+            (prev-beg-end
+             (save-excursion
+               (condition-case nil
+                   (progn
+                     (org-babel-previous-src-block)
+                     (let ((e (nth 1 (org-element-at-point))))
+                       (cons (cl-getf e :begin)
+                             (cl-getf e :end))))
+                 (user-error nil))))
+            (next-beg
+             (save-excursion
+               (condition-case nil
+                   (progn
+                     (org-babel-next-src-block)
+                     (point))
+                 (user-error nil)))))
+        (let ((dist-prev (and prev-beg-end (count-lines (1- (cdr prev-beg-end)) here)))
+              (dist-next (and next-beg (count-lines here (1- next-beg)))))
+          (if (or dist-prev dist-next)
+              (save-excursion
+                (goto-char
+                 (cond
+                  ((and dist-prev dist-next)
+                   (if (>= dist-prev dist-next)
+                       next-beg ; next gets priority if line dist is equal
+                     (car prev-beg-end)))
+                  (dist-next next-beg)
+                  (dist-prev (car prev-beg-end))))
+                (message "%s" (point))
+                (org-babel-execute-src-block))
+            (user-error "Could not find any source blocks to run.")))))))
 
 (defun ow-min--reval-update ()
   "Get the immutable url for the current remote version of this file."
