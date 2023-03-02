@@ -105,8 +105,8 @@
     (reval 'sha256 'cc8cfa015e1f3413a5fb0587f5090602604f631fee365233e1b418d83ab4333f
            ;;"~/git/orgstrap/ow.el"
            (concat ghost "f01ec0c0601e1c03e1496e1f3cba2f2a7386bdeb" "/ow.el")))
-  (reval 'sha256 'e3341e8b84acc2ac06bfd469f6ba72630a8a0f2906e53b13297ccc30eac2001d
+  (reval 'sha256 'dbb7c1fc0ffc72ba13f313d60830e52da652a43338b7bfabd0013cad45d79dd8
          ;; "~/git/orgstrap/init-content.el"
-         (concat ghost "056d7397e835cc896f0cece498729370fb9822f4" "/init-content.el")))
+         (concat ghost "86f2ab7449c6caea6a9eb7ce6c3c8af0da82dd1f" "/init-content.el")))
 
 ;;;; init-simple.el ends here
