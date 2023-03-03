@@ -1165,10 +1165,11 @@ into a list (name body ...)"
 
 (defun ow-populate-site-packages (&optional site-packages)
   "Add site packages to `package-alist' and `package-activated-list'."
-  (let ((site-packages (or site-packages ow-site-packages))
-        (site-lisp-directory
-         (cond ((featurep 'site-gentoo) (file-name-directory (locate-library "site-gentoo")))
-               (t (warn "don't know site-lisp location") nil))))
+  (let* ((site-packages (or site-packages ow-site-packages))
+         (ll (or (locate-library "site-gentoo")))
+         (site-lisp-directory
+          (cond (ll (file-name-directory ll))
+                (t (warn "don't know site-lisp location") nil))))
     (message ":site-lisp-directory %S :site-packages %s :osp %s" site-lisp-directory site-packages ow-site-packages)
     (when site-lisp-directory
       (cl-loop
