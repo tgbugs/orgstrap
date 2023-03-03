@@ -476,7 +476,7 @@ subsequent runs."
 (when (< emacs-major-version 26)
   (setq gnutls-algorithm-priority "NORMAL:-VERS-TLS1.3"))
 
-(defun ow-enable-use-package (&optional want-builtin-org)
+(defun ow-enable-use-package (&optional want-builtin-org populate-site)
   "Do all the setup needed for `use-package'.
 This needs to be called with (eval-when-compile ...) to the top level prior
 to any use of `use-package' otherwise it will be missing and fail"
@@ -506,7 +506,7 @@ to any use of `use-package' otherwise it will be missing and fail"
                   (cl-remove-if (lambda (p) (equal p '("gnu" . "http://elpa.gnu.org/packages/")))
                                 package-archives))
             (add-to-list 'package-archives (assoc "gnu" ow-package-archives))
-            (package-initialize)
+            (package-initialize populate-site)
             (unless (package-installed-p 'gnu-elpa-keyring-update)
               (let (os package-check-signature)
                 (setq package-check-signature nil)
@@ -518,7 +518,10 @@ to any use of `use-package' otherwise it will be missing and fail"
           (dolist (pair ow-package-archives)
             (add-to-list 'package-archives pair t))
           (unless package--initialized
-            (package-initialize))
+            (package-initialize populate-site))
+          (when populate-site
+            (ow-populate-site-packages (and (listp populate-site) populate-site))
+            (package-activate-all))
           (unless (package-installed-p 'use-package)
             (package-refresh-contents)
             (let (font-lock-global-modes) ; insane stuff in 26
