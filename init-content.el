@@ -90,28 +90,8 @@
 (assq-delete-all 'org package--builtin-versions)
 
 ;; check for site packages
-(defvar site-packages nil
-  "set this value before loading this file if there are known site packages")
-
-(defun populate-site-packages ()
-  "Add site packages to `package-alist' and `package-activated-list'.
-Note that any package in `site-packages' will be `require'd."
-  (cl-loop
-   for pkg in site-packages do
-   (when (ignore-errors (require pkg))
-     (let* ((el (locate-library (format "%s.el" (symbol-name pkg))))
-            (dir (file-name-directory el))
-            (pkg-desc
-             (with-current-buffer (find-file-noselect el)
-               (prog1
-                   (package-buffer-info)
-                 (kill-buffer)))))
-       (setf (package-desc-dir pkg-desc) dir)
-       (add-to-list 'package-alist (list pkg pkg-desc)))
-     (add-to-list 'package-activated-list pkg))))
-
-(when site-packages
-  (populate-site-packages))
+(when ow-site-packages
+  (ow-populate-site-packages))
 
 ;; `org-assert-version' is a nightmare when trying to use orgstrap and a newer version of org
 (defmacro org-assert-version () 't) ; SILENCE (reminder, don't byte compile org)
