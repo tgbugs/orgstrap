@@ -1033,7 +1033,7 @@ subsequent runs."
                             ;; and that memory has be deallocated
                             (or (not (featurep 'native-compile))
                                 (not (eq f 'ob-emacs-lisp))))
-                       (member sn '("ol" "oc"))))
+                       (member sn '("ol" "oc" "orgstrap"))))
             collect (progn '(message "unloading org feature: %s" f) (unload-feature f 'force) f))))
                                         ;font-lock-unfontify-region-function
                                         ;font-lock-unfontify-region
@@ -1138,6 +1138,8 @@ to any use of `use-package' otherwise it will be missing and fail"
             (progn (use-package org :no-require t) (setq success t))
           (when success
             (unload-feature 'ow) ; need the new org-macs
+            (when (featurep 'reval) ; `unload-feature' is brainded and unloads everything in a file
+              (load (symbol-file 'reval) nil t))
             (load ow-file nil t)
             (setq ow--org-to-reload to-reload))
           (ow-reload-org)
