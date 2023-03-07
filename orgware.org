@@ -422,7 +422,9 @@ does not seem to happen on 29, and it does not happen on all
 subsequent runs."
   (cl-letf (((symbol-function 'org-compat-unload-function)
              (lambda ()
-               (setq features (cl-delete-if (lambda (s) (eq s 'org-compat)) features)))))
+               (setq features (cl-delete-if (lambda (s) (eq s 'org-compat)) features))))
+            ((symbol-function 'outline-mode)
+             (lambda () (setq-local font-lock-unfontify-region-function (lambda (b e))))))
     (let ((org-features
            (cl-loop
             for f in features
