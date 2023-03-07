@@ -1090,6 +1090,7 @@ to any use of `use-package' otherwise it will be missing and fail"
            (or (featurep 'package) (require 'package))
            (assq 'org package--builtins) ; trying to reload a non-builtin org e.g. from elpa a nightmare
            (ow-unload-org)))
+         (populate-site (or populate-site ow-site-packages))
          success)
     (unwind-protect
         (progn
