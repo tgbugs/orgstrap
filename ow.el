@@ -1177,7 +1177,7 @@ into a list (name body ...)"
          (site-lisp-directory
           (cond (ll (file-name-directory ll))
                 (t (warn "don't know site-lisp location") nil))))
-    (message ":site-lisp-directory %S :site-packages %s :osp %s" site-lisp-directory site-packages ow-site-packages)
+    ;;(message ":site-lisp-directory %S :site-packages %s :osp %s" site-lisp-directory site-packages ow-site-packages)
     (when site-lisp-directory
       (cl-loop
        for pkg in site-packages do
@@ -1185,11 +1185,11 @@ into a list (name body ...)"
          (when el
            (let ((dir (file-name-directory el))
                  (pkg-desc
-                  (with-current-buffer (find-file-noselect el)
+                  (with-current-buffer (find-file-noselect el 'nowarn)
                     (prog1
                         (package-buffer-info)
                       (kill-buffer)))))
-             (message ":dir %s :el %s :site-lisp-directory %s" dir el site-lisp-directory)
+             ;;(message ":dir %s :el %s :site-lisp-directory %s" dir el site-lisp-directory)
              (when (string-prefix-p site-lisp-directory dir)
                (setf (package-desc-dir pkg-desc) dir)
                (add-to-list 'package-alist (list pkg pkg-desc))
