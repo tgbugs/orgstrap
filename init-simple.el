@@ -102,9 +102,9 @@
 (let ((ghost "https://raw.githubusercontent.com/tgbugs/orgstrap/"))
   ;; FIXME ghost breaks the reval helper code
   (unless (featurep 'ow)
-    (reval 'sha256 '253f6bb207993efb2dbc982ba43892ad1cd305b0c27b551fd1e2c8f117cd055c
+    (reval 'sha256 'bdff9001e59af3e4cf9a09ee3b36f2a92034e841fc0ce23e15dd7849810d98b7
            ;;"~/git/orgstrap/ow.el"
-           (concat ghost "682454fa8d1125ce92771df213d203bca04f4026" "/ow.el")))
+           (concat ghost "582f0f9230ddf290cb3f02c4d62d5e13f610534c" "/ow.el")))
   (reval 'sha256 '3e81f07eb4e26ef36859193606554543da269f7c07e79420b1ce48d25d882766
          ;; "~/git/orgstrap/init-content.el"
          (concat ghost "29888849b00b78e571d66ddf21154c88d167f4b0" "/init-content.el")))
