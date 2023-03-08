@@ -496,7 +496,13 @@ to any use of `use-package' otherwise it will be missing and fail"
            in-elisp-block
            (not ow--org-reloaded)
            (or (featurep 'package) (require 'package))
-           (assq 'org package--builtins) ; trying to reload a non-builtin org e.g. from elpa a nightmare
+           (or ; trying to reload a non-builtin org e.g. from elpa a nightmare
+            (assq 'org package--builtins)
+            ;; `package-initialize' has to have been called before this point
+            ;; for `package--builtins' to have been set, so we have have to fail
+            ;; over to use `locate-library' to see if we loaded the builtin org
+            ;; FIXME at the moment this is an awful hack that only works nixen
+            (string-prefix-p "/usr/" (locate-library "org")))
            (ow-unload-org)))
          (populate-site (or populate-site ow-site-packages))
          success)
