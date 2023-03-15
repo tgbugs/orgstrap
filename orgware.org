@@ -478,7 +478,7 @@ subsequent runs."
 (when (< emacs-major-version 26)
   (setq gnutls-algorithm-priority "NORMAL:-VERS-TLS1.3"))
 
-(defun ow-enable-use-package (&optional want-builtin-org populate-site)
+(defun ow-enable-use-package (&optional want-builtin-org populate-site force-org)
   "Do all the setup needed for `use-package'.
 This needs to be called with (eval-when-compile ...) to the top level prior
 to any use of `use-package' otherwise it will be missing and fail"
@@ -493,7 +493,7 @@ to any use of `use-package' otherwise it will be missing and fail"
          (to-reload
           (and
            (not want-builtin-org)
-           in-elisp-block
+           (or in-elisp-block force-org)
            (not ow--org-reloaded)
            (or (featurep 'package) (require 'package))
            (or ; trying to reload a non-builtin org e.g. from elpa a nightmare
