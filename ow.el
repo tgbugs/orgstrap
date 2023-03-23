@@ -1082,6 +1082,10 @@ to any use of `use-package' otherwise it will be missing and fail"
           (and
            (boundp 'org-babel-current-src-block-location)
            org-babel-current-src-block-location))
+         (oeb (and (boundp 'org-export-backends)
+                   org-export-backends))
+         (oerb (and (boundp 'org-export-registered-backends)
+                    org-export-registered-backends))
          (to-reload
           (and
            (not want-builtin-org)
@@ -1095,7 +1099,11 @@ to any use of `use-package' otherwise it will be missing and fail"
             ;; over to use `locate-library' to see if we loaded the builtin org
             ;; FIXME at the moment this is an awful hack that only works nixen
             (string-prefix-p "/usr/" (locate-library "org")))
-           (ow-unload-org)))
+           (cl-letf (((symbol-function 'org-unfontify-region) (lambda (b e))))
+             ;; if we don't bind `org-unfontify-region to be nothing emacs will segfault 139
+             ;; when native comp is enabled because e.g. `ob-cypher' will try to call a compiled
+             ;; function that has been unloaded at an address that is no longer valid (oops)
+             (ow-unload-org))))
          (populate-site (or populate-site ow-site-packages))
          success)
     (unwind-protect
@@ -1140,21 +1148,33 @@ to any use of `use-package' otherwise it will be missing and fail"
         (unless (< emacs-major-version 29)
           (org-assert-version))
         (unload-feature 'org-macs 'force))
-      (let ((ow-file (symbol-file 'ow)) success)
+      (let ((ow-file (symbol-file 'ow)))
         (assq-delete-all 'org package--builtins)
         (assq-delete-all 'org package--builtin-versions)
-        (unwind-protect ; :no-required needed on 29 it seems?
-            (progn (use-package org :no-require t) (setq success t))
-          (when success
-            (unload-feature 'ow) ; need the new org-macs
+        (when ow-file (unload-feature 'ow)) ; need the new org-macs
+        (unwind-protect ; :no-require needed to prevent circular require issues
+            ;; NOTE this does not handle the case where we don't want
+            ;; to install elpa org if it is not already present, but
+            ;; we do want to use it if it is
+            (progn (use-package org :no-require t))
+          (when ow-file
             (when (featurep 'reval) ; `unload-feature' is brainded and unloads everything in a file
               (load (symbol-file 'reval) nil t))
-            (load ow-file nil t)
-            (setq ow--org-to-reload to-reload))
+            (load ow-file nil t))
+          (setq ow--org-to-reload to-reload)
           (ow-reload-org)
           (setq ow--org-reloaded t)
-          (let (enable-local-eval)
-            (org-mode)))))))
+          (let (enable-local-eval
+                org-agenda-file-menu-enabled) ; needed to prevent keymapp nil errors
+            ;; these two are needed to prevent an eval-when-load 'ox statement from triggering
+            ;; causing a recursive load error
+            (when oeb (defvar org-export-backends oeb))
+            (when oerb (defvar org-export-registered-backends oerb))
+            (cl-loop
+             for buffer in (buffer-list) do
+             (with-current-buffer buffer
+               (when (eq major-mode 'org-mode)
+                 (org-mode))))))))))
 
 (defmacro ow-use-packages (&rest names)
   "enable multiple calls to `use-package' during bootstrap
