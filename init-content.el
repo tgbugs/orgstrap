@@ -82,7 +82,7 @@
 
 ;;; packages
 
-(ow-enable-use-package)
+(ow-enable-use-package nil '(vterm zmq))
 
 ;; hack to remove built-in org package so that we can download the
 ;; version from gnu elpa
