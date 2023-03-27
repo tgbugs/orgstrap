@@ -15,7 +15,7 @@ set -e "-C" "-e" "-e"
 { args=;file=;MyInvocation=;__p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > "${null}"
 $file = $MyInvocation.MyCommand.Source
 { file=$0;PATH=$__op;rm ${__p}/=;rmdir ${__p};} > "${null}"
-emacs -batch -no-site-file -eval "(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))" "${file}" -- ${args} "${@}"
+emacs -batch -no-site-file -eval "(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode) find-file-literally) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))" "${file}" -- ${args} "${@}"
 exit
 <# powershell open
 #+end_src
@@ -332,7 +332,11 @@ A breakdown of the elisp that appears in the =-eval= string.
 
         ;; fake setting the major mode to org-mode so that
         ;; `org-set-regexp-and-options' will trigger correctly
-        (major-mode 'org-mode))
+        (major-mode 'org-mode)
+
+        ;; `find-file-literally' is sticky and will cause issue if
+        ;; e.g. a call to `find-file' prompting to revisit normally
+        find-file-literally)
     ;; we do not set `enable-local-eval' and `enable-local-variables'
     ;; in the outer let due to a bug in Emacs 26 and 27 inside of
     ;; `find-file-noselect' where `enable-local-eval' is not properly
