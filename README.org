@@ -1,4 +1,4 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1-0; orgstrap-block-checksum: d33bdc8924478fedbd92ff73836c43e136d90e4c18393ff7c5e0aeda37f892d2; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1-0; orgstrap-block-checksum: 82cdb6abbe38d572dc8fee58c172864c3efbf582cf659c1d78282008825a07e6; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Orgstrap: Executable Org files
 #+startup: showall
@@ -31,7 +31,7 @@ set -e "-C" "-e" "-e"
 { args=;file=;MyInvocation=;__p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > "${null}"
 $file = $MyInvocation.MyCommand.Source
 { file=$0;PATH=$__op;rm ${__p}/=;rmdir ${__p};} > "${null}"
-emacs -batch -no-site-file -eval "(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))" "${file}" -- ${args} "${@}"
+emacs -batch -no-site-file -eval "(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode) find-file-literally) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))" "${file}" -- ${args} "${@}"
 exit
 <# powershell open
 #+end_src
@@ -1650,7 +1650,7 @@ which is not present in the versions of Org released with Emacs < 26.
 
 # XXX must keep this in sync manually to support old versions of org
 #+name: orgstrap-shebang-body
-: "set -e \"-C\" \"-e\" \"-e\"\n{ null=/dev/null;} > \"${null:=/dev/null}\"\n{ args=;file=;MyInvocation=;__p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > \"${null}\"\n$file = $MyInvocation.MyCommand.Source\n{ file=$0;PATH=$__op;rm ${__p}/=;rmdir ${__p};} > \"${null}\"\nemacs -batch -no-site-file -eval \"(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode)) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))\" \"${file}\" -- ${args} \"${@}\"\nexit\n<# powershell open"
+: "set -e \"-C\" \"-e\" \"-e\"\n{ null=/dev/null;} > \"${null:=/dev/null}\"\n{ args=;file=;MyInvocation=;__p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > \"${null}\"\n$file = $MyInvocation.MyCommand.Source\n{ file=$0;PATH=$__op;rm ${__p}/=;rmdir ${__p};} > \"${null}\"\nemacs -batch -no-site-file -eval \"(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode) find-file-literally) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))\" \"${file}\" -- ${args} \"${@}\"\nexit\n<# powershell open"
 
 #+caption: init helpers
 #+name: orgstrap-init-helper-defuns
@@ -1959,7 +1959,7 @@ If no elvs are found goto `point-max' instead."
           (orgstrap-update-src-block "orgstrap-shebang" orgstrap--shebang-body)
 
           (orgstrap--goto-elvs)
-          (insert "# close powershell comment #>\n"))))))
+          (insert (format "# close powershell comment %s>\n" "#"))))))
 
 (defun orgstrap-update-shebang-block (&optional universal-argument)
   "Update an existing shebang block. UNIVERSAL-ARGUMENT is ignored."
@@ -2160,7 +2160,7 @@ minimal as possible is critical.
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.5.3                             (ref:orgstrap.el-version)
+;; Version: 1.5.4                             (ref:orgstrap.el-version)
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -2438,6 +2438,13 @@ Things that need to be done for a release.
 :PROPERTIES:
 :CUSTOM_ID: changelog
 :END:
+** 1.5.4
+- Update ~orgstrap--shebang-body~ to set ~find-file-literally~ to nil.
+
+  If you use shebang blocks you should update them so that a call to
+  ~find-file~ on ~buffer-file-name~ of the orgstrapped file will
+  continue without prompting the user.
+
 ** 1.5.3
 - Ignore errors from ~org-set-visibility-according-to-property~.
 
