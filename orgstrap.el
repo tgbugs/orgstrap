@@ -3,7 +3,7 @@
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.5.4
+;; Version: 1.5.5
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -1231,7 +1231,7 @@ If no elvs are found goto `point-max' instead."
           (orgstrap-update-src-block "orgstrap-shebang" orgstrap--shebang-body)
 
           (orgstrap--goto-elvs)
-          (insert (format "# close powershell comment %s>\n" "#"))))))
+          (insert (format "# close powershell comment %s>\n" "#")))))))
 
 (defun orgstrap-update-shebang-block (&optional universal-argument)
   "Update an existing shebang block. UNIVERSAL-ARGUMENT is ignored."
