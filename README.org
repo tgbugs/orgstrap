@@ -1,4 +1,4 @@
-# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1-0; orgstrap-block-checksum: 82cdb6abbe38d572dc8fee58c172864c3efbf582cf659c1d78282008825a07e6; -*-
+# -*- org-adapt-indentation: nil; org-edit-src-content-indentation: 0; orgstrap-cypher: sha256; orgstrap-norm-func-name: orgstrap-norm-func--dprp-1-0; orgstrap-block-checksum: 24dbc0d54579db9f0972c6218bdfc1b924e54d8b230d82c2e9c55c833af19cdd; -*-
 # [[orgstrap][jump to orgstrap block for this file]]
 #+title: Orgstrap: Executable Org files
 #+startup: showall
@@ -1959,7 +1959,7 @@ If no elvs are found goto `point-max' instead."
           (orgstrap-update-src-block "orgstrap-shebang" orgstrap--shebang-body)
 
           (orgstrap--goto-elvs)
-          (insert (format "# close powershell comment %s>\n" "#"))))))
+          (insert (format "# close powershell comment %s>\n" "#")))))))
 
 (defun orgstrap-update-shebang-block (&optional universal-argument)
   "Update an existing shebang block. UNIVERSAL-ARGUMENT is ignored."
@@ -2160,7 +2160,7 @@ minimal as possible is critical.
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.5.4                             (ref:orgstrap.el-version)
+;; Version: 1.5.5                             (ref:orgstrap.el-version)
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -2438,6 +2438,11 @@ Things that need to be done for a release.
 :PROPERTIES:
 :CUSTOM_ID: changelog
 :END:
+** 1.5.5
+- Fix missing paren.
+
+  Missed due to a duplicate orgstrap block for debug in the same file.
+
 ** 1.5.4
 - Update ~orgstrap--shebang-body~ to set ~find-file-literally~ to nil.
 
