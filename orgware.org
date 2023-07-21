@@ -494,6 +494,7 @@ to any use of `use-package' otherwise it will be missing and fail"
                    org-export-backends))
          (oerb (and (boundp 'org-export-registered-backends)
                     org-export-registered-backends))
+         (befores '())
          (to-reload
           (and
            (not want-builtin-org)
@@ -507,6 +508,19 @@ to any use of `use-package' otherwise it will be missing and fail"
             ;; over to use `locate-library' to see if we loaded the builtin org
             ;; FIXME at the moment this is an awful hack that only works nixen
             (string-prefix-p "/usr/" (locate-library "org")))
+           (cl-loop
+            for buffer in (buffer-list) do
+            (with-current-buffer buffer
+              (when (eq major-mode 'org-mode)
+                (setq
+                 befores
+                 (cons
+                  (cons
+                   buffer
+                   (with-current-buffer buffer
+                     (buffer-local-variables)))
+                  befores))))
+            return t)
            (cl-letf (((symbol-function 'org-unfontify-region) (lambda (b e))))
              ;; if we don't bind `org-unfontify-region to be nothing emacs will segfault 139
              ;; when native comp is enabled because e.g. `ob-cypher' will try to call a compiled
@@ -582,7 +596,17 @@ to any use of `use-package' otherwise it will be missing and fail"
              for buffer in (buffer-list) do
              (with-current-buffer buffer
                (when (eq major-mode 'org-mode)
-                 (org-mode))))))))))
+                 (let ((before (cdr (assoc buffer befores))))
+                   (org-mode)
+                   (let ((after (buffer-local-variables)))
+                     (cl-loop
+                      with a-value
+                      for (var . b-value) in before
+                      do (setq a-value (assq var after)) ; XXX bad complexity
+                      unless (and a-value (equal b-value (cdr a-value)))
+                      ;; XXX WARNING there might be some cases where restoring old local variables
+                      ;; will break things if there are differences between org versions
+                      do (set (make-local-variable var) b-value)))))))))))))
 
 (defmacro ow-use-packages (&rest names)
   "enable multiple calls to `use-package' during bootstrap
