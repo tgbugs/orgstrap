@@ -1189,7 +1189,11 @@ to any use of `use-package' otherwise it will be missing and fail"
              (with-current-buffer buffer
                (when (eq major-mode 'org-mode)
                  (let ((before (cdr (assoc buffer befores))))
-                   (org-mode)
+                   (cl-letf (((symbol-function 'org-restart-font-lock) (lambda ())))
+                     ;; starting at org 9.7.5 have to `org-restart-font-lock' to do nothing
+                     ;; because `org-link--set-link-display' is called by `custom-initialize-reset'
+                     ;; and somehow that is called before org.el itself is loaded
+                     (org-mode))
                    (let ((after (buffer-local-variables)))
                      (cl-loop
                       with a-value
@@ -1383,9 +1387,22 @@ so that it can be pasted into a file that needs to able to set
 
 ;; control initial visibility
 
+(defun ow-narrow-to-section-0 ()
+  (let* ((beg (point-min))
+         (end (progn (goto-char beg) (org-next-visible-heading 1) (point))))
+    (narrow-to-region beg end)))
+
 (defun ow-hide-section-0-blocks ()
+  "Hide blocks and dynamic blocks in section 0."
+  (save-excursion
+    (ow-narrow-to-section-0)
+    (org-hide-block-all)
+    (widen)))
+
+(defun ow-old-hide-section-0-blocks ()
+  ;; XXX deprecated this impl since better to allow exclusion than require inclusion
   "Hide blocks and dynamic blocks that are used in section 0."
-  (let ((dblocks '("metadata" "properties" "prefixes"))
+  (let ((dblocks '("metadata" "properties" "prefixes" "setup"))
         (blocks '("orgstrap-shebang")))
     ;; dblocks and blocks have separate namespaces
     (save-excursion
