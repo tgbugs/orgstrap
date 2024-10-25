@@ -266,6 +266,7 @@
   :custom
   (org-adapt-indentation nil)
   (org-edit-src-content-indentation 0)
+  (org-babel-lisp-eval-fn #'sly-eval)
   :init
   ;; FIXME Emacs 24 during the first pass byte compile of ob-core.el
   ;; the bytecode file that is produced is mangled in such a way that
