@@ -3,7 +3,7 @@
 ;; Author: Tom Gillespie
 ;; URL: https://github.com/tgbugs/orgstrap
 ;; Keywords: lisp org org-mode bootstrap
-;; Version: 1.5.5
+;; Version: 1.5.6
 ;; Package-Requires: ((emacs "24.4"))
 
 ;;;; License and Commentary
@@ -1201,7 +1201,7 @@ If no elvs are found goto `point-max' instead."
     (beginning-of-line)))
 
 (defconst orgstrap--shebang-body
-  "set -e \"-C\" \"-e\" \"-e\"\n{ null=/dev/null;} > \"${null:=/dev/null}\"\n{ args=;file=;MyInvocation=;__p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > \"${null}\"\n$file = $MyInvocation.MyCommand.Source\n{ file=$0;PATH=$__op;rm ${__p}/=;rmdir ${__p};} > \"${null}\"\nemacs -batch -no-site-file -eval \"(let (vc-follow-symlinks) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode) find-file-literally) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))\" \"${file}\" -- ${args} \"${@}\"\nexit\n<# powershell open"
+  "set -e \"-C\" \"-e\" \"-e\"\n{ null=/dev/null;} > \"${null:=/dev/null}\"\n{ args=;file=;MyInvocation=;__p=$(mktemp -d);touch ${__p}/=;chmod +x ${__p}/=;__op=$PATH;PATH=${__p}:$PATH;} > \"${null}\"\n$file = $MyInvocation.MyCommand.Source\n{ file=$0;PATH=$__op;rm ${__p}/=;rmdir ${__p};} > \"${null}\"\nemacs -batch -no-site-file -eval \"(let (vc-follow-symlinks) (defun org-restart-font-lock ()) (defun orgstrap--confirm-eval (l _) (not (memq (intern l) '(elisp emacs-lisp)))) (let ((file (pop argv)) enable-local-variables) (find-file-literally file) (end-of-line) (when (eq (char-before) ?\\^m) (let ((coding-system-for-read 'utf-8)) (revert-buffer nil t t)))) (let ((enable-local-eval t) (enable-local-variables :all) (major-mode 'org-mode) find-file-literally) (require 'org) (org-set-regexps-and-options) (hack-local-variables)))\" \"${file}\" -- ${args} \"${@}\"\nexit\n<# powershell open"
   "Shebang block body content.")
 
 (defun orgstrap--add-shebang-block (&optional update)
