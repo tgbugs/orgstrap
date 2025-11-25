@@ -102,7 +102,6 @@
  rainbow-delimiters
  sly-repl-ansi-color ac-sly
  sparql-mode
- toml-mode
  yaml-mode
  (evil
   :custom
